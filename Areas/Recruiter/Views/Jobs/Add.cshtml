@@ -1,0 +1,67 @@
+@using JobPortal.Areas.Shared.Models
+@model JobPortal.Areas.Shared.Models.job_listing
+
+@{
+    ViewData["Title"] = "Add New Job";
+}
+
+<h3 class="mb-3">Add New Job</h3>
+
+@if (ViewBag.DebugError != null)
+{
+    <div class="alert alert-warning">Validation error: @ViewBag.DebugError</div>
+}
+
+<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post">
+    @Html.AntiForgeryToken()
+
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+    <div class="mb-3">
+        <label asp-for="job_title" class="form-label"></label>
+        <input asp-for="job_title" class="form-control" required />
+        <span asp-validation-for="job_title" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="job_description" class="form-label"></label>
+        <textarea asp-for="job_description" class="form-control"></textarea>
+        <span asp-validation-for="job_description" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="job_requirements" class="form-label"></label>
+        <textarea asp-for="job_requirements" class="form-control"></textarea>
+        <span asp-validation-for="job_requirements" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="salary_min" class="form-label"></label>
+        <input asp-for="salary_min" class="form-control" type="number" step="0.01" />
+        <span asp-validation-for="salary_min" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="salary_max" class="form-label"></label>
+        <input asp-for="salary_max" class="form-control" type="number" step="0.01" />
+        <span asp-validation-for="salary_max" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="job_status" class="form-label"></label>
+        <select asp-for="job_status" class="form-select">
+            <option>Open</option>
+            <option>Draft</option>
+            <option>Closed</option>
+        </select>
+        <span asp-validation-for="job_status" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save Job</button>
+    <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="btn btn-secondary ms-2">Cancel</a>
+</form>
+
+@section Scripts{
+    <!-- client-side validation (optional, but nice) -->
+    <partial name="_ValidationScriptsPartial" />
+}

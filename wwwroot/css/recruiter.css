@@ -1,0 +1,28 @@
+/* Layout basics */
+body { min-height: 100vh; }
+.app { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px); }
+.sidebar { border-right: 1px solid #eee; }
+.chip { display:inline-block; padding:.2rem .5rem; border-radius:.5rem; background:#f6f6f6; font-size:.8rem; }
+
+/* Kanban */
+.kanban { display:grid; grid-template-columns: repeat(6, minmax(220px,1fr)); gap:12px; align-items:start; }
+.kanban-col { background:#fafafa; border:1px dashed #ddd; border-radius:.5rem; padding:10px; min-height:240px; }
+.kanban-col.drop-hover { background:#f1f5ff; border-color:#9ec5fe; }
+.candidate-card { background:#fff; border:1px solid #e6e6e6; border-radius:.5rem; padding:10px; margin-bottom:8px; cursor:grab; }
+.candidate-card.dragging { opacity:.6; border-style:dashed; }
+.score { font-weight:700; }
+
+/* Skeleton loading */
+.skeleton { position:relative; overflow:hidden; background:#f0f2f5; border-radius:.25rem; }
+.skeleton::after{
+  content:""; position:absolute; inset:0; transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
+  animation:shimmer 1.2s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* Active nav */
+.list-group-item.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+
+/* Utilities */
+.table-responsive { scrollbar-gutter: stable both-edges; }

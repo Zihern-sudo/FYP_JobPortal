@@ -1,0 +1,19 @@
+@{
+  var items = ViewBag.Items as List<CandidateItem>;
+}
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">Manual overrides (prototype)</div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead><tr><th>Candidate</th><th>Score</th><th>Stage</th><th>Reason (example)</th></tr></thead>
+      <tbody>
+        @foreach (var x in items!)
+        {
+          <tr>
+            <td>@x.Name</td><td>@x.Score</td><td>@x.Stage</td><td>Strong portfolio</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

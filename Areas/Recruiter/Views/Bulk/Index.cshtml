@@ -1,0 +1,29 @@
+@{
+  var list = ViewBag.Items as List<CandidateItem>;
+}
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">Bulk actions (prototype)</div>
+  <div class="card-body">
+    <div class="mb-2">Select candidates and choose an action.</div>
+    <div class="d-flex gap-2 mb-3">
+      <button class="btn btn-outline-primary btn-sm" onclick='showToast("Bulk messaged","primary")'>Message</button>
+      <button class="btn btn-outline-success btn-sm" onclick='showToast("Moved to Shortlisted","success")'>Move to Shortlisted</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick='showToast("Export queued","secondary")'>Export CVs</button>
+    </div>
+    <table class="table align-middle">
+      <thead><tr><th></th><th>Name</th><th>Score</th><th>Stage</th><th>Applied</th></tr></thead>
+      <tbody>
+        @foreach (var c in list!)
+        {
+          <tr>
+            <td><input type="checkbox"/></td>
+            <td>@c.Name</td>
+            <td>@c.Score</td>
+            <td>@c.Stage</td>
+            <td>@c.AppliedAt</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

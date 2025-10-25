@@ -1,0 +1,16 @@
+@{
+  var job = ViewBag.Job as JobItem;
+  var req = ViewBag.Req as JobRequirement;
+}
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">@job?.Title — @job?.Location</div>
+  <div class="card-body">
+    <div class="mb-2"><span class="chip">@job?.Status</span> • Created @job?.CreatedAt</div>
+    <p class="text-muted">Public preview of the job post. Real content to be filled later.</p>
+    <h6>Requirements</h6>
+    <ul>
+      <li><strong>Must-haves:</strong> @req?.MustHaves</li>
+      <li><strong>Nice-to-haves:</strong> @req?.NiceToHaves</li>
+    </ul>
+  </div>
+</div>

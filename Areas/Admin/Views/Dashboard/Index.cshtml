@@ -1,0 +1,77 @@
+@{
+    var approvals = ViewBag.Approvals as List<ApprovalItem>;
+    var attention = ViewBag.Attention as List<AttentionItem>;
+}
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
+    <div class="text-muted small">Active Jobs</div><div class="display-6">24</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
+    <div class="text-muted small">Pending Approvals</div><div class="display-6">@approvals?.Count</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
+    <div class="text-muted small">Candidates (7 days)</div><div class="display-6">138</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
+    <div class="text-muted small">AI Flags</div><div class="display-6">5</div>
+  </div></div></div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white fw-semibold">Needs attention</div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead><tr><th>Type</th><th>Title</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var item in attention!)
+        {
+          <tr>
+            <td>@item.Type</td>
+            <td>@item.Title</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Messages" asp-action="Index">@item.LinkText</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Pending job approvals</div>
+      <div class="card-body p-0">
+        <table class="table mb-0">
+          <thead><tr><th>ID</th><th>Job</th><th>Organisation</th><th>Risk</th><th>Submitted</th><th></th></tr></thead>
+          <tbody>
+            @foreach (var a in approvals!)
+            {
+              <tr>
+                <td>@a.Id</td>
+                <td>@a.JobTitle</td>
+                <td>@a.Organisation</td>
+                <td><span class="chip">@a.Risk</span></td>
+                <td>@a.SubmittedAt</td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview" asp-route-id="@a.Id">Open</a>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Applications per day (placeholder)</div>
+      <div class="card-body">
+        <div style="height:160px; background: repeating-linear-gradient(45deg,#f8f9fa,#f8f9fa 10px,#f1f3f5 10px,#f1f3f5 20px);"></div>
+        <small class="text-muted">Chart placeholder</small>
+      </div>
+    </div>
+  </div>
+</div>

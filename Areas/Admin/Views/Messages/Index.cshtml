@@ -1,0 +1,31 @@
+@{
+    var threads = ViewBag.Threads as List<ConversationListItem>;
+}
+<div class="row">
+  <div class="col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Latest threads</div>
+      <div class="list-group list-group-flush">
+        @foreach (var t in threads!)
+        {
+          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+             asp-area="Admin" asp-controller="Messages" asp-action="Thread" asp-route-id="@t.Id">
+            <div>
+              <div class="fw-semibold">#@t.Id • @t.Org</div>
+              <div class="small text-muted">@t.Job</div>
+            </div>
+            <div class="text-end">
+              <div class="small">@t.LastMessageAt</div>
+              @if (t.Flagged) { <span class="badge text-bg-warning">Flag</span> }
+            </div>
+          </a>
+        }
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card shadow-sm h-100 d-flex align-items-center justify-content-center text-muted">
+      <div>Select a thread from the left.</div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,55 @@
+@{
+  var p = ViewBag.Profile as CandidateProfile;
+}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Overview</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="fw-semibold">@p?.Name</div>
+            <div class="text-muted small">@p?.Email • @p?.Phone</div>
+          </div>
+          <div><span class="chip">AI-Screened</span></div>
+        </div>
+        <hr/>
+        <p class="mb-0">@p?.Summary</p>
+      </div>
+    </div>
+    <div class="card shadow-sm mt-3">
+      <div class="card-header bg-white fw-semibold">Messages</div>
+      <div class="card-body">
+        <p class="text-muted mb-0">This would embed the thread for this candidate in a real app.</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Actions</div>
+      <div class="card-body d-grid gap-2">
+        <button class="btn btn-primary" onclick='showToast("Shortlisted","success")'>Move to Shortlisted</button>
+        <button class="btn btn-outline-secondary" onclick='showToast("Interview scheduled (mock)","primary")'>Schedule Interview</button>
+        <button class="btn btn-outline-danger" onclick='showToast("Rejected","danger")'>Reject</button>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#msgModal">Quick message</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Message Modal -->
+<div class="modal fade" id="msgModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Message @p?.Name</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">
+      <textarea class="form-control" rows="4" placeholder="Type your message…"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary" data-bs-dismiss="modal" onclick='showToast("Message sent (mock)","success")'>Send</button>
+    </div>
+  </div></div>
+</div>

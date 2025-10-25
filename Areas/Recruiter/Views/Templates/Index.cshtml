@@ -1,0 +1,25 @@
+@{
+  var items = ViewBag.Items as List<TemplateItem>;
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="fw-semibold">Message templates</div>
+  <button class="btn btn-primary btn-sm" disabled>Create (mock)</button>
+</div>
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead><tr><th>Name</th><th>Subject</th><th>Snippet</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var t in items!)
+        {
+          <tr>
+            <td>@t.Name</td>
+            <td>@t.Subject</td>
+            <td class="text-muted">@t.Snippet</td>
+            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" disabled>Edit</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

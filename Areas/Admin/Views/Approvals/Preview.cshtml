@@ -1,0 +1,54 @@
+@model ApprovalItem
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Job details (read-only)</div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-3">Job Title</dt>
+          <dd class="col-sm-9">@Model.JobTitle</dd>
+          <dt class="col-sm-3">Organisation</dt>
+          <dd class="col-sm-9">@Model.Organisation</dd>
+          <dt class="col-sm-3">Submitted</dt>
+          <dd class="col-sm-9">@Model.SubmittedAt</dd>
+        </dl>
+        <hr />
+        <div class="mb-2 fw-semibold">Description</div>
+        <p class="text-muted">Placeholder job description. In the real app, this renders the full posting.</p>
+        <div class="mb-2 fw-semibold">Requirements</div>
+        <ul class="mb-0">
+          <li>ASP.NET Core basics</li>
+          <li>SQL familiarity</li>
+          <li>Team communication</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white fw-semibold">AI Policy Check</div>
+      <div class="card-body">
+        <div class="mb-2">Risk: <span class="chip">@Model.Risk</span></div>
+        <ul class="small text-muted">
+          <li>No discriminatory terms detected</li>
+          <li>Clear must-haves provided</li>
+          <li>Salary range missing (advice)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="d-grid gap-2">
+      <button class="btn btn-success" onclick='showToast("Job approved", "success", "/Admin/Approvals")'>
+        Approve
+      </button>
+
+      <button class="btn btn-warning" onclick='showToast("Request sent for changes", "warning", "/Admin/Approvals")'>
+        Request Changes
+      </button>
+
+      <button class="btn btn-outline-danger" onclick='showToast("Job rejected", "danger", "/Admin/Approvals")'>
+        Reject
+      </button>
+    </div>
+
+  </div>
+</div>

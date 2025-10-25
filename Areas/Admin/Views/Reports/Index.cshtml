@@ -1,0 +1,49 @@
+@{
+  var cards = ViewBag.Cards as List<SimpleStat>;
+}
+<div class="row g-3 mb-3">
+  @foreach (var c in cards!)
+  {
+    <div class="col-md-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="small text-muted">@c.Label</div>
+          <div class="display-6">@c.Value</div>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">Summary (prototype)</div>
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach (var c in cards!)
+        {
+          <tr>
+            <td>@c.Label</td>
+            <td>@c.Value</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <div class="card shadow-sm mt-4">
+    <div class="card-header bg-white fw-semibold">Applications per day</div>
+    <div class="card-body">
+      <div
+        style="height:200px; background: repeating-linear-gradient(45deg,#f8f9fa,#f8f9fa 10px,#f1f3f5 10px,#f1f3f5 20px);">
+      </div>
+      <small class="text-muted">Chart placeholder</small>
+    </div>
+  </div>
+
+</div>

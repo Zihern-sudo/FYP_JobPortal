@@ -1,0 +1,89 @@
+@using JobPortal.Areas.Shared.Models
+@model IEnumerable<JobPortal.Areas.Shared.Models.job_listing>
+
+@{
+  // Null-safe fallback so foreach never crashes
+  var jobs = Model ?? Enumerable.Empty<job_listing>();
+}
+
+<div class="d-flex gap-2 align-items-center mb-3">
+  <input id="q" class="form-control" placeholder="Search title or location…" style="max-width:320px" />
+  <select id="status" class="form-select" style="max-width:180px">
+    <option value="">All statuses</option>
+    <option>Open</option>
+    <option>Paused</option>
+    <option>Draft</option>
+    <option>Closed</option>
+  </select>
+  <a class="btn btn-primary btn-sm ms-auto" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add">New Job</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="jobRows">
+          @if (jobs.Any())
+          {
+            foreach (var j in jobs)
+            {
+              <tr>
+                <td>@j.job_listing_id</td>
+                <td>@j.job_title</td>
+                <td><!-- TODO: join company to show location --></td>
+                <td><span class="chip">@j.job_status</span></td>
+                <td>@j.date_posted.ToString("yyyy-MM-dd HH:mm")</td>
+
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
+                    asp-route-id="@j.job_listing_id">Edit</a>
+
+                  <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview"
+                    asp-route-id="@j.job_listing_id">Preview</a>
+
+                  <a class="btn btn-sm btn-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Pipeline"
+                    asp-route-id="@j.job_listing_id">Pipeline</a>
+                </td>
+              </tr>
+            }
+          }
+          else
+          {
+            <tr>
+              <td colspan="6" class="text-center text-muted">No jobs found.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  <script>
+    const rows = [...document.querySelectorAll('#jobRows tr')];
+    function apply() {
+      const q = (document.getElementById('q').value || '').toLowerCase();
+      const s = document.getElementById('status').value;
+      rows.forEach(r => {
+        const title = (r.children[1]?.textContent || "").toLowerCase();
+        const loc = (r.children[2]?.textContent || "").toLowerCase();
+        const st = (r.children[3]?.innerText || "").trim();
+        const show = (!q || title.includes(q) || loc.includes(q)) && (!s || st === s);
+        r.style.display = show ? '' : 'none';
+      });
+    }
+    document.getElementById('q').addEventListener('input', apply);
+    document.getElementById('status').addEventListener('change', apply);
+  </script>
+}

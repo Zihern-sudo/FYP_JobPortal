@@ -1,0 +1,28 @@
+@{
+    var list = ViewBag.Templates as List<AiTemplate>;
+}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="fw-semibold">Reusable requirement templates</div>
+  <button class="btn btn-primary btn-sm" disabled>Create new (mock)</button>
+</div>
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table mb-0">
+      <thead><tr><th>Name</th><th>Example role fit</th><th>Updated</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var t in list!)
+        {
+          <tr>
+            <td>@t.Name</td>
+            <td class="text-muted">@t.RoleExample</td>
+            <td>@t.Updated</td>
+            <td class="text-end">
+              <button class="btn btn-sm btn-outline-secondary" disabled>Duplicate</button>
+              <button class="btn btn-sm btn-outline-primary" disabled>Edit</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

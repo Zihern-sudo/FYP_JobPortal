@@ -1,0 +1,54 @@
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Weights (visual only)</div>
+      <div class="card-body">
+        <label class="form-label">Must-have skills</label><input id="wMust" type="range" class="form-range" min="0" max="100" value="60">
+        <label class="form-label mt-3">Nice-to-haves</label><input id="wNice" type="range" class="form-range" min="0" max="100" value="30">
+        <label class="form-label mt-3">Experience</label><input id="wExp"  type="range" class="form-range" min="0" max="100" value="40">
+        <label class="form-label mt-3">Education</label><input id="wEdu"  type="range" class="form-range" min="0" max="100" value="20">
+        <label class="form-label mt-3">Certifications</label><input id="wCert" type="range" class="form-range" min="0" max="100" value="15">
+        <label class="form-label mt-3">Recency</label><input id="wRec"  type="range" class="form-range" min="0" max="100" value="50">
+        <div class="alert alert-info mt-3 mb-0">Prototype only. Right panel reorders top 5.</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Preview: Top 5</div>
+      <div class="card-body">
+        <ol id="topList" class="mb-0"></ol>
+        <small class="text-muted">Demo candidates.</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+@section Scripts{
+<script>
+  const candidates = [
+    { name:"Candidate A", must:0.95, nice:0.40, exp:0.50, edu:0.60, cert:0.10, rec:0.80 },
+    { name:"Candidate B", must:0.90, nice:0.55, exp:0.65, edu:0.50, cert:0.20, rec:0.70 },
+    { name:"Candidate C", must:0.80, nice:0.70, exp:0.45, edu:0.55, cert:0.30, rec:0.65 },
+    { name:"Candidate D", must:0.75, nice:0.35, exp:0.80, edu:0.45, cert:0.15, rec:0.60 },
+    { name:"Candidate E", must:0.85, nice:0.45, exp:0.55, edu:0.40, cert:0.40, rec:0.50 },
+    { name:"Candidate F", must:0.70, nice:0.60, exp:0.35, edu:0.70, cert:0.25, rec:0.85 }
+  ];
+  const els = {
+    wMust: w("wMust"), wNice: w("wNice"), wExp: w("wExp"),
+    wEdu: w("wEdu"), wCert: w("wCert"), wRec: w("wRec"), list: document.getElementById("topList")
+  };
+  function w(id){ return document.getElementById(id); }
+  function update(){
+    const W = { must:+els.wMust.value, nice:+els.wNice.value, exp:+els.wExp.value, edu:+els.wEdu.value, cert:+els.wCert.value, rec:+els.wRec.value };
+    const sum = Object.values(W).reduce((a,b)=>a+b,0)||1; for(const k in W) W[k]/=sum;
+    const ranked = candidates.map(c=>{
+      const s = c.must*W.must + c.nice*W.nice + c.exp*W.exp + c.edu*W.edu + c.cert*W.cert + c.rec*W.rec;
+      return {...c, score: Math.round(s*100)};
+    }).sort((a,b)=>b.score-a.score).slice(0,5);
+    els.list.innerHTML = ranked.map(r=>`<li>${r.name} — <span class="fw-semibold">Score ${r.score}</span></li>`).join("");
+  }
+  ["wMust","wNice","wExp","wEdu","wCert","wRec"].forEach(id=>w(id).addEventListener("input", update));
+  update();
+</script>
+}

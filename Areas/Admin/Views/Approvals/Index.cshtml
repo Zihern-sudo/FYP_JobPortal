@@ -1,0 +1,26 @@
+@{
+    var items = ViewBag.Items as List<ApprovalItem>;
+}
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold">Pending job approvals</div>
+  <div class="card-body p-0">
+    <table class="table mb-0 align-middle">
+      <thead><tr><th>ID</th><th>Job</th><th>Organisation</th><th>Risk</th><th>Submitted</th><th></th></tr></thead>
+      <tbody>
+        @foreach (var a in items!)
+        {
+          <tr>
+            <td>@a.Id</td>
+            <td>@a.JobTitle</td>
+            <td>@a.Organisation</td>
+            <td><span class="chip">@a.Risk</span></td>
+            <td>@a.SubmittedAt</td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview" asp-route-id="@a.Id">Open</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
