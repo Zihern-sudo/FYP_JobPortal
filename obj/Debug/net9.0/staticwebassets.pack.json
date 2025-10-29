@@ -1,10 +1,6 @@
 {
   "Files": [
     {
-      "Id": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
-      "PackagePath": "staticwebassets\\JobPortal.z1y16c4udp.bundle.scp.css"
-    },
-    {
       "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\css\\recruiter.css",
       "PackagePath": "staticwebassets\\css\\recruiter.css"
     },
@@ -259,6 +255,10 @@
     {
       "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\lib\\jquery\\dist\\jquery.slim.min.map",
       "PackagePath": "staticwebassets\\lib\\jquery\\dist\\jquery.slim.min.map"
+    },
+    {
+      "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf",
+      "PackagePath": "staticwebassets\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf"
     },
     {
       "Id": "obj\\Debug\\net9.0\\staticwebassets\\msbuild.JobPortal.Microsoft.AspNetCore.StaticWebAssetEndpoints.props",

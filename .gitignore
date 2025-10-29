@@ -1,0 +1,13 @@
+# build output
+bin/
+obj/
+
+# user-specific settings
+.vscode/
+
+# secrets
+appsettings.Development.json
+
+# MySQL dump backups we are NOT using
+*.bak
+*.sql~  # temp files

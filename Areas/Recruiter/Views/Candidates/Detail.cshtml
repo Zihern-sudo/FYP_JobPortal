@@ -1,55 +1,179 @@
+@using JobPortal.Areas.Recruiter.Models
 @{
-  var p = ViewBag.Profile as CandidateProfile;
+  ViewData["Title"] = ViewData["Title"] ?? "Candidate";
+  var p = (CandidateVM)ViewBag.Profile;
+  var notes = ViewBag.Messages as List<NoteVM> ?? new List<NoteVM>();
+  var offerVm = (OfferFormVM)ViewBag.OfferForm;
+
+  // ---- stage-aware UI rules ----
+  var s = (p.Status ?? "").Trim().ToLowerInvariant();
+  bool isSubmitted = s == "submitted";
+  bool isAIScreened = s == "ai-screened";
+  bool isShortlisted = s == "shortlisted";
+  bool isInterview = s == "interview";
+  bool isOffer = s == "offer";
+  bool isHired = s == "hired";
+  bool isRejected = s == "rejected";
+
+  // Only allow moving to Interview from earlier stages; not from Interview/Offer/Hired/Rejected
+  bool showMoveToInterview = (isSubmitted || isAIScreened || isShortlisted);
+
+  // Per request: when Hired, hide Move to Interview, Send Offer, Mark Hired, Reject
+  bool showSendOffer = !(isHired || isRejected);
+  bool showHire = !(isHired || isRejected);
+  bool showReject = !(isHired || isRejected);
 }
-<div class="row g-3">
-  <div class="col-lg-7">
-    <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Overview</div>
-      <div class="card-body">
-        <div class="d-flex justify-content-between">
-          <div>
-            <div class="fw-semibold">@p?.Name</div>
-            <div class="text-muted small">@p?.Email • @p?.Phone</div>
-          </div>
-          <div><span class="chip">AI-Screened</span></div>
-        </div>
-        <hr/>
-        <p class="mb-0">@p?.Summary</p>
-      </div>
-    </div>
-    <div class="card shadow-sm mt-3">
-      <div class="card-header bg-white fw-semibold">Messages</div>
-      <div class="card-body">
-        <p class="text-muted mb-0">This would embed the thread for this candidate in a real app.</p>
-      </div>
+
+<div class="d-flex align-items-start justify-content-between mb-3">
+  <div>
+    <h3 class="mb-1">@p.Name</h3>
+    <div class="text-muted">
+      <span class="me-3">@p.Email</span>
+      @if (!string.IsNullOrWhiteSpace(p.Phone))
+      {
+        <span class="me-3">@p.Phone</span>
+      }
+      <span>Status: <span class="badge bg-secondary">@p.Status</span></span>
     </div>
   </div>
-  <div class="col-lg-5">
-    <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Actions</div>
-      <div class="card-body d-grid gap-2">
-        <button class="btn btn-primary" onclick='showToast("Shortlisted","success")'>Move to Shortlisted</button>
-        <button class="btn btn-outline-secondary" onclick='showToast("Interview scheduled (mock)","primary")'>Schedule Interview</button>
-        <button class="btn btn-outline-danger" onclick='showToast("Rejected","danger")'>Reject</button>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#msgModal">Quick message</button>
-      </div>
-    </div>
+
+  <div class="btn-group">
+    @if (showMoveToInterview)
+    {
+      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Interview" method="post" class="me-1">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@p.ApplicationId" />
+        <button class="btn btn-outline-secondary btn-sm" type="submit">Move to Interview</button>
+      </form>
+    }
+
+    @if (showSendOffer)
+    {
+      <button class="btn btn-primary btn-sm me-1" data-bs-toggle="modal" data-bs-target="#offerModal">
+        Send Offer
+      </button>
+    }
+
+    @if (showHire)
+    {
+      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Hire" method="post" class="me-1">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@p.ApplicationId" />
+        <button class="btn btn-success btn-sm" type="submit">Mark Hired</button>
+      </form>
+    }
+
+    @if (showReject)
+    {
+      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Reject" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@p.ApplicationId" />
+        <button class="btn btn-outline-danger btn-sm" type="submit">Reject</button>
+      </form>
+    }
   </div>
 </div>
 
-<!-- Quick Message Modal -->
-<div class="modal fade" id="msgModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header">
-      <h5 class="modal-title">Message @p?.Name</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+@if (TempData["Message"] != null)
+{
+  <div class="alert alert-info">@TempData["Message"]</div>
+}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <h6 class="text-uppercase text-muted mb-2">Summary</h6>
+    <p class="mb-0">@p.Summary</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h6 class="text-uppercase text-muted mb-3">Thread</h6>
+
+    @if (notes.Count == 0)
+    {
+      <div class="text-muted">No messages yet.</div>
+    }
+    else
+    {
+      <div class="list-group">
+        @foreach (var n in notes)
+        {
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between">
+              <div>
+                <strong>@n.Author</strong>
+                <span class="text-muted">• @n.CreatedAt</span>
+              </div>
+              @if (n.FromRecruiter)
+              {
+                <span class="badge bg-primary">Recruiter</span>
+              }
+              else
+              {
+                <span class="badge bg-secondary">Candidate</span>
+              }
+            </div>
+            <div class="mt-1" style="white-space:pre-line">@n.Text</div>
+          </div>
+        }
+      </div>
+    }
+
+    <hr class="my-3" />
+
+    <form asp-area="Recruiter" asp-controller="Candidates" asp-action="SendMessage" method="post">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="id" value="@p.ApplicationId" />
+      <div class="input-group">
+        <input class="form-control" name="text" placeholder="Write a quick note..." />
+        <button class="btn btn-outline-primary" type="submit">Send</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= Offer Modal ================= -->
+<div class="modal fade" id="offerModal" tabindex="-1" aria-labelledby="offerModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="SendOffer" method="post">
+        @Html.AntiForgeryToken()
+        <div class="modal-header">
+          <h5 class="modal-title" id="offerModalLabel">Send Offer</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" asp-for="@offerVm.ApplicationId" name="ApplicationId" value="@offerVm.ApplicationId" />
+
+          <div class="mb-3">
+            <label class="form-label">Salary Offer</label>
+            <input type="number" step="0.01" class="form-control" name="SalaryOffer" />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Start Date</label>
+            <input type="date" class="form-control" name="StartDate" />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Contract Type</label>
+            <input type="text" class="form-control" name="ContractType" value="@offerVm.ContractType"
+              placeholder="Full-time, Contract, Internship..." />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" rows="3" name="Notes"
+              placeholder="Add any special terms or instructions..."></textarea>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-link" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Send Offer</button>
+        </div>
+      </form>
     </div>
-    <div class="modal-body">
-      <textarea class="form-control" rows="4" placeholder="Type your message…"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-      <button class="btn btn-primary" data-bs-dismiss="modal" onclick='showToast("Message sent (mock)","success")'>Send</button>
-    </div>
-  </div></div>
+  </div>
 </div>

@@ -1,25 +1,98 @@
+@using JobPortal.Areas.Recruiter.Models
+
 @{
-  var items = ViewBag.Items as List<TemplateItem>;
+  var items = (IEnumerable<JobPortal.Areas.Recruiter.Models.TemplateItemVM>)
+  (ViewBag.Items ?? Enumerable.Empty<JobPortal.Areas.Recruiter.Models.TemplateItemVM>());
+  bool isArchived = (ViewBag.IsArchivedList as bool?) == true;
+  bool isJobPost = (ViewBag.IsJobPost as bool?) == true;
+  int? threadId = ViewBag.ThreadId as int?;
+
+  // read values passed from Thread (if any)
+  var qFirst = Context.Request.Query["firstName"].ToString();
+  var qJob = Context.Request.Query["jobTitle"].ToString();
+
+  var pageTitle = isJobPost
+  ? (isArchived ? "Archived Job Post Templates" : "Job Post Templates")
+  : (isArchived ? "Archived Templates" : "Message Templates");
 }
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="fw-semibold">Message templates</div>
-  <button class="btn btn-primary btn-sm" disabled>Create (mock)</button>
+
+
+<h3 class="mb-3">@pageTitle</h3>
+
+<div class="d-flex gap-2 mb-3">
+  @if (!isArchived)
+  {
+    <a class="btn btn-primary" asp-area="Recruiter" asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")"
+      asp-action="Create">Create</a>
+
+    <a class="btn btn-outline-secondary" asp-area="Recruiter"
+      asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Archived">Archived</a>
+  }
+  else
+  {
+    <a class="btn btn-outline-secondary" asp-area="Recruiter"
+      asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Index">Back to Active</a>
+  }
 </div>
-<div class="card shadow-sm">
-  <div class="card-body p-0">
-    <table class="table mb-0">
-      <thead><tr><th>Name</th><th>Subject</th><th>Snippet</th><th></th></tr></thead>
+
+@if (!items.Any())
+{
+  <div class="text-muted">No templates found.</div>
+}
+else
+{
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th style="width:26%">Name</th>
+          <th style="width:24%">Subject</th>
+          <th>Snippet</th>
+          <th class="text-end" style="width:230px">Actions</th>
+        </tr>
+      </thead>
       <tbody>
-        @foreach (var t in items!)
+        @foreach (var t in items)
         {
           <tr>
             <td>@t.Name</td>
             <td>@t.Subject</td>
-            <td class="text-muted">@t.Snippet</td>
-            <td class="text-end"><button class="btn btn-sm btn-outline-secondary" disabled>Edit</button></td>
+            <td>@t.Snippet</td>
+            <td class="text-end">
+              @* Only Message templates (not JobPost), only when threadId is present, only on Active list *@
+              @if (!isJobPost && threadId.HasValue && !isArchived)
+              {
+                <a class="btn btn-outline-primary btn-sm me-1" asp-area="Recruiter" asp-controller="Templates"
+                  asp-action="Fill" asp-route-id="@t.Id" asp-route-threadId="@threadId" asp-route-firstName="@qFirst"
+                  asp-route-jobTitle="@qJob">Use</a>
+              }
+
+
+              @if (!isArchived)
+              {
+                <a class="btn btn-outline-secondary btn-sm me-1" asp-area="Recruiter"
+                  asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Edit"
+                  asp-route-id="@t.Id">Edit</a>
+
+                <form method="post" class="d-inline" asp-area="Recruiter"
+                  asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Archive" asp-route-id="@t.Id">
+                  @Html.AntiForgeryToken()
+                  <button type="submit" class="btn btn-outline-danger btn-sm">Archive</button>
+                </form>
+              }
+              else
+              {
+                <form method="post" class="d-inline" asp-area="Recruiter"
+                  asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Unarchive"
+                  asp-route-id="@t.Id">
+                  @Html.AntiForgeryToken()
+                  <button type="submit" class="btn btn-outline-success btn-sm">Unarchive</button>
+                </form>
+              }
+            </td>
           </tr>
         }
       </tbody>
     </table>
   </div>
-</div>
+}

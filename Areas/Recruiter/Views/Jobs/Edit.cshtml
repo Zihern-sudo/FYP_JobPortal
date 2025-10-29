@@ -1,78 +1,63 @@
-@using JobPortal.Areas.Shared.Models
-@model JobPortal.Areas.Shared.Models.job_listing
-
+@model JobPortal.Areas.Recruiter.Models.JobEditVm
 @{
-    ViewData["Title"] = "Edit Job";
+  ViewData["Title"] = "Edit Job";
 }
 
-<div class="row g-3">
-  <div class="col-lg-8">
-    <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Job details</div>
-      <div class="card-body">
-        <form asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit" method="post">
-          @Html.AntiForgeryToken()
+<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit" method="post">
+  @Html.AntiForgeryToken()
+  <input type="hidden" asp-for="job_listing_id" />
 
-          <!-- hidden id -->
-          <input type="hidden" asp-for="job_listing_id" />
-
-          <div class="mb-3">
-            <label class="form-label">Title</label>
-            <input class="form-control" value="@Model.job_title" readonly />
-            <div class="form-text">Editing title/description can come later. For now, only status is editable.</div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Description</label>
-            <textarea class="form-control" rows="3" readonly>@Model.job_description</textarea>
-          </div>
-
-          <div class="mb-3">
-            <label asp-for="job_status" class="form-label">Status</label>
-            <select asp-for="job_status" class="form-select">
-              <option>Open</option>
-              <option>Paused</option>
-              <option>Draft</option>
-              <option>Closed</option>
-            </select>
-            <span asp-validation-for="job_status" class="text-danger"></span>
-          </div>
-
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Save</button>
-            <!-- Quick actions set status + submit -->
-            <button type="submit" name="setStatus" value="Draft" class="btn btn-outline-secondary">Save Draft</button>
-            <button type="submit" name="setStatus" value="Open" class="btn btn-success">Publish (Open)</button>
-
-            <a class="btn btn-outline-primary ms-auto"
-               asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview" asp-route-id="@Model.job_listing_id">
-               Preview
-            </a>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div class="card shadow-sm mt-3">
-      <div class="card-header bg-white fw-semibold">Requirements</div>
-      <div class="card-body">
-        <textarea class="form-control" rows="2" readonly>@Model.job_requirements</textarea>
-      </div>
-    </div>
+  <!-- Status (keep whatever UI you already had; this is just an example) -->
+  <div class="mb-3">
+    <label asp-for="job_status" class="form-label"></label>
+    <select asp-for="job_status" class="form-select"
+      asp-items="Html.GetEnumSelectList<JobPortal.Areas.Recruiter.Models.JobStatus>()"></select>
+    <span asp-validation-for="job_status" class="text-danger"></span>
   </div>
 
-  <div class="col-lg-4">
-    <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Meta</div>
-      <div class="card-body">
-        <div><strong>ID:</strong> @Model.job_listing_id</div>
-        <div><strong>Posted:</strong> @Model.date_posted.ToString("yyyy-MM-dd HH:mm")</div>
-        <div><strong>Current Status:</strong> <span class="chip">@Model.job_status</span></div>
-      </div>
-    </div>
+  <!-- Title display (if you keep it read-only) -->
+  <div class="mb-3">
+    <label asp-for="job_title" class="form-label">Job Title</label>
+    <input asp-for="job_title" class="form-control" />
+    <span asp-validation-for="job_title" class="text-danger"></span>
   </div>
-</div>
 
-@section Scripts{
-  <partial name="_ValidationScriptsPartial" />
-}
+  <!-- ✅ EDITABLE: Job Description -->
+  <div class="mb-3">
+    <label asp-for="job_description" class="form-label">Job Description</label>
+    <textarea asp-for="job_description" class="form-control" rows="5"
+      placeholder="Describe the role, responsibilities, team, tech stack, etc."></textarea>
+    <span asp-validation-for="job_description" class="text-danger"></span>
+  </div>
+
+  <!-- ✅ EDITABLE: Must-have Requirements -->
+  <div class="mb-3">
+    <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
+    <textarea asp-for="job_requirements" class="form-control" rows="4"
+      placeholder="e.g., ASP.NET Core, SQL, EF Core"></textarea>
+    <span asp-validation-for="job_requirements" class="text-danger"></span>
+  </div>
+
+  <!-- ✅ EDITABLE: Nice-to-have Requirements -->
+  <div class="mb-3">
+    <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
+    <textarea asp-for="job_requirements_nice" class="form-control" rows="3"
+      placeholder="e.g., Azure, CI/CD, Docker"></textarea>
+    <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
+  </div>
+
+  <!-- Optional: Posted date display (still read-only) -->
+  <div class="mb-3">
+    <label class="form-label">Posted</label>
+    <input class="form-control" value="@Model.date_posted?.ToString("yyyy-MM-dd HH:mm")" readonly />
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <!-- If you have quick status buttons, keep them -->
+    <button type="submit" name="setStatus" value="Open" class="btn btn-success">Set Open</button>
+    <button type="submit" name="setStatus" value="Paused" class="btn btn-warning">Set Paused</button>
+    <button type="submit" name="setStatus" value="Closed" class="btn btn-secondary">Set Closed</button>
+    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>

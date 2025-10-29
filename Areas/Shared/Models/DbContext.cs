@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobPortal.Areas.Shared.Models;
 
-public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
+public partial class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -17,29 +17,33 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
 
     public virtual DbSet<ai_resume_evaluation> ai_resume_evaluations { get; set; }
 
-    public virtual DbSet<Company> companies { get; set; }
+    public virtual DbSet<company> companies { get; set; }
 
-    public virtual DbSet<Conversation> conversations { get; set; }
+    public virtual DbSet<conversation> conversations { get; set; }
 
-    public virtual DbSet<ConversationMonitor> conversation_monitors { get; set; }
+    public virtual DbSet<conversation_monitor> conversation_monitors { get; set; }
 
     public virtual DbSet<job_application> job_applications { get; set; }
 
     public virtual DbSet<job_listing> job_listings { get; set; }
 
+    public virtual DbSet<job_offer> job_offers { get; set; }
+
     public virtual DbSet<job_post_approval> job_post_approvals { get; set; }
 
     public virtual DbSet<job_seeker_note> job_seeker_notes { get; set; }
 
-    public virtual DbSet<Message> messages { get; set; }
+    public virtual DbSet<message> messages { get; set; }
 
-    public virtual DbSet<Notification> notifications { get; set; }
+    public virtual DbSet<notification> notifications { get; set; }
 
-    public virtual DbSet<NotificationPreference> notification_preferences { get; set; }
+    public virtual DbSet<notification_preference> notification_preferences { get; set; }
 
-    public virtual DbSet<Resume> resumes { get; set; }
+    public virtual DbSet<resume> resumes { get; set; }
 
-    public virtual DbSet<User> users { get; set; }
+    public virtual DbSet<template> templates { get; set; }
+
+    public virtual DbSet<user> users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,7 +76,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.resume).WithMany(p => p.ai_resume_evaluations).HasConstraintName("fk_eval_resume");
         });
 
-        modelBuilder.Entity<Company>(entity =>
+        modelBuilder.Entity<company>(entity =>
         {
             entity.HasKey(e => e.company_id).HasName("PRIMARY");
 
@@ -81,7 +85,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.user).WithMany(p => p.companies).HasConstraintName("fk_company_user");
         });
 
-        modelBuilder.Entity<Conversation>(entity =>
+        modelBuilder.Entity<conversation>(entity =>
         {
             entity.HasKey(e => e.conversation_id).HasName("PRIMARY");
 
@@ -90,7 +94,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.job_listing).WithMany(p => p.conversations).HasConstraintName("fk_conversation_job");
         });
 
-        modelBuilder.Entity<ConversationMonitor>(entity =>
+        modelBuilder.Entity<conversation_monitor>(entity =>
         {
             entity.HasKey(e => e.monitor_id).HasName("PRIMARY");
 
@@ -129,6 +133,18 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
                 .HasConstraintName("fk_joblisting_user");
         });
 
+        modelBuilder.Entity<job_offer>(entity =>
+        {
+            entity.HasKey(e => e.offer_id).HasName("PRIMARY");
+
+            entity.Property(e => e.date_updated)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.offer_status).HasDefaultValueSql("'Draft'");
+
+            entity.HasOne(d => d.application).WithMany(p => p.job_offers).HasConstraintName("fk_offer_app");
+        });
+
         modelBuilder.Entity<job_post_approval>(entity =>
         {
             entity.HasKey(e => e.approval_id).HasName("PRIMARY");
@@ -155,7 +171,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.job_seeker).WithMany(p => p.job_seeker_notejob_seekers).HasConstraintName("fk_note_seeker");
         });
 
-        modelBuilder.Entity<Message>(entity =>
+        modelBuilder.Entity<message>(entity =>
         {
             entity.HasKey(e => e.message_id).HasName("PRIMARY");
 
@@ -168,7 +184,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.sender).WithMany(p => p.messagesenders).HasConstraintName("fk_message_sender");
         });
 
-        modelBuilder.Entity<Notification>(entity =>
+        modelBuilder.Entity<notification>(entity =>
         {
             entity.HasKey(e => e.notification_id).HasName("PRIMARY");
 
@@ -177,7 +193,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.user).WithMany(p => p.notifications).HasConstraintName("fk_notification_user");
         });
 
-        modelBuilder.Entity<NotificationPreference>(entity =>
+        modelBuilder.Entity<notification_preference>(entity =>
         {
             entity.HasKey(e => e.preference_id).HasName("PRIMARY");
 
@@ -187,7 +203,7 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.user).WithMany(p => p.notification_preferences).HasConstraintName("fk_pref_user");
         });
 
-        modelBuilder.Entity<Resume>(entity =>
+        modelBuilder.Entity<resume>(entity =>
         {
             entity.HasKey(e => e.resume_id).HasName("PRIMARY");
 
@@ -196,7 +212,22 @@ public partial class AppDbContext : Microsoft.EntityFrameworkCore.DbContext
             entity.HasOne(d => d.user).WithMany(p => p.resumes).HasConstraintName("fk_resume_user");
         });
 
-        modelBuilder.Entity<User>(entity =>
+        modelBuilder.Entity<template>(entity =>
+        {
+            entity.HasKey(e => e.template_id).HasName("PRIMARY");
+
+            entity.Property(e => e.date_created).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.date_updated)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.template_status).HasDefaultValueSql("'Active'");
+
+            entity.HasOne(d => d.user).WithMany(p => p.templates)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_template_user");
+        });
+
+        modelBuilder.Entity<user>(entity =>
         {
             entity.HasKey(e => e.user_id).HasName("PRIMARY");
 

@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "oqZMeRURNybZuF93XWarTNcbsSr3W72kT7SZA8iaxXI=",
+  "Hash": "AeQue3+aXUtf6uTjYRvgLBerfREzvU9DMsRQVCsrzKg=",
   "Source": "JobPortal",
   "BasePath": "_content/JobPortal",
   "Mode": "Default",
@@ -99,27 +99,6 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\wwwroot\\lib\\jquery-validation\\dist\\additional-methods.js"
-    },
-    {
-      "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1lctz6r0fk-z1y16c4udp.gz",
-      "SourceId": "JobPortal",
-      "SourceType": "Computed",
-      "ContentRoot": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\",
-      "BasePath": "_content/JobPortal",
-      "RelativePath": "JobPortal#[.{fingerprint=z1y16c4udp}]!.bundle.scp.css.gz",
-      "AssetKind": "All",
-      "AssetMode": "Reference",
-      "AssetRole": "Alternative",
-      "AssetMergeBehavior": "",
-      "AssetMergeSource": "",
-      "RelatedAsset": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
-      "AssetTraitName": "Content-Encoding",
-      "AssetTraitValue": "gzip",
-      "Fingerprint": "7vehvky9vd",
-      "Integrity": "gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css"
     },
     {
       "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1t6imutoui-ausgxo2sd3.gz",
@@ -393,27 +372,6 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\wwwroot\\lib\\bootstrap\\dist\\js\\bootstrap.bundle.min.js.map"
-    },
-    {
-      "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\8ga384lmvf-z1y16c4udp.gz",
-      "SourceId": "JobPortal",
-      "SourceType": "Computed",
-      "ContentRoot": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\",
-      "BasePath": "_content/JobPortal",
-      "RelativePath": "JobPortal#[.{fingerprint=z1y16c4udp}]?.styles.css.gz",
-      "AssetKind": "All",
-      "AssetMode": "CurrentProject",
-      "AssetRole": "Alternative",
-      "AssetMergeBehavior": "",
-      "AssetMergeSource": "",
-      "RelatedAsset": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css",
-      "AssetTraitName": "Content-Encoding",
-      "AssetTraitValue": "gzip",
-      "Fingerprint": "7vehvky9vd",
-      "Integrity": "gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css"
     },
     {
       "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\93pjstcrn2-6cfz1n2cew.gz",
@@ -1380,48 +1338,6 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\wwwroot\\lib\\bootstrap\\dist\\css\\bootstrap-utilities.rtl.min.css"
-    },
-    {
-      "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css",
-      "SourceId": "JobPortal",
-      "SourceType": "Computed",
-      "ContentRoot": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\",
-      "BasePath": "_content/JobPortal",
-      "RelativePath": "JobPortal#[.{fingerprint}]?.styles.css",
-      "AssetKind": "All",
-      "AssetMode": "CurrentProject",
-      "AssetRole": "Primary",
-      "AssetMergeBehavior": "",
-      "AssetMergeSource": "",
-      "RelatedAsset": "",
-      "AssetTraitName": "ScopedCss",
-      "AssetTraitValue": "ApplicationBundle",
-      "Fingerprint": "z1y16c4udp",
-      "Integrity": "WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css"
-    },
-    {
-      "Identity": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
-      "SourceId": "JobPortal",
-      "SourceType": "Computed",
-      "ContentRoot": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\",
-      "BasePath": "_content/JobPortal",
-      "RelativePath": "JobPortal#[.{fingerprint}]!.bundle.scp.css",
-      "AssetKind": "All",
-      "AssetMode": "Reference",
-      "AssetRole": "Primary",
-      "AssetMergeBehavior": "",
-      "AssetMergeSource": "",
-      "RelatedAsset": "",
-      "AssetTraitName": "ScopedCss",
-      "AssetTraitValue": "ProjectBundle",
-      "Fingerprint": "z1y16c4udp",
-      "Integrity": "WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=",
-      "CopyToOutputDirectory": "Never",
-      "CopyToPublishDirectory": "PreserveNewest",
-      "OriginalItemSpec": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css"
     },
     {
       "Identity": "C:\\Users\\USER\\JobPortal\\wwwroot\\css\\recruiter.css",
@@ -2766,6 +2682,27 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\lib\\jquery\\LICENSE.txt"
+    },
+    {
+      "Identity": "C:\\Users\\USER\\JobPortal\\wwwroot\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf",
+      "SourceId": "JobPortal",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\USER\\JobPortal\\wwwroot\\",
+      "BasePath": "_content/JobPortal",
+      "RelativePath": "uploads/resumes/Lee_Zi_Hern_Resume#[.{fingerprint}]?.pdf",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "Fingerprint": "74a0r3c6gu",
+      "Integrity": "yaXZ0FtUsXGvqu4t83p8VqRdNPawFYI8+YwAfNRb3cQ=",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf"
     }
   ],
   "Endpoints": [
@@ -2794,7 +2731,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -2855,7 +2792,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -2900,7 +2837,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -2955,7 +2892,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -3008,7 +2945,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -3045,7 +2982,7 @@
         },
         {
           "Name": "Last-Modified",
-          "Value": "Wed, 22 Oct 2025 09:25:31 GMT"
+          "Value": "Wed, 22 Oct 2025 09:25:30 GMT"
         },
         {
           "Name": "Cache-Control",
@@ -3660,602 +3597,6 @@
         {
           "Name": "integrity",
           "Value": "sha256-wfFuuYm+Lh6RbCeeiUqxw334b/hIOkp5j9eokGUM1Y0="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.bundle.scp.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1lctz6r0fk-z1y16c4udp.gz",
-      "Selectors": [
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip",
-          "Quality": "0.001811594203"
-        }
-      ],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "W/\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.bundle.scp.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "1143"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.bundle.scp.css.gz",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1lctz6r0fk-z1y16c4udp.gz",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.styles.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\8ga384lmvf-z1y16c4udp.gz",
-      "Selectors": [
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip",
-          "Quality": "0.001811594203"
-        }
-      ],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "W/\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.styles.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "1143"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.styles.css.gz",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\8ga384lmvf-z1y16c4udp.gz",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "no-cache"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "integrity",
-          "Value": "sha256-gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.bundle.scp.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1lctz6r0fk-z1y16c4udp.gz",
-      "Selectors": [
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip",
-          "Quality": "0.001811594203"
-        }
-      ],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "W/\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.bundle.scp.css"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.bundle.scp.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "1143"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.bundle.scp.css"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.bundle.scp.css.gz",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\1lctz6r0fk-z1y16c4udp.gz",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.bundle.scp.css.gz"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.styles.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\8ga384lmvf-z1y16c4udp.gz",
-      "Selectors": [
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip",
-          "Quality": "0.001811594203"
-        }
-      ],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "W/\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.styles.css"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.styles.css",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\bundle\\JobPortal.styles.css",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "1143"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.styles.css"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-WWfcqDHtDhjfnlxG3BEmMJV8BDzm1WH6Xz6dV7zcjHs="
-        }
-      ]
-    },
-    {
-      "Route": "JobPortal.z1y16c4udp.styles.css.gz",
-      "AssetFile": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\compressed\\8ga384lmvf-z1y16c4udp.gz",
-      "Selectors": [],
-      "ResponseHeaders": [
-        {
-          "Name": "Accept-Ranges",
-          "Value": "bytes"
-        },
-        {
-          "Name": "Content-Length",
-          "Value": "551"
-        },
-        {
-          "Name": "Content-Type",
-          "Value": "text/css"
-        },
-        {
-          "Name": "ETag",
-          "Value": "\"gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU=\""
-        },
-        {
-          "Name": "Last-Modified",
-          "Value": "Sat, 25 Oct 2025 05:52:25 GMT"
-        },
-        {
-          "Name": "Cache-Control",
-          "Value": "max-age=31536000, immutable"
-        },
-        {
-          "Name": "Content-Encoding",
-          "Value": "gzip"
-        },
-        {
-          "Name": "Vary",
-          "Value": "Content-Encoding"
-        }
-      ],
-      "EndpointProperties": [
-        {
-          "Name": "fingerprint",
-          "Value": "z1y16c4udp"
-        },
-        {
-          "Name": "label",
-          "Value": "JobPortal.styles.css.gz"
-        },
-        {
-          "Name": "integrity",
-          "Value": "sha256-gxT/ny7lQic6gTmjPNIt4jY0YHjq+6zMC+rF0/LVLLU="
         }
       ]
     },
@@ -22218,6 +21559,88 @@
         {
           "Name": "integrity",
           "Value": "sha256-JKWeHUaANNuffeRatdc54UCb84RoxjEw/nTq8Mops8Y="
+        }
+      ]
+    },
+    {
+      "Route": "uploads/resumes/Lee_Zi_Hern_Resume.74a0r3c6gu.pdf",
+      "AssetFile": "C:\\Users\\USER\\JobPortal\\wwwroot\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "3970442"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "application/pdf"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"yaXZ0FtUsXGvqu4t83p8VqRdNPawFYI8+YwAfNRb3cQ=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Thu, 21 Aug 2025 14:42:12 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "max-age=31536000, immutable"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "fingerprint",
+          "Value": "74a0r3c6gu"
+        },
+        {
+          "Name": "label",
+          "Value": "uploads/resumes/Lee_Zi_Hern_Resume.pdf"
+        },
+        {
+          "Name": "integrity",
+          "Value": "sha256-yaXZ0FtUsXGvqu4t83p8VqRdNPawFYI8+YwAfNRb3cQ="
+        }
+      ]
+    },
+    {
+      "Route": "uploads/resumes/Lee_Zi_Hern_Resume.pdf",
+      "AssetFile": "C:\\Users\\USER\\JobPortal\\wwwroot\\uploads\\resumes\\Lee_Zi_Hern_Resume.pdf",
+      "Selectors": [],
+      "ResponseHeaders": [
+        {
+          "Name": "Accept-Ranges",
+          "Value": "bytes"
+        },
+        {
+          "Name": "Content-Length",
+          "Value": "3970442"
+        },
+        {
+          "Name": "Content-Type",
+          "Value": "application/pdf"
+        },
+        {
+          "Name": "ETag",
+          "Value": "\"yaXZ0FtUsXGvqu4t83p8VqRdNPawFYI8+YwAfNRb3cQ=\""
+        },
+        {
+          "Name": "Last-Modified",
+          "Value": "Thu, 21 Aug 2025 14:42:12 GMT"
+        },
+        {
+          "Name": "Cache-Control",
+          "Value": "no-cache"
+        }
+      ],
+      "EndpointProperties": [
+        {
+          "Name": "integrity",
+          "Value": "sha256-yaXZ0FtUsXGvqu4t83p8VqRdNPawFYI8+YwAfNRb3cQ="
         }
       ]
     }

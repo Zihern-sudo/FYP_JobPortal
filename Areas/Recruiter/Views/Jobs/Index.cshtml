@@ -1,10 +1,17 @@
 @using JobPortal.Areas.Shared.Models
+@using JobPortal.Areas.Recruiter.Models
+@* enum: JobStatus *@
 @model IEnumerable<JobPortal.Areas.Shared.Models.job_listing>
 
 @{
   // Null-safe fallback so foreach never crashes
   var jobs = Model ?? Enumerable.Empty<job_listing>();
 }
+
+@{
+  var order = (ViewBag.Order as string) ?? "desc";
+}
+
 
 <div class="d-flex gap-2 align-items-center mb-3">
   <input id="q" class="form-control" placeholder="Search title or location…" style="max-width:320px" />
@@ -24,7 +31,15 @@
       <table class="table table-sm mb-0 align-middle">
         <thead>
           <tr>
-            <th>ID</th>
+            <th style="width:90px;">
+              <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
+                asp-route-order="@(order == "asc" ? "desc" : "asc")" class="text-decoration-none text-body"
+                title="Toggle sort by ID">
+                <span class="me-1">ID</span>
+                <span class="small">@((order == "asc") ? "▲" : "▼")</span>
+              </a>
+            </th>
+
             <th>Title</th>
             <th>Location</th>
             <th>Status</th>
@@ -37,13 +52,14 @@
           {
             foreach (var j in jobs)
             {
+              // Parse DB string -> enum for canonical display (fallback = Open)
+              var status = Enum.TryParse<JobStatus>(j.job_status ?? "", true, out var s) ? s : JobStatus.Open;
               <tr>
                 <td>@j.job_listing_id</td>
                 <td>@j.job_title</td>
                 <td><!-- TODO: join company to show location --></td>
-                <td><span class="chip">@j.job_status</span></td>
-                <td>@j.date_posted.ToString("yyyy-MM-dd HH:mm")</td>
-
+                <td><span class="chip">@status</span></td>
+                <td>@(j.date_posted == default(DateTime) ? "-" : j.date_posted.ToString("yyyy-MM-dd HH:mm"))</td>
                 <td class="text-end">
                   <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
                     asp-route-id="@j.job_listing_id">Edit</a>

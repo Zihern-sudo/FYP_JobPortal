@@ -1,32 +1,66 @@
+@using JobPortal.Areas.Recruiter.Models
 @{
-  var messages = ViewBag.Messages as List<MessageEntry>;
-  var id = (int)ViewBag.Id;
+  ViewData["Title"] = ViewData["Title"] ?? "Thread";
+  var msgs = (IEnumerable<NoteVM>)(ViewBag.Messages ?? Enumerable.Empty<NoteVM>());
+  int threadId = (int)ViewBag.ThreadId;
+  string jobTitle = (string)(ViewBag.JobTitle ?? "");
+  string otherUser = (string)ViewBag.OtherUser;
+  string firstName = (otherUser ?? "").Trim().Split(' ').FirstOrDefault() ?? "there";
+  string? beforeCursor = ViewBag.BeforeCursor as string;
+
+  // Pull the merged template text back into the input box
+  var draftVal = (Context?.Request?.Query["draft"].ToString()) ?? "";
 }
-<div class="card shadow-sm">
-  <div class="card-header bg-white d-flex justify-content-between align-items-center">
-    <div class="fw-semibold">Thread #@id</div>
-    <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-outline-secondary" disabled data-bs-toggle="tooltip" data-bs-title="Disabled in prototype">Mark as read</button>
-      <button class="btn btn-sm btn-outline-primary" disabled data-bs-toggle="tooltip" data-bs-title="Disabled in prototype">Export</button>
-    </div>
-  </div>
-  <div class="card-body">
-    @foreach (var m in messages!)
+
+<h3 class="mb-3">Thread #@threadId — @ViewBag.JobTitle</h3>
+
+<div class="card mb-3">
+  <div class="card-header">Conversation with @otherUser</div>
+  <div class="card-body" style="min-height:320px;">
+
+    @if (!string.IsNullOrEmpty(beforeCursor))
     {
-      <div class="mb-3">
-        <div class="small text-muted">@m.At • <span class="fw-semibold">@m.From</span></div>
-        <div>@m.Text</div>
-        @if (m.IsFlagged) { <div class="badge text-bg-warning mt-1">Flagged</div> }
+      <div class="text-center mb-3">
+        <a class="btn btn-outline-secondary btn-sm" asp-area="Recruiter" asp-controller="Inbox" asp-action="Thread"
+          asp-route-id="@threadId" asp-route-before="@beforeCursor">
+          Load older
+        </a>
       </div>
-      <hr />
     }
-    <div class="text-muted small">Prototype: read-only.</div>
+
+    @if (!msgs.Any())
+    {
+      <div class="text-muted">No messages yet.</div>
+    }
+    else
+    {
+      foreach (var m in msgs)
+      {
+        <div class="d-flex mb-3 @(m.FromRecruiter ? "justify-content-end" : "justify-content-start")">
+          <div class="p-3 rounded-3 border" style="max-width:640px;">
+            <div class="small text-muted">@m.Author • @m.CreatedAt</div>
+            <div class="mt-1">@m.Text</div>
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <div class="card-footer">
+    <div class="d-flex justify-content-between mb-2">
+      <a class="btn btn-outline-secondary btn-sm" asp-area="Recruiter" asp-controller="Templates" asp-action="Index"
+        asp-route-threadId="@threadId" asp-route-jobTitle="@jobTitle" asp-route-firstName="@firstName">
+        Open Templates
+      </a>
+    </div>
+
+    <form asp-area="Recruiter" asp-controller="Inbox" asp-action="Send" method="post">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="id" value="@threadId" />
+      <div class="input-group">
+        <input name="text" class="form-control" placeholder="Type a message..." value="@draftVal" />
+        <button class="btn btn-primary" type="submit">Send</button>
+      </div>
+    </form>
   </div>
 </div>
-
-@section Scripts{
-<script>
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
-</script>
-}

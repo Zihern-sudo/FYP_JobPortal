@@ -1,6 +1,10 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using JobPortal.Areas.Shared.Models;   // <-- ensure this matches your DbContext namespace
+using JobPortal.Areas.Shared.Models;
+using JobPortal.Areas.Recruiter.Models;  // <-- add this
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -10,69 +14,107 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private readonly AppDbContext _db;
         public JobsController(AppDbContext db) => _db = db;
 
-        // LIST
-        public async Task<IActionResult> Index()
+        // NEW: single source of truth for splitting/combining
+        private const string NICE_DELIM = "\n||NICE||\n";
+
+        private static (string must, string? nice) SplitReq(string? stored)
         {
-            ViewData["Title"] = "Jobs";
-            var recruiterId = 2; // TODO: replace with logged-in user later
-
-            var jobs = await _db.job_listings
-                .Where(j => j.user_id == recruiterId)
-                .OrderByDescending(j => j.date_posted)
-                .ToListAsync();
-
-            return View(jobs);
+            if (string.IsNullOrWhiteSpace(stored)) return ("", null);
+            var parts = stored.Split(NICE_DELIM);
+            var must = parts[0].Trim();
+            var nice = parts.Length > 1 ? parts[1].Trim() : null;
+            return (must, string.IsNullOrWhiteSpace(nice) ? null : nice);
         }
 
-        // ADD (GET)
+        private static string CombineReq(string? must, string? nice)
+        {
+            must = (must ?? "").Trim();
+            nice = (nice ?? "").Trim();
+            return string.IsNullOrEmpty(nice) ? must : $"{must}{NICE_DELIM}{nice}";
+        }
+
+
+        public async Task<IActionResult> Index(string? order)
+        {
+            ViewData["Title"] = "Jobs";
+            var recruiterId = 3; // (your existing placeholder)
+
+            // base query
+            var query = _db.job_listings.Where(j => j.user_id == recruiterId);
+
+            // sort by id only when explicitly requested; otherwise keep your current default (date_posted desc)
+            if (string.Equals(order, "asc", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.OrderBy(j => j.job_listing_id);
+                ViewBag.Order = "asc";
+            }
+            else if (string.Equals(order, "desc", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.OrderByDescending(j => j.job_listing_id);
+                ViewBag.Order = "desc";
+            }
+            else
+            {
+                // preserve your original behavior
+                query = query.OrderByDescending(j => j.date_posted);
+                ViewBag.Order = null; // no highlight in the UI
+            }
+
+            var jobs = await query.ToListAsync();
+            return View(jobs);
+        }
+        // --- CREATE (GET/POST) ---
+
         [HttpGet]
         public IActionResult Add()
         {
-            // default values so ModelState is valid even if you submit quickly
-            var model = new job_listing
-            {
-                job_status = "Open"
-            };
-            return View(model);
+            var vm = new JobCreateVm { job_status = JobStatus.Open };
+            return View(vm);
         }
 
-        // ADD (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Add(
-    [Bind("job_title,job_description,job_requirements,salary_min,salary_max,job_status")]
-    job_listing model)
+        public async Task<IActionResult> Add(JobCreateVm vm)
         {
-            // supply required FKs
-            model.user_id = 2;       // demo recruiter
-            model.company_id = 1;    // ensure this exists
-
             if (!ModelState.IsValid)
             {
-                var firstError = ModelState.Values.SelectMany(v => v.Errors).FirstOrDefault()?.ErrorMessage;
+                var firstError = ModelState.Values.SelectMany(v => v.Errors)
+                    .FirstOrDefault()?.ErrorMessage;
                 ViewBag.DebugError = firstError ?? "Validation failed.";
-                return View(model);
+                return View(vm);
             }
 
-            model.job_status ??= "Open";
-            model.date_posted = DateTime.Now;
+            var recruiterId = 3;
+            var companyId = 1;
 
-            _db.job_listings.Add(model);
+            var entity = new job_listing
+            {
+                job_title = vm.job_title,
+                job_description = vm.job_description,                    // description stays in its own column
+                job_requirements = CombineReq(vm.job_requirements,       // must + nice stored together
+                                              vm.job_requirements_nice),
+                salary_min = vm.salary_min,
+                salary_max = vm.salary_max,
+                job_status = vm.job_status.ToString(),
+                user_id = recruiterId,
+                company_id = companyId,
+                date_posted = DateTime.Now
+            };
+
+            _db.job_listings.Add(entity);
             await _db.SaveChangesAsync();
 
             TempData["Message"] = "New job added successfully!";
             return RedirectToAction(nameof(Index));
         }
 
+        // --- EDIT (GET only — status remains editable as before) ---
 
-
-
-        // GET: /Recruiter/Jobs/Edit/5
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
             ViewData["Title"] = "Edit Job";
-            var recruiterId = 2; // TODO: replace with logged-in user
+            var recruiterId = 3;
 
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
@@ -80,45 +122,177 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (job == null) return NotFound();
 
-            return View(job); // strongly-typed view
+            var (must, nice) = SplitReq(job.job_requirements);
+
+            var vm = new JobEditVm
+            {
+                job_listing_id = job.job_listing_id,
+                job_status = Enum.TryParse<JobStatus>(job.job_status, true, out var s) ? s : JobStatus.Open,
+                job_title = job.job_title,
+                job_description = job.job_description,
+                job_requirements = must,
+                job_requirements_nice = nice,
+                date_posted = job.date_posted
+            };
+
+            return View(vm);
         }
 
-        // POST: /Recruiter/Jobs/Edit
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(
-            [Bind("job_listing_id,job_status")] job_listing form,
-            string? setStatus) // comes from submit buttons (optional)
+        public async Task<IActionResult> Edit(JobEditVm vm, string? setStatus)
         {
-            var recruiterId = 2;
+            var recruiterId = 3;
 
-            // Load the existing row (and verify ownership)
             var job = await _db.job_listings
-                .Where(j => j.user_id == recruiterId && j.job_listing_id == form.job_listing_id)
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == vm.job_listing_id)
                 .FirstOrDefaultAsync();
 
             if (job == null) return NotFound();
 
-            // If user clicked "Save Draft" or "Publish", override dropdown value
-            if (!string.IsNullOrWhiteSpace(setStatus))
-                form.job_status = setStatus;
-
-            // Validate the incoming status (keep it simple)
-            var allowed = new[] { "Draft", "Open", "Paused", "Closed" };
-            if (!allowed.Contains(form.job_status))
+            // Quick status buttons (if any) still work
+            if (!string.IsNullOrWhiteSpace(setStatus) &&
+                Enum.TryParse<JobStatus>(setStatus, true, out var quick))
             {
-                ModelState.AddModelError(nameof(job.job_status), "Invalid status.");
-                return View(job); // show original job with error
+                vm.job_status = quick;
             }
 
-            // Apply change
-            job.job_status = form.job_status;
+            // ✅ Persist ALL editable fields
+            job.job_status = vm.job_status.ToString();
+            job.job_title = vm.job_title;
+            job.job_description = vm.job_description;                                  // NEW: update description
+            job.job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice); // NEW: must + nice
 
             await _db.SaveChangesAsync();
 
-            TempData["Message"] = $"Job #{job.job_listing_id} status updated to {job.job_status}.";
+            TempData["Message"] = $"Job #{job.job_listing_id} updated.";
             return RedirectToAction(nameof(Index));
         }
+
+
+        // --- PREVIEW ---
+
+        [HttpGet]
+        public async Task<IActionResult> Preview(int id)
+        {
+            var recruiterId = 3;
+
+            var job = await _db.job_listings
+                .Include(j => j.company)
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .FirstOrDefaultAsync();
+
+            if (job == null) return NotFound();
+
+            var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var s) ? s : JobStatus.Open;
+            var (must, nice) = SplitReq(job.job_requirements);
+
+            var item = new JobItemVM(
+                Id: job.job_listing_id,
+                Title: job.job_title,
+                Location: job.company?.company_location ?? string.Empty,
+                Status: statusEnum,
+                CreatedAt: job.date_posted.ToString("yyyy-MM-dd HH:mm")
+            );
+
+            var req = new JobRequirementVM(
+                MustHaves: string.IsNullOrWhiteSpace(must) ? "(not specified)" : must,
+                NiceToHaves: nice
+            );
+
+            ViewBag.Job = item;
+            ViewBag.Req = req;
+            ViewBag.Desc = job.job_description;             // so the view can render Description above Requirements
+            ViewBag.SalaryMin = job.salary_min;
+            ViewBag.SalaryMax = job.salary_max;
+            ViewBag.Company = job.company?.company_name;
+
+            return View();
+        }
+
+        // PIPELINE (Kanban)
+        [HttpGet]
+        public async Task<IActionResult> Pipeline(int id)
+        {
+            var recruiterId = 3;
+
+            var job = await _db.job_listings
+                .Include(j => j.company)
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .FirstOrDefaultAsync();
+            if (job == null) return NotFound();
+
+            var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var s) ? s : JobStatus.Open;
+
+            var item = new JobItemVM(
+                Id: job.job_listing_id,
+                Title: job.job_title,
+                Location: job.company?.company_location ?? string.Empty,
+                Status: statusEnum,
+                CreatedAt: job.date_posted.ToString("yyyy-MM-dd HH:mm")
+            );
+
+            // Pull applications for this job
+            var apps = await _db.job_applications
+                .Include(a => a.user)
+                .Where(a => a.job_listing_id == id)
+                .OrderByDescending(a => a.date_updated)
+                .ToListAsync();
+
+            // Get latest match score per applicant for this job (if any)
+            var applicantIds = apps.Select(a => a.user_id).Distinct().ToList();
+
+            var scoreLookup = await _db.ai_resume_evaluations
+                .Where(ev => ev.job_listing_id == id)
+                .Join(_db.resumes, ev => ev.resume_id, r => r.resume_id,
+                      (ev, r) => new { r.user_id, r.upload_date, ev.match_score })
+                .Where(x => applicantIds.Contains(x.user_id))
+                .GroupBy(x => x.user_id)
+                .Select(g => new
+                {
+                    user_id = g.Key,
+                    score = g.OrderByDescending(x => x.upload_date)
+                             .Select(x => (int?)(x.match_score ?? 0))
+                             .FirstOrDefault() ?? 0
+                })
+                .ToDictionaryAsync(x => x.user_id, x => x.score);
+
+            // Robust mapping of DB status -> board column (trim + case-insensitive)
+            string MapStage(string dbStatusRaw)
+            {
+                var dbStatus = (dbStatusRaw ?? "").Trim();
+                if (dbStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase)) return "New";
+                if (dbStatus.Equals("Hired", StringComparison.OrdinalIgnoreCase)) return "Hired/Rejected";
+                if (dbStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase)) return "Hired/Rejected";
+                if (dbStatus.Equals("AI-Screened", StringComparison.OrdinalIgnoreCase)) return "AI-Screened";
+                if (dbStatus.Equals("Shortlisted", StringComparison.OrdinalIgnoreCase)) return "Shortlisted";
+                if (dbStatus.Equals("Interview", StringComparison.OrdinalIgnoreCase)) return "Interview";
+                if (dbStatus.Equals("Offer", StringComparison.OrdinalIgnoreCase)) return "Offer";
+                return "New";
+            }
+
+            var cands = apps.Select(a => new CandidateItemVM(
+                Id: a.application_id,
+                Name: (a.user != null ? $"{a.user.first_name} {a.user.last_name}" : $"User #{a.user_id}").Trim(),
+                Stage: MapStage(a.application_status),
+                Score: scoreLookup.TryGetValue(a.user_id, out var sc) ? sc : 0,
+                AppliedAt: a.date_updated.ToString("yyyy-MM-dd HH:mm"),
+                LowConfidence: false,  // wire real flags later
+                Override: false
+            )).ToList();
+
+            // Debug breadcrumbs (you can remove later)
+            ViewBag.DebugAppsCount = apps.Count;
+            ViewBag.DebugCandsCount = cands.Count;
+
+            ViewBag.Job = item;
+            ViewBag.Cands = cands;
+
+            return View();
+        }
+
+
+
 
     }
 }

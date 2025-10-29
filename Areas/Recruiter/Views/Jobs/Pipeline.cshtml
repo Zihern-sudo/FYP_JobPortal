@@ -1,16 +1,38 @@
+@using JobPortal.Areas.Recruiter.Models
+
 @{
-  var job = ViewBag.Job as JobItem;
-  var cands = ViewBag.Cands as List<CandidateItem>;
-  string[] cols = ["New","AI-Screened","Shortlisted","Interview","Offer","Hired/Rejected"];
-  var by = cols.ToDictionary(c => c, c => cands!.Where(x => x.Stage == c).ToList());
+  // Safe casts with sensible fallbacks so the view never crashes
+  var job   = ViewBag.Job   as JobItemVM ?? new JobItemVM(0, "", "", JobStatus.Draft, "");
+  var cands = ViewBag.Cands as List<CandidateItemVM> ?? new List<CandidateItemVM>();
+
+  // Board columns
+  string[] cols = new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" };
+
+  // Group candidates by column; handle null Stage and compare case-insensitively
+  var by = cols.ToDictionary(
+      c => c,
+      c => cands.Where(x => string.Equals(x.Stage ?? "", c, StringComparison.OrdinalIgnoreCase)).ToList()
+  );
 }
+
+@if (ViewBag.DebugAppsCount != null)
+{
+  <div class="text-muted small">
+    apps: @ViewBag.DebugAppsCount, cards: @ViewBag.DebugCandsCount
+  </div>
+}
+
 <style>
-  .kanban-col.drop-hover{ background:#f1f5ff; border-color:#9ec5fe; }
+  .kanban-col.drop-hover {
+    background: #f1f5ff;
+    border-color: #9ec5fe;
+  }
 </style>
 
 <div class="mb-2">
-  <span class="chip">@job?.Title</span> • <span class="chip">@job?.Location</span>
+  <span class="chip">@job.Title</span> • <span class="chip">@job.Location</span>
 </div>
+
 <div class="kanban" id="board">
   @foreach (var col in cols)
   {
@@ -26,11 +48,13 @@
           <div class="small text-muted">@x.AppliedAt</div>
           <div class="mt-1">
             @if (x.LowConfidence) { <span class="badge text-bg-warning">Low confidence</span> }
-            @if (x.Override) { <span class="badge text-bg-info">Override</span> }
+            @if (x.Override)      { <span class="badge text-bg-info">Override</span> }
           </div>
           <div class="mt-2 d-flex gap-2">
-            <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@x.Id">Open</a>
-            <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Screening" asp-action="Parsing" asp-route-candidateId="@x.Id">Parse</a>
+            <a class="btn btn-sm btn-outline-primary"
+               asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@x.Id">Open</a>
+            <a class="btn btn-sm btn-outline-secondary"
+               asp-area="Recruiter" asp-controller="Screening" asp-action="Parsing" asp-route-candidateId="@x.Id">Parse</a>
           </div>
         </div>
       }
@@ -38,21 +62,21 @@
   }
 </div>
 
-@section Scripts{
-<script>
-  let dragged = null;
-  document.querySelectorAll('.candidate-card').forEach(card=>{
-    card.addEventListener('dragstart', e => { dragged = card; card.classList.add('dragging'); });
-    card.addEventListener('dragend', e => {
-      card.classList.remove('dragging');
-      document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('drop-hover'));
-      showToast("Moved candidate","primary");
+@section Scripts {
+  <script>
+    let dragged = null;
+    document.querySelectorAll('.candidate-card').forEach(card => {
+      card.addEventListener('dragstart', e => { dragged = card; card.classList.add('dragging'); });
+      card.addEventListener('dragend',   e => {
+        card.classList.remove('dragging');
+        document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drop-hover'));
+        if (typeof showToast === 'function') { showToast("Moved candidate", "primary"); }
+      });
     });
-  });
-  document.querySelectorAll('.kanban-col').forEach(col=>{
-    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
-    col.addEventListener('dragleave', e => { col.classList.remove('drop-hover'); });
-    col.addEventListener('drop', e => { e.preventDefault(); if(dragged){ col.appendChild(dragged); col.classList.remove('drop-hover'); }});
-  });
-</script>
+    document.querySelectorAll('.kanban-col').forEach(col => {
+      col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drop-hover'); });
+      col.addEventListener('dragleave', e => { col.classList.remove('drop-hover'); });
+      col.addEventListener('drop',      e => { e.preventDefault(); if (dragged) { col.appendChild(dragged); col.classList.remove('drop-hover'); } });
+    });
+  </script>
 }

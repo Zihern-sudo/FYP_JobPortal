@@ -311,9 +311,8 @@ C:\Users\USER\JobPortal\obj\Debug\net9.0\JobPortal.csproj.CoreCompileInputs.cach
 C:\Users\USER\JobPortal\obj\Debug\net9.0\JobPortal.MvcApplicationPartsAssemblyInfo.cache
 C:\Users\USER\JobPortal\obj\Debug\net9.0\JobPortal.RazorAssemblyInfo.cache
 C:\Users\USER\JobPortal\obj\Debug\net9.0\JobPortal.RazorAssemblyInfo.cs
-C:\Users\USER\JobPortal\obj\Debug\net9.0\scopedcss\Areas\JobSeeker\Views\Shared\_Layout.cshtml.rz.scp.css
+C:\Users\USER\JobPortal\obj\Debug\net9.0\JobPortal.sourcelink.json
 C:\Users\USER\JobPortal\obj\Debug\net9.0\scopedcss\bundle\JobPortal.styles.css
-C:\Users\USER\JobPortal\obj\Debug\net9.0\scopedcss\projectbundle\JobPortal.bundle.scp.css
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\nbmktjbixw-49aqsep8hz.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\ynyu3qtlyy-b9sayid5wm.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\dr8ytnq6ot-61n19gt1b8.gz
@@ -377,8 +376,6 @@ C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\25vvip2lxr-2z0ns9nrw6.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\olcqdoiarc-muycvpuwrr.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\0rm3z317t4-87fc7y1x7t.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\iw238sduct-mlv21k5csn.gz
-C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\8ga384lmvf-z1y16c4udp.gz
-C:\Users\USER\JobPortal\obj\Debug\net9.0\compressed\1lctz6r0fk-z1y16c4udp.gz
 C:\Users\USER\JobPortal\obj\Debug\net9.0\staticwebassets.build.json
 C:\Users\USER\JobPortal\obj\Debug\net9.0\staticwebassets.development.json
 C:\Users\USER\JobPortal\obj\Debug\net9.0\staticwebassets.build.endpoints.json

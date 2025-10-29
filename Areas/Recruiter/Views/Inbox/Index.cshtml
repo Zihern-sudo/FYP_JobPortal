@@ -1,31 +1,53 @@
+@using JobPortal.Areas.Recruiter.Models
 @{
-  var threads = ViewBag.Threads as List<MessageThread>;
+  var threads = ViewBag.Threads as List<ThreadListItemVM> ?? new();
 }
-<div class="row">
-  <div class="col-lg-4">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">Threads</div>
-      <div class="list-group list-group-flush">
-        @foreach (var t in threads!)
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="fw-semibold">Inbox</div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Participant</th>
+          <th>Last message</th>
+          <th>When</th>
+          <th class="text-end"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (!threads.Any())
         {
-          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-             asp-area="Recruiter" asp-controller="Inbox" asp-action="Thread" asp-route-id="@t.Id">
-            <div>
-              <div class="fw-semibold">@t.Candidate</div>
-              <div class="small text-muted">@t.JobTitle</div>
-            </div>
-            <div class="text-end">
-              <div class="small">@t.LastAt</div>
-              @if (t.Unread) { <span class="badge text-bg-primary">New</span> }
-            </div>
-          </a>
+          <tr>
+            <td colspan="5" class="text-center text-muted">No conversations yet.</td>
+          </tr>
         }
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-8">
-    <div class="card shadow-sm h-100 d-flex align-items-center justify-content-center text-muted">
-      <div>Select a thread on the left.</div>
-    </div>
+        else
+        {
+          foreach (var t in threads)
+          {
+            <tr>
+              <td>@t.JobTitle</td>
+              <td>@t.Participant</td>
+              <td class="text-muted">@t.LastSnippet</td>
+              <td class="text-nowrap">@t.LastAt</td>
+              <td class="text-end">
+                @if (t.UnreadCount > 0)
+                {
+                  <span class="badge text-bg-primary">@t.UnreadCount</span>
+                }
+                <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Inbox" asp-action="Thread"
+                  asp-route-id="@t.Id">
+                  Open
+                </a>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
   </div>
 </div>

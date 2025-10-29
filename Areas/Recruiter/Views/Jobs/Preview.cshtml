@@ -1,16 +1,91 @@
 @{
-  var job = ViewBag.Job as JobItem;
-  var req = ViewBag.Req as JobRequirement;
+  var job = (JobPortal.Areas.Recruiter.Models.JobItemVM)ViewBag.Job;
+  var req = (JobPortal.Areas.Recruiter.Models.JobRequirementVM)ViewBag.Req;
+  string? desc = ViewBag.Desc as string;
+  var company = ViewBag.Company as string;
+  decimal? smin = ViewBag.SalaryMin as decimal?;
+  decimal? smax = ViewBag.SalaryMax as decimal?;
+  string SalaryText() => (smin.HasValue || smax.HasValue)
+  ? $"{(smin.HasValue ? smin.Value.ToString("N0") : "—")} – {(smax.HasValue ? smax.Value.ToString("N0") : "—")}"
+  : "Not disclosed";
+
+  // small helpers: split bullets on newline or comma
+  string[] Bullets(string? text)
+  => string.IsNullOrWhiteSpace(text)
+  ? Array.Empty<string>()
+  : text!.Replace("\r", "").Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries)
+  .Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
 }
+
 <div class="card shadow-sm">
-  <div class="card-header bg-white fw-semibold">@job?.Title — @job?.Location</div>
   <div class="card-body">
-    <div class="mb-2"><span class="chip">@job?.Status</span> • Created @job?.CreatedAt</div>
-    <p class="text-muted">Public preview of the job post. Real content to be filled later.</p>
-    <h6>Requirements</h6>
-    <ul>
-      <li><strong>Must-haves:</strong> @req?.MustHaves</li>
-      <li><strong>Nice-to-haves:</strong> @req?.NiceToHaves</li>
-    </ul>
+    <div class="d-flex align-items-start justify-content-between">
+      <div>
+        <h4 class="mb-1">@job.Title</h4>
+        <div class="text-muted">
+          <span class="me-3"><i class="bi bi-geo-alt"></i> @(!string.IsNullOrWhiteSpace(job.Location) ? job.Location :
+                        "Location not specified")</span>
+          <span class="me-3"><i class="bi bi-building"></i> @(string.IsNullOrWhiteSpace(company) ? "Company" :
+                        company)</span>
+          <span class="me-3"><i class="bi bi-cash-coin"></i> @SalaryText()</span>
+          <span><i class="bi bi-clock-history"></i> Posted @job.CreatedAt</span>
+        </div>
+      </div>
+      <span
+        class="badge rounded-pill bg-@(job.Status == JobPortal.Areas.Recruiter.Models.JobStatus.Open ? "success" : (job.Status == JobPortal.Areas.Recruiter.Models.JobStatus.Paused ? "warning text-dark" : "secondary"))"
+        style="font-size:.9rem; padding:.5rem .75rem;">
+        @job.Status
+      </span>
+    </div>
+
+    <hr />
+
+    <!-- Description FIRST -->
+    <section class="mb-4">
+      <h6 class="text-uppercase text-muted mb-2">Job Description</h6>
+      @if (string.IsNullOrWhiteSpace(desc))
+      {
+        <p class="text-muted fst-italic">No description provided.</p>
+      }
+      else
+      {
+        <p style="white-space:pre-line">@desc</p>
+      }
+    </section>
+
+    <!-- Requirements -->
+    <section>
+      <h6 class="text-uppercase text-muted mb-2">Requirements</h6>
+
+      <div class="mb-2">
+        <strong>Must-haves:</strong>
+        @if (Bullets(req.MustHaves).Length == 0)
+        {
+          <div class="text-muted">Not specified</div>
+        }
+        else
+        {
+          <ul class="mb-0">
+            @foreach (var b in Bullets(req.MustHaves))
+            {
+              <li>@b</li>
+            }
+          </ul>
+        }
+      </div>
+
+      @if (!string.IsNullOrWhiteSpace(req.NiceToHaves))
+      {
+        <div class="mt-3">
+          <strong>Nice-to-haves:</strong>
+          <ul class="mb-0">
+            @foreach (var b in Bullets(req.NiceToHaves))
+            {
+              <li>@b</li>
+            }
+          </ul>
+        </div>
+      }
+    </section>
   </div>
 </div>
