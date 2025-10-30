@@ -4,6 +4,7 @@ using JobPortal.Areas.Shared.Models;
 using System.Security.Cryptography;
 using System.Text;
 using JobPortal.Services;
+using Microsoft.AspNetCore.Identity;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -23,10 +24,11 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // GET: Login page
         [HttpGet]
         public IActionResult Login()
-        {   
+        {
             return View();
         }
 
+        // POST: Handle login submission
         // POST: Handle login submission
         [HttpPost]
         public async Task<IActionResult> Login(string email, string password, string? twoFACode)
@@ -45,34 +47,46 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return View("Login");
             }
 
+            // ✅ Status checks first
             if (user.user_status == "Suspended")
             {
                 TempData["Message"] = "Please verify your email before logging in.";
-                ViewBag.Email = email;
                 return View("Login");
             }
 
-            // ⚠️ Ideally, hash passwords in production; for now plain match
-            if (user.password_hash != password)
+            if (user.user_status == "Inactive")
+            {
+                TempData["Message"] = "Your account is inactive. Please contact support.";
+                return View("Login");
+            }
+
+            // ✅ Restrict main login page to JobSeekers only
+            if (user.user_role != "JobSeeker")
+            {
+                // Redirect to staff login page if admin/recruiter tries to use main login
+                return RedirectToAction("StaffLogin");
+            }
+
+            // Existing password verification, 2FA, and session setup
+            var hasher = new PasswordHasher<object>();
+            var result = hasher.VerifyHashedPassword(null, user.password_hash, password);
+            if (result == PasswordVerificationResult.Failed)
             {
                 TempData["Message"] = "Invalid email or password.";
                 ViewBag.Email = email;
                 return View("Login");
             }
 
-            // ✅ 2FA Verification (Database-based)
             if (user.user_2FA)
             {
-                // Step 1: Request 2FA code if not provided
                 if (string.IsNullOrEmpty(twoFACode))
                 {
                     TempData["Require2FA"] = "true";
                     TempData["PendingEmail"] = user.email;
-                    TempData["PendingPassword"] = password; // ✅ carry password for re-submission
+                    TempData["PendingPassword"] = password;
                     return RedirectToAction("Login");
                 }
 
-                // Step 2: Validate 2FA secret and code
                 if (string.IsNullOrEmpty(user.user_2FA_secret) ||
                     !TwoFactorService.VerifyCode(user.user_2FA_secret, twoFACode))
                 {
@@ -82,22 +96,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 }
             }
 
-            // ✅ Successful login — create session
             HttpContext.Session.SetString("UserId", user.user_id.ToString());
             HttpContext.Session.SetString("UserRole", user.user_role);
             HttpContext.Session.SetString("UserName", $"{user.first_name} {user.last_name}");
             HttpContext.Session.SetString("UserEmail", user.email);
 
-            // Redirect by user role
-            return user.user_role switch
-            {
-                "Admin" => RedirectToAction("Index", "Dashboard", new { area = "Admin" }),
-                "Recruiter" => RedirectToAction("Index", "Home", new { area = "Recruiter" }),
-                "JobSeeker" => RedirectToAction("Index", "Dashboard", new { area = "JobSeeker" }),
-                _ => View("Login")
-            };
+            return RedirectToAction("Index", "Dashboard", new { area = "JobSeeker" });
         }
-
 
         // ===============================
         // ✅ REGISTER (NEW)
@@ -111,7 +116,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            // ✅ Check if email already exists
             var existingUser = await _db.users.FirstOrDefaultAsync(u => u.email == email);
             if (existingUser != null)
             {
@@ -119,13 +123,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            // ✅ Create new user
+            // ✅ Hash password
+            var hasher = new PasswordHasher<object>();
+            var hashedPassword = hasher.HashPassword(null, password);
+
             var user = new user
             {
                 first_name = name,
                 last_name = "",
                 email = email,
-                password_hash = password,
+                password_hash = hashedPassword, // store hash
                 user_role = "JobSeeker",
                 user_status = "Suspended", // unverified
                 user_2FA = false,
@@ -135,7 +142,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             _db.users.Add(user);
             await _db.SaveChangesAsync();
 
-            // ✅ Generate verification link
             var verificationLink = Url.Action("VerifyEmail", "Account",
                 new { area = "JobSeeker", email = user.email },
                 Request.Scheme);
@@ -149,6 +155,62 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             TempData["Message"] = "Registration successful! Please check your email to verify your account.";
             return RedirectToAction("Login");
+        }
+
+        [HttpGet]
+        public IActionResult StaffLogin()
+        {
+            return View(); // Create StaffLogin.cshtml
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> StaffLogin(string email, string password, string? twoFACode)
+        {
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+            {
+                ViewBag.Error = "Please enter both email and password.";
+                return View();
+            }
+
+            var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
+            if (user == null || (user.user_role != "Admin" && user.user_role != "Recruiter"))
+            {
+                TempData["Message"] = "Invalid staff login credentials.";
+                ViewBag.Email = email;
+                return View();
+            }
+
+            var hasher = new PasswordHasher<object>();
+            var result = hasher.VerifyHashedPassword(null, user.password_hash, password);
+            if (result == PasswordVerificationResult.Failed)
+            {
+                TempData["Message"] = "Invalid staff login credentials.";
+                ViewBag.Email = email;
+                return View();
+            }
+
+            // Optional: 2FA check
+            if (user.user_2FA && !string.IsNullOrEmpty(user.user_2FA_secret))
+            {
+                if (string.IsNullOrEmpty(twoFACode) || !TwoFactorService.VerifyCode(user.user_2FA_secret, twoFACode))
+                {
+                    TempData["Message"] = "Invalid 2FA code.";
+                    ViewBag.Email = email;
+                    return View();
+                }
+            }
+
+            HttpContext.Session.SetString("UserId", user.user_id.ToString());
+            HttpContext.Session.SetString("UserRole", user.user_role);
+            HttpContext.Session.SetString("UserName", $"{user.first_name} {user.last_name}");
+            HttpContext.Session.SetString("UserEmail", user.email);
+
+            return user.user_role switch
+            {
+                "Admin" => RedirectToAction("Index", "Dashboard", new { area = "Admin" }),
+                "Recruiter" => RedirectToAction("Index", "Home", new { area = "Recruiter" }),
+                _ => View("StaffLogin")
+            };
         }
 
 
@@ -255,12 +317,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            user.password_hash = newPassword; // (Hash later)
+            // ✅ Hash the new password properly
+            var hasher = new PasswordHasher<object>();
+            user.password_hash = hasher.HashPassword(null, newPassword);
+
             await _db.SaveChangesAsync();
 
             TempData["Message"] = "Password reset successfully! You can now log in.";
             return RedirectToAction("Login");
         }
+
 
         [HttpGet]
         public IActionResult RecoverAccount()
@@ -278,13 +344,22 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            if (user.user_status != "Suspended")
+            if (user.user_status == "Inactive")
+            {
+                TempData["Message"] = "Your account is inactive. Please contact support.";
+                return RedirectToAction("Login");
+            }
+
+            bool eligibleForRecovery =
+                user.user_status == "Suspended" ||
+                (user.user_status == "Active" && user.user_2FA);
+
+            if (!eligibleForRecovery)
             {
                 TempData["Message"] = "Your account is not locked. Try logging in.";
                 return RedirectToAction("Login");
             }
 
-            // ✅ Generate recovery link
             var token = Guid.NewGuid().ToString();
             HttpContext.Session.SetString("RecoverToken", token);
             HttpContext.Session.SetString("RecoverEmail", email);
@@ -293,7 +368,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 new { area = "JobSeeker", email, token }, Request.Scheme);
 
             await _emailService.SendEmailAsync(email, "Recover Your JobPortal Account",
-                $"Click here to unlock your account: <a href='{link}'>Recover Account</a>");
+                $"Click here to recover your account: <a href='{link}'>Recover Account</a>");
 
             TempData["Message"] = "Recovery email sent. Please check your inbox.";
             return RedirectToAction("Login");
@@ -302,27 +377,61 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpGet]
         public async Task<IActionResult> UnlockAccount(string email, string token)
         {
-            var savedToken = HttpContext.Session.GetString("RecoverToken");
-            var savedEmail = HttpContext.Session.GetString("RecoverEmail");
+            var storedToken = HttpContext.Session.GetString("RecoverToken");
+            var storedEmail = HttpContext.Session.GetString("RecoverEmail");
 
-            if (token != savedToken || email != savedEmail)
+            if (storedToken == null || storedEmail == null || storedToken != token || storedEmail != email)
             {
                 TempData["Message"] = "Invalid or expired recovery link.";
                 return RedirectToAction("Login");
             }
 
             var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
-            if (user != null)
+            if (user == null)
             {
-                user.user_status = "Active";
-                await _db.SaveChangesAsync();
+                TempData["Message"] = "Account not found.";
+                return RedirectToAction("Login");
             }
 
-            TempData["Message"] = "Your account has been unlocked. Please log in.";
+            // ✅ Generate a temporary password
+            var tempPassword = GenerateTemporaryPassword();
+
+            // ✅ Hash it securely using ASP.NET's built-in PasswordHasher
+            var hasher = new PasswordHasher<object>();
+            user.password_hash = hasher.HashPassword(null, tempPassword);
+
+            // ✅ Disable 2FA and clear secret
+            user.user_2FA = false;
+            user.user_2FA_secret = null;
+
+            // ✅ Reactivate the account if suspended
+            if (user.user_status == "Suspended")
+                user.user_status = "Active";
+
+            await _db.SaveChangesAsync();
+
+            await _emailService.SendEmailAsync(user.email,
+                "Your Account Has Been Recovered",
+                $"Your account has been recovered successfully.<br>" +
+                $"Here is your temporary password: <b>{tempPassword}</b><br>" +
+                $"Please log in and change it immediately.");
+
+            // ✅ Clear session tokens
+            HttpContext.Session.Remove("RecoverToken");
+            HttpContext.Session.Remove("RecoverEmail");
+
+            TempData["Message"] = "Your account has been recovered. Check your email for a temporary password.";
             return RedirectToAction("Login");
         }
 
-
+        // 🔹 Utility: random secure temporary password generator
+        private string GenerateTemporaryPassword(int length = 10)
+        {
+            const string validChars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@#$_";
+            var random = new Random();
+            return new string(Enumerable.Repeat(validChars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
 
         // ✅ Logout
         [HttpGet]

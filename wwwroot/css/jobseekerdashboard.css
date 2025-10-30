@@ -32,8 +32,21 @@ body, html {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    transition: width 0.3s ease;
+    overflow: hidden;
 }
 
+/* Collapsed Sidebar (default state) */
+.sidebar.collapsed {
+    width: 60px;
+}
+
+.sidebar.collapsed .profile-section,
+.sidebar.collapsed .nav-menu a {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
 
 .profile-section {
     text-align: center;
@@ -52,10 +65,9 @@ body, html {
     color: #2e2a47;
 }
 
+/* === Navigation Links === */
 .nav-menu a {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    display: block;
     padding: 10px 12px;
     margin-bottom: 10px;
     text-decoration: none;
@@ -70,33 +82,66 @@ body, html {
     color: #4f16ce;
 }
 
+/* === Sidebar Toggle Button === */
+.sidebar-toggle {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background-color: #4f16ce;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 1000;
+    transition: background-color 0.2s;
+}
+
+.sidebar-toggle:hover {
+    background-color: #3c0fa5;
+}
+
 /* === Main Content === */
 .main-content {
     flex: 1;
-    padding: 40px 40px 60px 30px; /* consistent spacing, smaller left padding */
+    padding: 40px 40px 60px 30px;
+    transition: margin-left 0.3s ease;
 }
 
-/* Header with bell icon */
+.sidebar.collapsed + .main-content {
+    margin-left: 80px;
+}
+
 .dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    padding: 0 10px;
 }
 
 .dashboard-header h1 {
     font-size: 24px;
     font-weight: 700;
     color: #4f16ce;
+    margin: 0;
+}
+
+/* Notification Icon */
+.notification-wrapper {
+    position: relative;
 }
 
 .notif-icon {
     font-size: 22px;
-    position: relative;
+    color: #4f16ce;
+    background: none;
+    border: none;
     cursor: pointer;
+    position: relative;
 }
 
-/* Notification badge */
 .notif-icon::after {
     content: attr(data-count);
     position: absolute;
@@ -104,16 +149,75 @@ body, html {
     right: -8px;
     background-color: #e74c3c;
     color: white;
-    font-size: 11px;
+    font-size: 10px;
+    font-weight: 600;
     padding: 2px 6px;
     border-radius: 50%;
-    font-weight: bold;
     display: none;
 }
 
 .notif-icon[data-count]:not([data-count="0"])::after {
     display: inline-block;
 }
+
+/* Dropdown styling */
+.notif-dropdown {
+    display: none;
+    position: absolute;
+    top: 35px;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    width: 260px;
+    z-index: 1000;
+    padding: 10px 0;
+}
+
+.notif-dropdown h4 {
+    font-size: 15px;
+    font-weight: 600;
+    padding: 0 15px 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.notif-dropdown ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.notif-dropdown ul li {
+    padding: 10px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    color: #333;
+}
+
+.notif-dropdown ul li:last-child {
+    border-bottom: none;
+}
+
+.notif-center-btn {
+    display: block;
+    text-align: center;
+    background-color: #4f16ce;
+    color: white;
+    margin: 10px 15px 0;
+    padding: 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: 0.3s;
+}
+
+.notif-center-btn:hover {
+    background-color: #3d12a1;
+}
+
 
 /* === Summary Cards === */
 .summary {

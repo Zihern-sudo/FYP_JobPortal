@@ -10,6 +10,12 @@ using System; // for Uri.EscapeDataString
 using JobPortal.Areas.JobSeeker.Models;
 using QRCoder;
 using JobPortal.Services;
+using Microsoft.AspNetCore.Identity;
+using QuestPDF.Fluent;
+using QuestPDF.Helpers;
+using QuestPDF.Infrastructure;
+
+
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -17,6 +23,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
     public class DashboardController : Controller
     {
         private readonly AppDbContext _db;
+        private readonly IWebHostEnvironment _webHostEnvironment;
         public DashboardController(AppDbContext db)
         {
             _db = db;
@@ -88,13 +95,18 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (user == null)
                 return NotFound();
 
-            if (user.password_hash != currentPassword)
+            // ✅ Use PasswordHasher to verify the current password
+            var hasher = new PasswordHasher<object>();
+            var verificationResult = hasher.VerifyHashedPassword(null, user.password_hash, currentPassword);
+
+            if (verificationResult == PasswordVerificationResult.Failed)
                 return BadRequest("Current password is incorrect.");
 
             if (newPassword != confirmPassword)
                 return BadRequest("New password and confirmation do not match.");
 
-            user.password_hash = newPassword;
+            // ✅ Hash and update new password
+            user.password_hash = hasher.HashPassword(null, newPassword);
             await _db.SaveChangesAsync();
 
             return Ok("Password updated successfully!");
@@ -102,26 +114,30 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
 
         // ==============================
-        // ❌ Delete Account (POST)
+        // ❌ Delete Account (Soft Delete)
         // ==============================
         [HttpPost]
         public async Task<IActionResult> DeleteAccount()
         {
-            var userId = HttpContext.Session.GetString("UserId");
-            if (string.IsNullOrEmpty(userId))
-                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return Unauthorized();
 
-            var user = await _db.users.FindAsync(int.Parse(userId));
+            int userId = int.Parse(userIdStr);
+            var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == userId);
+
             if (user == null)
                 return NotFound();
 
-            _db.users.Remove(user);
+            // 🟢 Soft delete: set account as Inactive instead of removing
+            user.user_status = "Inactive";
+            _db.users.Update(user);
             await _db.SaveChangesAsync();
 
+            // 🧹 End session
             HttpContext.Session.Clear();
 
-            TempData["Message"] = "Your account has been deleted successfully.";
-            return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+            return Ok(new { message = "Account deactivated successfully." });
         }
 
 
@@ -313,26 +329,40 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(applications);
         }
 
-        // ✅ Dynamic Job Listings
-        public async Task<IActionResult> JobListings(string? search)
+        // ✅ Dynamic Job Listings with Pagination
+        public async Task<IActionResult> JobListings(string? search, int page = 1)
         {
-            var jobs = _db.job_listings
+            int pageSize = 10; // ✅ Show 10 jobs per page
+
+            var jobsQuery = _db.job_listings
                 .Where(j => j.job_status == "Open");
 
-            // Optional search by job title or company
+            // Optional search by job title or description
             if (!string.IsNullOrEmpty(search))
             {
-                jobs = jobs.Where(j =>
+                jobsQuery = jobsQuery.Where(j =>
                     j.job_title.Contains(search) ||
                     j.job_description.Contains(search));
             }
 
-            var jobList = await jobs
+            // ✅ Get total job count
+            int totalJobs = await jobsQuery.CountAsync();
+
+            // ✅ Get paged results
+            var jobList = await jobsQuery
                 .OrderByDescending(j => j.date_posted)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            // ✅ Pass pagination info to the view
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalJobs / (double)pageSize);
+            ViewBag.Search = search;
 
             return View(jobList);
         }
+
 
         // ✅ Optional: Job Details page
         public async Task<IActionResult> JobDetails(int id)
@@ -402,5 +432,90 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             return View("Feedback");
         }
+        // GET: /JobSeeker/Dashboard/ResumeBuilder
+        [HttpGet]
+        public IActionResult ResumeBuilder()
+        {
+            // Optionally check if user is logged in
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            return View(); // Looks for Views/Dashboard/ResumeBuilder.cshtml
+        }
+
+        public byte[] GenerateResumePDF(string fullName, string email, string education, string experience, string skills)
+        {
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Margin(50);
+
+                    // Header: Full Name
+                    page.Header().Text(fullName)
+                        .FontSize(24)
+                        .Bold()
+                        .AlignCenter();
+
+                    // Content
+                    page.Content().Column(col =>
+                    {
+                        col.Spacing(5); // space between items
+
+                        col.Item().Text($"Email: {email}").FontSize(12);
+
+                        col.Item().Text("Education:").Bold();
+                        col.Item().Text(education);
+
+                        col.Item().Text("Experience:").Bold();
+                        col.Item().Text(experience);
+
+                        col.Item().Text("Skills:").Bold();
+                        col.Item().Text(skills);
+                    });
+                });
+            });
+
+            return document.GeneratePdf();
+        }
+
+        // POST: /JobSeeker/Dashboard/SaveResume
+        [HttpPost]
+        public async Task<IActionResult> SaveResume(string fullName, string email, string education, string experience, string skills)
+        {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
+
+            // 1. Generate PDF
+            var pdfBytes = GenerateResumePDF(fullName, email, education, experience, skills);
+
+            // 2. Save PDF to wwwroot/resumes
+            var resumesDir = Path.Combine(_webHostEnvironment.WebRootPath, "resumes");
+            if (!Directory.Exists(resumesDir))
+                Directory.CreateDirectory(resumesDir);
+
+            var fileName = $"resume_{Guid.NewGuid()}.pdf";
+            var filePath = Path.Combine(resumesDir, fileName);
+            await System.IO.File.WriteAllBytesAsync(filePath, pdfBytes);
+
+            // 3. Save record in DB
+            var newResume = new resume
+            {
+                user_id = userId,
+                upload_date = DateTime.Now,
+                file_path = "/resumes/" + fileName
+            };
+
+            _db.resumes.Add(newResume);
+            await _db.SaveChangesAsync();
+
+            TempData["Message"] = "Resume saved successfully!";
+            return RedirectToAction("MyResumes"); // Make sure MyResumes exists
+        }
+
     }
 }

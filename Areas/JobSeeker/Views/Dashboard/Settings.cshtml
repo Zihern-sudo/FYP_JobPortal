@@ -134,10 +134,10 @@
                 Swal.fire({
                     title: "Change Password",
                     html: `
-                                                <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
-                                                <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
-                                                <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
-                                            `,
+                                                    <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
+                                                    <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
+                                                    <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
+                                                `,
                     confirmButtonText: "Update Password",
                     focusConfirm: false,
                     preConfirm: () => {
@@ -199,91 +199,17 @@
             }
         });
         // 🔹 Handle Two-Factor Authentication toggle
-        document.querySelector("input[name='TwoFAEnabled']")?.addEventListener("change", function () {
-            if (this.checked) {
-                // ✅ When user turns ON 2FA
-                fetch("/JobSeeker/Dashboard/Generate2FA", { method: "POST" })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            Swal.fire({
-                                title: "Enable Two-Factor Authentication",
-                                html: `
-                                                    <p>Scan this QR code with <b>Google Authenticator</b> app:</p>
-                                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
-                                                    <p>Secret Key: <b>${data.secret}</b></p>
-                                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
-                                                `,
-                                confirmButtonText: "Verify Code",
-                                focusConfirm: false,
-                                preConfirm: () => {
-                                    const code = document.getElementById("verifyCode").value;
-                                    if (!code) {
-                                        Swal.showValidationMessage("Please enter the 6-digit code.");
-                                        return false;
-                                    }
-
-                                    // ✅ Verify 2FA code
-                                    return fetch("/JobSeeker/Dashboard/Verify2FA", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                                        body: new URLSearchParams({ code })
-                                    })
-                                        .then(res => res.json())
-                                        .then(result => {
-                                            if (!result.success) {
-                                                Swal.showValidationMessage("Invalid code, please try again.");
-                                                return false;
-                                            }
-                                            return true;
-                                        });
-                                }
-                            }).then(result => {
-                                if (result.isConfirmed) {
-                                    Swal.fire({
-                                        icon: "success",
-                                        title: "2FA Enabled!",
-                                        text: "Two-Factor Authentication is now active.",
-                                        confirmButtonColor: "#28a745"
-                                    });
-                                }
-                            });
-                        }
-                    })
-                    .catch(() => {
-                        Swal.fire("Error", "Unable to generate QR code.", "error");
-                    });
-            } else {
-                Swal.fire({
-                    icon: "info",
-                    title: "2FA Disabled",
-                    text: "Two-Factor Authentication has been turned off.",
-                    confirmButtonColor: "#007bff"
-                });
-            }
-        });
-        // 🔹 Handle Two-Factor Authentication toggle
         const twoFASwitch = document.querySelector("input[name='TwoFAEnabled']");
 
         if (twoFASwitch) {
-            // On load, set state based on session (via ViewBag)
             const is2FAEnabled = '@Model.TwoFAEnabled.ToString().ToLower()';
-            if (is2FAEnabled === "true") {
-                twoFASwitch.checked = true;
-            }
+            twoFASwitch.checked = (is2FAEnabled === "true");
 
             twoFASwitch.addEventListener("change", function () {
                 const enabled = this.checked;
 
-                // Update backend session
-                fetch("/JobSeeker/Dashboard/Toggle2FA", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: new URLSearchParams({ enabled })
-                });
-
                 if (enabled) {
-                    // existing QR popup code
+                    // 🔸 Step 1: Generate QR & secret
                     fetch("/JobSeeker/Dashboard/Generate2FA", { method: "POST" })
                         .then(response => response.json())
                         .then(data => {
@@ -291,12 +217,14 @@
                                 Swal.fire({
                                     title: "Enable Two-Factor Authentication",
                                     html: `
-                                                    <p>Scan this QR code with <b>Google Authenticator</b>:</p>
-                                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
-                                                    <p>Secret Key: <b>${data.secret}</b></p>
-                                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
-                                                `,
+                                    <p>Scan this QR code with <b>Google Authenticator</b>:</p>
+                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
+                                    <p>Secret Key: <b>${data.secret}</b></p>
+                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
+                                `,
                                     confirmButtonText: "Verify Code",
+                                    showCancelButton: true,
+                                    cancelButtonText: "Cancel",
                                     focusConfirm: false,
                                     preConfirm: () => {
                                         const code = document.getElementById("verifyCode").value;
@@ -320,17 +248,42 @@
                                     }
                                 }).then(result => {
                                     if (result.isConfirmed) {
+                                        // 🔸 Step 2: Mark 2FA as enabled in DB only after verification
+                                        fetch("/JobSeeker/Dashboard/Toggle2FA", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                            body: new URLSearchParams({ enabled: true })
+                                        });
+
                                         Swal.fire({
                                             icon: "success",
                                             title: "2FA Enabled!",
                                             text: "Two-Factor Authentication is now active.",
                                             confirmButtonColor: "#28a745"
                                         });
+                                    } else {
+                                        // ❌ User cancelled or closed popup -> revert toggle
+                                        twoFASwitch.checked = false;
+                                        fetch("/JobSeeker/Dashboard/Toggle2FA", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                            body: new URLSearchParams({ enabled: false })
+                                        });
                                     }
                                 });
                             }
+                        })
+                        .catch(() => {
+                            Swal.fire("Error", "Unable to generate QR code.", "error");
+                            twoFASwitch.checked = false;
                         });
                 } else {
+                    // 🔹 Disable 2FA
+                    fetch("/JobSeeker/Dashboard/Toggle2FA", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({ enabled: false })
+                    });
                     Swal.fire({
                         icon: "info",
                         title: "2FA Disabled",
@@ -340,6 +293,7 @@
                 }
             });
         }
+
         // 🔹 Handle Delete Account button
         document.querySelector(".delete-btn")?.addEventListener("click", function () {
             Swal.fire({

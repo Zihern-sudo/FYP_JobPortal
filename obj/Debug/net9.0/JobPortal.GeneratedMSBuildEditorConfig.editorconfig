@@ -120,6 +120,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcUmVzZXRQYXNzd29yZC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/User/Desktop/FYP/FYP_JobPortal/Areas/JobSeeker/Views/Account/StaffLogin.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcU3RhZmZMb2dpbi5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/User/Desktop/FYP/FYP_JobPortal/Areas/JobSeeker/Views/Dashboard/Applications.cshtml]
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxBcHBsaWNhdGlvbnMuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
@@ -146,6 +150,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/Users/User/Desktop/FYP/FYP_JobPortal/Areas/JobSeeker/Views/Dashboard/JobListings.cshtml]
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxKb2JMaXN0aW5ncy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/User/Desktop/FYP/FYP_JobPortal/Areas/JobSeeker/Views/Dashboard/ResumeBuilder.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxSZXN1bWVCdWlsZGVyLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/User/Desktop/FYP/FYP_JobPortal/Areas/JobSeeker/Views/Dashboard/Settings.cshtml]

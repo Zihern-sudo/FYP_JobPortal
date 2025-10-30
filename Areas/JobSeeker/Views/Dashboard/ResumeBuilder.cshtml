@@ -1,0 +1,82 @@
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Resume Builder";
+}
+<link rel="stylesheet" href="~/css/dashboard.css" />
+
+<div class="resume-builder-container">
+    <h1>Resume Builder</h1>
+
+    <form id="resumeForm">
+        <h3>Personal Information</h3>
+        <label>Full Name</label>
+        <input type="text" id="fullName" name="fullName" placeholder="John Doe" required />
+
+        <label>Email</label>
+        <input type="email" id="email" name="email" placeholder="john@example.com" required />
+
+        <h3>Education</h3>
+        <label>School / University</label>
+        <input type="text" id="school" name="school" placeholder="University of XYZ" />
+
+        <label>Degree</label>
+        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science" />
+
+        <label>Year</label>
+        <input type="text" id="eduYear" name="eduYear" placeholder="2020 - 2024" />
+
+        <h3>Work Experience</h3>
+        <label>Company</label>
+        <input type="text" id="company" name="company" placeholder="ABC Corp" />
+
+        <label>Position</label>
+        <input type="text" id="position" name="position" placeholder="Software Intern" />
+
+        <label>Duration</label>
+        <input type="text" id="duration" name="duration" placeholder="Jun 2023 - Aug 2023" />
+
+        <h3>Skills</h3>
+        <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" />
+
+        <button type="button" id="previewBtn">Preview Resume</button>
+    </form>
+
+    <div id="resumePreview" style="border:1px solid #ccc; padding:20px; margin-top:20px;">
+        <h2>Resume Preview</h2>
+        <div id="resumeContent"></div>
+        <button id="downloadPDF" style="margin-top:15px;">Download as PDF</button>
+    </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+document.getElementById("previewBtn").addEventListener("click", function () {
+    const name = document.getElementById("fullName").value;
+    const email = document.getElementById("email").value;
+    const school = document.getElementById("school").value;
+    const degree = document.getElementById("degree").value;
+    const eduYear = document.getElementById("eduYear").value;
+    const company = document.getElementById("company").value;
+    const position = document.getElementById("position").value;
+    const duration = document.getElementById("duration").value;
+    const skills = document.getElementById("skills").value;
+
+    const content = `
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>
+        <p><strong>Experience:</strong> ${position} at ${company} (${duration})</p>
+        <p><strong>Skills:</strong> ${skills}</p>
+    `;
+
+    document.getElementById("resumeContent").innerHTML = content;
+});
+document.getElementById("downloadPDF").addEventListener("click", () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const content = document.getElementById("resumeContent").innerText;
+    doc.text(content, 10, 10);
+    doc.save("resume.pdf");
+});
+
+</script>

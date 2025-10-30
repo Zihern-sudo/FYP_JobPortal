@@ -70,6 +70,10 @@
               "target": "Package",
               "version": "[1.7.0, )"
             },
+            "QuestPDF": {
+              "target": "Package",
+              "version": "[2025.7.3, )"
+            },
             "UglyToad.PdfPig": {
               "target": "Package",
               "version": "[1.7.0-custom-5, )"

@@ -7,60 +7,106 @@
     <title>@ViewData["Title"] - JobPortal Dashboard</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/jobseekerdashboard.css" asp-append-version="true" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
 </head>
 
 <body>
 
     <div class="dashboard-container">
-        <aside class="sidebar">
+
+        <!-- ☰ Sidebar Toggle Button -->
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+
+        <!-- === Sidebar === -->
+        <aside class="sidebar" id="sidebar">
             <div class="profile-section">
                 <img src="~/images/profile.png" alt="Profile" class="profile-img" />
                 <p class="username">@((Context.Session.GetString("UserName")) ?? "Guest User")</p>
+                <a asp-area="JobSeeker" asp-controller="Account" asp-action="Logout" class="logout-link">Logout</a>
+            </div>
 
-            <a asp-area="JobSeeker" asp-controller="Account" asp-action="Logout" class="logout-link">Logout</a>
-    </div>
+            <nav class="nav-menu">
+                <a asp-controller="Dashboard" asp-action="Index"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")">
+                    Home
+                </a>
+                <a asp-controller="Dashboard" asp-action="JobListings"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "JobListings" ? "active" : "")">
+                    Job Listings
+                </a>
+                <a asp-controller="Dashboard" asp-action="Applications"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Applications" ? "active" : "")">
+                    My Applications
+                </a>
+                <a asp-controller="Dashboard" asp-action="Feedback"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Feedback" ? "active" : "")">
+                    Resume Feedback
+                </a>
+                <a asp-controller="Dashboard" asp-action="ResumeBuilder"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "ResumeBuilder" ? "active" : "")">
+                    Resume Builder
+                </a>    
+                <a asp-controller="Dashboard" asp-action="Settings"
+                    class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Settings" ? "active" : "")">
+                    Settings
+                </a>
+            </nav>
+        </aside>
 
-    <nav class="nav-menu">
-        <a asp-controller="Dashboard" asp-action="Index"
-            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")">
-            Home
-        </a>
+        <!-- === Header with Notification Bell === -->
+        <main class="main-content">
+            <!-- === Header with Notification Bell === -->
+            <div class="dashboard-header">
+                <h1></h1>
 
-        <a asp-controller="Dashboard" asp-action="JobListings"
-            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "JobListings" ? "active" : "")">
-            Job Listings
-        </a>
+                <div class="notification-wrapper">
+                    <button id="notifBell" class="notif-icon bi bi-bell" data-count="3"></button>
 
-        <a asp-controller="Dashboard" asp-action="Applications"
-            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Applications" ? "active" : "")">
-            My Applications
-        </a>
+                    <div class="notif-dropdown" id="notifDropdown">
+                        <h4>Notifications</h4>
+                        <ul>
+                            <li>New message from recruiter</li>
+                            <li>Your application status was updated</li>
+                            <li>Resume feedback is ready</li>
+                        </ul>
+                        <a asp-controller="Dashboard" asp-action="Notifications" class="notif-center-btn">
+                            Go to Notification Center
+                        </a>
+                    </div>
+                </div>
+            </div>
 
-        <a asp-controller="Dashboard" asp-action="Feedback"
-            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Feedback" ? "active" : "")">
-            Resume Feedback
-        </a>
-
-        <a asp-controller="Dashboard" asp-action="Settings"
-            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Settings" ? "active" : "")">
-            Settings
-        </a>
-    </nav>
-    </aside>
-
-    <main class="main-content">
-        @RenderBody()
-    </main>
+            @RenderBody()
+        </main>
     </div>
 
     <footer class="text-center py-3">
         &copy; 2025 JobPortal System. All rights reserved.
     </footer>
 
-    <!-- ✅ Add this line below -->
     @RenderSection("Scripts", required: false)
 
+    <script>
+        // Sidebar Toggle
+        document.getElementById("sidebarToggle").addEventListener("click", function () {
+            document.getElementById("sidebar").classList.toggle("collapsed");
+        });
 
+        // Notification Dropdown
+        const bell = document.getElementById('notifBell');
+        const dropdown = document.getElementById('notifDropdown');
+
+        bell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && !bell.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    </script>
 
 </body>
 

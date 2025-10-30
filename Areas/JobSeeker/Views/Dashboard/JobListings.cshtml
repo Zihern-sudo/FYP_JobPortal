@@ -15,8 +15,8 @@
 
     <!-- 🔍 Search Bar -->
     <form asp-action="JobListings" method="get" class="job-filter-bar">
-        <input type="text" name="search" class="search-input"
-            placeholder="Search for job titles or companies..." value="@(Context.Request.Query["search"].ToString())" />
+        <input type="text" name="search" class="search-input" placeholder="Search for job titles or companies..."
+            value="@(Context.Request.Query["search"].ToString())" />
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
 
@@ -40,15 +40,36 @@
                     <div class="job-logo">
                         <img src="~/images/company1.png" alt="Company Logo">
                         <a asp-controller="Dashboard" asp-action="JobDetails" asp-route-id="@job.job_listing_id"
-                           class="apply-btn">View Details</a>
+                            class="apply-btn">View Details</a>
                     </div>
                 </div>
             }
         }
     </div>
 
-    <!-- 📄 Pagination Placeholder -->
-    <div class="pagination">
-        <span>Showing @Model.Count() jobs</span>
-    </div>
+    <!-- 📄 Pagination -->
+    @if (ViewBag.TotalPages > 1)
+    {
+        <div class="pagination">
+            <button disabled="@((ViewBag.CurrentPage == 1))"
+                onclick="location.href='@Url.Action("JobListings", new { page = ViewBag.CurrentPage - 1, search = ViewBag.Search })'">
+                ⬅ Previous
+            </button>
+
+            <span>Page @ViewBag.CurrentPage of @ViewBag.TotalPages</span>
+
+            <button disabled="@((ViewBag.CurrentPage == ViewBag.TotalPages))"
+                onclick="location.href='@Url.Action("JobListings", new { page = ViewBag.CurrentPage + 1, search = ViewBag.Search })'">
+                Next ➡
+            </button>
+        </div>
+    }
+
+    else
+    {
+        <div class="pagination">
+            <span>Showing all @Model.Count() jobs</span>
+        </div>
+    }
+
 </section>

@@ -556,7 +556,7 @@ public partial class user
     [StringLength(100)]
     public string? user_2FA_secret { get; set; }
 
-    [Column(TypeName = "enum('Active','Suspended')")]
+    [Column(TypeName = "enum('Active','Suspended','Inactive')")]
     public string user_status { get; set; } = null!;
 
     [Column(TypeName = "datetime")]

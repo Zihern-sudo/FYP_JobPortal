@@ -88,5 +88,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 });
             }
         }
+
     }
 }
