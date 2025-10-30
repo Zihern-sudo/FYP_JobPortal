@@ -1,75 +1,56 @@
-@using JobPortal.Areas.Recruiter.Models
-@model JobCreateVm
-
+@* ===============================================
+   File: Areas/Recruiter/Views/Jobs/Add.cshtml
+   Strongly-typed to JobCreateVm; shows prefill banner if TempData set.
+   =============================================== *@
+@model JobPortal.Areas.Recruiter.Models.JobCreateVm
 @{
-    ViewData["Title"] = "Add New Job";
+    ViewData["Title"] = "New Job";
 }
+<h2 class="mb-3">New Job</h2>
 
-<h3 class="mb-3">Add New Job</h3>
-
-@if (ViewBag.DebugError != null)
+@if (TempData["Message"] is string msg && !string.IsNullOrWhiteSpace(msg))
 {
-    <div class="alert alert-warning">Validation error: @ViewBag.DebugError</div>
+    <div class="alert alert-info">@msg</div>
 }
 
-<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post" class="card shadow-sm">
+<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post">
     @Html.AntiForgeryToken()
 
-    <div class="card-body">
-        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
-
-        <div class="mb-3">
-            <label asp-for="job_title" class="form-label"></label>
-            <input asp-for="job_title" class="form-control" />
-            <span asp-validation-for="job_title" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="job_description" class="form-label"></label>
-            <textarea asp-for="job_description" class="form-control" rows="3"></textarea>
-            <span asp-validation-for="job_description" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
-            <textarea asp-for="job_requirements" class="form-control" rows="4"
-                placeholder="e.g., ASP.NET Core, SQL, EF Core"></textarea>
-            <span asp-validation-for="job_requirements" class="text-danger"></span>
-        </div>
-
-        <!-- NEW: Nice-to-have -->
-        <div class="mb-3">
-            <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
-            <textarea asp-for="job_requirements_nice" class="form-control" rows="3"
-                placeholder="e.g., Azure, CI/CD, Docker"></textarea>
-            <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
-        </div>
-
-        <div class="row g-3">
-            <div class="col">
-                <label asp-for="salary_min" class="form-label"></label>
-                <input asp-for="salary_min" class="form-control" />
-                <span asp-validation-for="salary_min" class="text-danger"></span>
-            </div>
-            <div class="col">
-                <label asp-for="salary_max" class="form-label"></label>
-                <input asp-for="salary_max" class="form-control" />
-                <span asp-validation-for="salary_max" class="text-danger"></span>
-            </div>
-        </div>
-
-        <div class="mb-3 mt-3">
-            <label asp-for="job_status" class="form-label"></label>
-            <select asp-for="job_status" class="form-select" asp-items="Html.GetEnumSelectList<JobStatus>()"></select>
-            <span asp-validation-for="job_status" class="text-danger"></span>
-        </div>
+    <div class="mb-3">
+        <label asp-for="job_status" class="form-label">Status</label>
+        <select asp-for="job_status" class="form-select"
+            asp-items="Html.GetEnumSelectList<JobPortal.Areas.Recruiter.Models.JobStatus>()"></select>
     </div>
 
-    <div class="card-footer d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Create</button>
-        <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+    <div class="mb-3">
+        <label asp-for="job_title" class="form-label">Job Title</label>
+        <input asp-for="job_title" class="form-control" />
+        <span asp-validation-for="job_title" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="job_description" class="form-label">Job Description</label>
+        <textarea asp-for="job_description" class="form-control" rows="6"></textarea>
+        <span asp-validation-for="job_description" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
+        <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
+        <span asp-validation-for="job_requirements" class="text-danger"></span>
+    </div>
+
+    <div class="mb-4">
+        <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
+        <textarea asp-for="job_requirements_nice" class="form-control" rows="4"></textarea>
+        <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
+    </div>
+
+    <div class="text-end">
+        <button class="btn btn-success" type="submit">Create Job</button>
     </div>
 </form>
+
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

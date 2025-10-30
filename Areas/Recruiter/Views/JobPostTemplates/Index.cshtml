@@ -1,0 +1,102 @@
+@* File: Areas/Recruiter/Views/JobPostTemplates/Index.cshtml *@
+@using JobPortal.Areas.Recruiter.Models
+
+@{
+    ViewData["Title"] = "Job Post Templates";
+
+    // Items are passed via ViewBag to keep this view flexible
+    var items = (IEnumerable<JobPortal.Areas.Recruiter.Models.TemplateItemVM>)
+                (ViewBag.Items ?? Enumerable.Empty<JobPortal.Areas.Recruiter.Models.TemplateItemVM>());
+
+    bool isArchived = (ViewBag.IsArchivedList as bool?) == true;
+
+    // If you arrive here from Jobs/Edit to pick/apply, this may be present (used by Preview/Apply)
+    int? jobId = ViewBag.JobId as int?;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Job Post Templates</h3>
+
+    <div class="d-flex gap-2">
+        <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Create">
+            Create
+        </a>
+
+        @if (!isArchived)
+        {
+            <a class="btn btn-outline-secondary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Archived">
+                Archived
+            </a>
+        }
+        else
+        {
+            <a class="btn btn-outline-secondary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Index">
+                Back to Active
+            </a>
+        }
+    </div>
+</div>
+
+@if (!items.Any())
+{
+    <div class="text-muted">No job templates found.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle jobtpl-table">
+            <thead>
+                <tr>
+                    <th style="width:26%">Name</th>
+                    <th>Snippet</th>
+                    <th class="text-end actions-col" style="width:360px">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var t in items)
+            {
+                <tr>
+                    <td>@t.Name</td>
+                    <td>@t.Snippet</td>
+
+                    <td class="text-end actions-cell">
+                        <div class="actions-toolbar">
+                            @* Create a job directly from this template (no preview) *@
+                            <a class="btn btn-success btn-sm"
+                               asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="CreateFrom"
+                               asp-route-id="@t.Id">Create from template</a>
+
+                            <a class="btn btn-outline-secondary btn-sm"
+                               asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Preview"
+                               asp-route-id="@t.Id" asp-route-jobId="@(jobId ?? 0)">Preview</a>
+
+                            @if (!isArchived)
+                            {
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Edit"
+                                   asp-route-id="@t.Id">Edit</a>
+
+                                <form method="post" class="d-inline"
+                                      asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Archive"
+                                      asp-route-id="@t.Id">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Archive</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" class="d-inline"
+                                      asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Unarchive"
+                                      asp-route-id="@t.Id">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-success btn-sm">Unarchive</button>
+                                </form>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}

@@ -3,61 +3,115 @@
   ViewData["Title"] = "Edit Job";
 }
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Edit Job</h2>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#applyTplModal"
+      onclick="loadTplModal(@Model.job_listing_id, '');">
+      Apply Template…
+    </button>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#saveAsTemplateModal">
+      Save As Template
+    </button>
+  </div>
+</div>
+
 <form asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit" method="post">
   @Html.AntiForgeryToken()
   <input type="hidden" asp-for="job_listing_id" />
 
-  <!-- Status (keep whatever UI you already had; this is just an example) -->
   <div class="mb-3">
-    <label asp-for="job_status" class="form-label"></label>
+    <label asp-for="job_status" class="form-label">Status</label>
     <select asp-for="job_status" class="form-select"
       asp-items="Html.GetEnumSelectList<JobPortal.Areas.Recruiter.Models.JobStatus>()"></select>
-    <span asp-validation-for="job_status" class="text-danger"></span>
   </div>
 
-  <!-- Title display (if you keep it read-only) -->
   <div class="mb-3">
     <label asp-for="job_title" class="form-label">Job Title</label>
     <input asp-for="job_title" class="form-control" />
     <span asp-validation-for="job_title" class="text-danger"></span>
   </div>
 
-  <!-- ✅ EDITABLE: Job Description -->
   <div class="mb-3">
     <label asp-for="job_description" class="form-label">Job Description</label>
-    <textarea asp-for="job_description" class="form-control" rows="5"
-      placeholder="Describe the role, responsibilities, team, tech stack, etc."></textarea>
+    <textarea asp-for="job_description" class="form-control" rows="6"></textarea>
     <span asp-validation-for="job_description" class="text-danger"></span>
   </div>
 
-  <!-- ✅ EDITABLE: Must-have Requirements -->
   <div class="mb-3">
     <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
-    <textarea asp-for="job_requirements" class="form-control" rows="4"
-      placeholder="e.g., ASP.NET Core, SQL, EF Core"></textarea>
+    <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
     <span asp-validation-for="job_requirements" class="text-danger"></span>
   </div>
 
-  <!-- ✅ EDITABLE: Nice-to-have Requirements -->
-  <div class="mb-3">
+  <div class="mb-4">
     <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
-    <textarea asp-for="job_requirements_nice" class="form-control" rows="3"
-      placeholder="e.g., Azure, CI/CD, Docker"></textarea>
+    <textarea asp-for="job_requirements_nice" class="form-control" rows="4"></textarea>
     <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
   </div>
 
-  <!-- Optional: Posted date display (still read-only) -->
-  <div class="mb-3">
-    <label class="form-label">Posted</label>
-    <input class="form-control" value="@Model.date_posted?.ToString("yyyy-MM-dd HH:mm")" readonly />
-  </div>
-
-  <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary">Save Changes</button>
-    <!-- If you have quick status buttons, keep them -->
-    <button type="submit" name="setStatus" value="Open" class="btn btn-success">Set Open</button>
-    <button type="submit" name="setStatus" value="Paused" class="btn btn-warning">Set Paused</button>
-    <button type="submit" name="setStatus" value="Closed" class="btn btn-secondary">Set Closed</button>
-    <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+  <div class="text-end">
+    <button class="btn btn-success" type="submit">Save</button>
   </div>
 </form>
+
+<!-- Apply Template Modal -->
+<div class="modal fade" id="applyTplModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-body p-3" id="applyTplModalBody">
+        <div class="d-flex align-items-center">
+          <div class="spinner-border me-2" role="status" aria-hidden="true"></div>
+          Loading templates…
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Save As Template Modal -->
+<div class="modal fade" id="saveAsTemplateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Save Job As Template</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form asp-area="Recruiter" asp-controller="Jobs" asp-action="SaveAsTemplate" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@Model.job_listing_id" />
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Template Name</label>
+            <input class="form-control" name="name" placeholder="This will be saved under Templates → Job Templates." />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Template</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  <script>
+    async function loadTplModal(jobId, q) {
+      try {
+        const box = document.getElementById('applyTplModalBody');
+        box.innerHTML =
+          '<div class="d-flex align-items-center"><div class="spinner-border me-2" role="status"></div>Loading templates…</div>';
+        const url = new URL('@Url.Action("Modal", "JobPostTemplates", new { area = "Recruiter" })', window.location.origin);
+        url.searchParams.set('jobId', jobId);
+        if (q) url.searchParams.set('q', q);
+        const res = await fetch(url, { credentials: 'same-origin' });
+        box.innerHTML = await res.text();
+      } catch (e) {
+        document.getElementById('applyTplModalBody').innerHTML =
+          '<div class="text-danger">Failed to load templates. Please refresh.</div>';
+      }
+      return false;
+    }
+  </script>
+}

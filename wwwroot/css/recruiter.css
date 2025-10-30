@@ -1,28 +1,187 @@
-/* Layout basics */
-body { min-height: 100vh; }
-.app { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px); }
-.sidebar { border-right: 1px solid #eee; }
-.chip { display:inline-block; padding:.2rem .5rem; border-radius:.5rem; background:#f6f6f6; font-size:.8rem; }
+/* File: wwwroot/css/recruiter.css */
 
-/* Kanban */
-.kanban { display:grid; grid-template-columns: repeat(6, minmax(220px,1fr)); gap:12px; align-items:start; }
-.kanban-col { background:#fafafa; border:1px dashed #ddd; border-radius:.5rem; padding:10px; min-height:240px; }
-.kanban-col.drop-hover { background:#f1f5ff; border-color:#9ec5fe; }
-.candidate-card { background:#fff; border:1px solid #e6e6e6; border-radius:.5rem; padding:10px; margin-bottom:8px; cursor:grab; }
-.candidate-card.dragging { opacity:.6; border-style:dashed; }
-.score { font-weight:700; }
-
-/* Skeleton loading */
-.skeleton { position:relative; overflow:hidden; background:#f0f2f5; border-radius:.25rem; }
-.skeleton::after{
-  content:""; position:absolute; inset:0; transform:translateX(-100%);
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);
-  animation:shimmer 1.2s infinite;
+/* Layout */
+body {
+  min-height: 100vh;
 }
-@keyframes shimmer { 100% { transform: translateX(100%); } }
 
-/* Active nav */
-.list-group-item.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 64px);
+}
+
+.sidebar {
+  border-right: 1px solid #eee;
+}
 
 /* Utilities */
-.table-responsive { scrollbar-gutter: stable both-edges; }
+.table-responsive {
+  scrollbar-gutter: stable both-edges;
+}
+
+.chip {
+  display: inline-block;
+  padding: .2rem .5rem;
+  border-radius: .5rem;
+  background: #f6f6f6;
+  font-size: .8rem;
+}
+
+/* Kanban */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.kanban-col {
+  background: #fafafa;
+  border: 1px dashed #ddd;
+  border-radius: .5rem;
+  padding: 10px;
+  min-height: 240px;
+}
+
+.kanban-col.drop-hover {
+  background: #f1f5ff;
+  border-color: #9ec5fe;
+}
+
+.candidate-card {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: .5rem;
+  padding: 10px;
+  margin-bottom: 8px;
+  cursor: grab;
+}
+
+.candidate-card.dragging {
+  opacity: .6;
+  border-style: dashed;
+}
+
+.score {
+  font-weight: 700;
+}
+
+/* Skeleton */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #f0f2f5;
+  border-radius: .25rem;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .4), transparent);
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Active nav */
+.list-group-item.active {
+  background: #0d6efd;
+  color: #fff;
+  border-color: #0d6efd;
+}
+
+/* === Templates submenu styling === */
+.nav-templates .parent.active-parent {
+  background-color: var(--bs-primary);
+  color: #fff;
+}
+
+.nav-templates .parent.active-parent:hover {
+  color: #fff;
+}
+
+.nav-templates .subnav .list-group-item {
+  border: 0;
+  padding-left: 1.75rem;
+  /* indent children */
+  font-size: .95rem;
+}
+
+.nav-templates .subnav .list-group-item+.list-group-item {
+  border-top: 1px solid rgba(0, 0, 0, .05);
+}
+
+.nav-templates .subnav .list-group-item.active {
+  font-weight: 600;
+}
+
+/* === Side-by-side diff polish === */
+.diff-card {
+  border: 1px solid #e9ecef;
+  border-radius: .75rem;
+}
+
+.diff-head {
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.field {
+  padding: .75rem 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.field:last-child {
+  border-bottom: 0;
+}
+
+.field-label {
+  font-size: .8rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
+.field-body {
+  white-space: pre-wrap;
+}
+
+.changed {
+  background: #fff8e1;
+}
+
+/* Job Templates index: keep actions neat and aligned */
+.jobtpl-table .actions-col {
+  width: 360px;
+}
+
+/* fixed column width for consistent layout */
+.jobtpl-table .actions-cell {
+  white-space: nowrap;
+}
+
+/* prevent wrapping */
+.jobtpl-table .actions-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .4rem;
+  flex-wrap: nowrap;
+}
+
+.jobtpl-table .actions-toolbar .btn {
+  padding-inline: .6rem;
+}
+
+.jobtpl-table .actions-toolbar .btn-success {
+  white-space: nowrap;
+}
+
+/* long label, keep on one line */

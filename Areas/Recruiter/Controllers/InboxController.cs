@@ -1,7 +1,9 @@
+// File: Areas/Recruiter/Controllers/InboxController.cs
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;          // DbContext + entities
@@ -16,8 +18,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private readonly AppDbContext _db;
         public InboxController(AppDbContext db) => _db = db;
 
-        // GET: /Recruiter/Inbox
-        // Uses cached conversation fields (last_message_at, last_snippet, unread_for_recruiter, candidate_name)
         [HttpGet]
         public async Task<IActionResult> Index()
         {
@@ -25,7 +25,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             ViewData["Title"] = "Inbox";
 
-            // Prefer conversations where recruiter_id is set; otherwise fall back to job owner for safety
             var convs = await _db.conversations
                 .Include(c => c.job_listing)
                 .Where(c =>
@@ -44,7 +43,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
                 threads.Add(new ThreadListItemVM(
                     Id: c.conversation_id,
-                    JobTitle: c.job_title ?? c.job_listing.job_title,   // cached title if present
+                    JobTitle: c.job_title ?? c.job_listing.job_title,
                     Participant: participant,
                     LastSnippet: c.last_snippet ?? "",
                     LastAt: lastAt.ToString("yyyy-MM-dd HH:mm"),
@@ -52,22 +51,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 ));
             }
 
-            // sort newest first by cached timestamp string (same format)
             threads = threads.OrderByDescending(t => t.LastAt).ToList();
 
             ViewBag.Threads = threads;
             return View();
         }
 
-        // GET: /Recruiter/Inbox/Thread/{id}?before=ISO8601
-        // Keyset pagination + unread clearing and keeps cached counters in sync
+        // GET: /Recruiter/Inbox/Thread/{id}?before=ISO8601&draft=...
         [HttpGet]
-        public async Task<IActionResult> Thread(int id, string? before = null)
+        public async Task<IActionResult> Thread(int id, string? before = null, string? draft = null)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var conv = await _db.conversations
                 .Include(c => c.job_listing)
+                .ThenInclude(j => j.company) // needed for company_name
                 .FirstOrDefaultAsync(c =>
                     c.conversation_id == id &&
                     ((c.recruiter_id != null && c.recruiter_id == recruiterId) ||
@@ -83,7 +81,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
             else
             {
-                // Fallback: infer from last message if candidate_id wasn't cached
                 var lastNonRecruiter = await _db.messages
                     .Where(m => m.conversation_id == id && m.sender_id != recruiterId)
                     .OrderByDescending(m => m.msg_timestamp)
@@ -92,7 +89,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 otherId = lastNonRecruiter == 0 ? recruiterId : lastNonRecruiter;
             }
 
-            // Load newest N, then “Load older” using keyset on timestamp
             const int pageSize = 50;
 
             var q = _db.messages
@@ -108,7 +104,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Include(m => m.receiver)
                 .ToListAsync();
 
-            // oldest-first for display
             var msgsAsc = batch.OrderBy(m => m.msg_timestamp).ToList();
 
             var vms = msgsAsc.Select(m => new NoteVM(
@@ -119,7 +114,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 FromRecruiter: m.sender_id == recruiterId
             )).ToList();
 
-            // Mark unread as read for recruiter, and clear cached counter
             var unread = await _db.messages
                 .Where(m => m.conversation_id == id && m.receiver_id == recruiterId && !m.is_read)
                 .ToListAsync();
@@ -127,7 +121,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (unread.Count > 0)
             {
                 unread.ForEach(m => m.is_read = true);
-                conv.unread_for_recruiter = 0; // keep denormalized counter in sync
+                conv.unread_for_recruiter = 0;
                 await _db.SaveChangesAsync();
             }
 
@@ -136,7 +130,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 : null;
 
             ViewData["Title"] = $"Thread #{id} — {(conv.job_title ?? conv.job_listing.job_title)}";
-            ViewBag.Messages = vms;                 // keep your existing view contract
+            ViewBag.Messages = vms;
             ViewBag.ThreadId = id;
             ViewBag.OtherUser = !string.IsNullOrWhiteSpace(conv.candidate_name)
                                 ? conv.candidate_name
@@ -144,14 +138,29 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.OtherUserId = otherId;
             ViewBag.BeforeCursor = beforeCursor;
 
+            // expose helpers for client-side placeholder assist
+            var otherFirst = (ViewBag.OtherUser as string ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "there";
+            ViewBag.OtherUserFirst = otherFirst;
+            ViewBag.JobTitle = conv.job_title ?? conv.job_listing.job_title ?? string.Empty;
+            var recruiter = await _db.users.Where(u => u.user_id == recruiterId).Select(u => new { u.first_name, u.last_name }).FirstOrDefaultAsync();
+            ViewBag.RecruiterNameFirst = $"{recruiter?.first_name} {recruiter?.last_name}".Trim();
+            ViewBag.Company = conv.job_listing.company?.company_name ?? ""; // FIX: company is on job_listing.company
+
+            // prefill message box if redirected from Templates/Fill
+            ViewBag.Draft = string.IsNullOrWhiteSpace(draft) ? null : draft;
+
             return View();
         }
 
         // POST: /Recruiter/Inbox/Send
-        // Writes one row and updates conversation summary + unread counters
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Send(int id, string text)
+        public async Task<IActionResult> Send(
+            int id,
+            string text,
+            string? date = null,
+            string? time = null,
+            Dictionary<string, string>? tokens = null)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
@@ -163,6 +172,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var conv = await _db.conversations
                 .Include(c => c.job_listing)
+                .ThenInclude(j => j.company) // FIX: need company for placeholder
                 .FirstOrDefaultAsync(c =>
                     c.conversation_id == id &&
                     ((c.recruiter_id != null && c.recruiter_id == recruiterId) ||
@@ -170,7 +180,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (conv == null) return NotFound();
 
-            // Decide receiver: prefer cached candidate_id
             int otherId = conv.candidate_id ?? await _db.messages
                 .Where(m => m.conversation_id == id)
                 .OrderByDescending(m => m.msg_timestamp)
@@ -179,7 +188,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (otherId == 0 || otherId == recruiterId)
             {
-                // ultimate fallback: first distinct participant not recruiter
                 otherId = await _db.messages
                     .Where(m => m.conversation_id == id)
                     .SelectMany(m => new[] { m.sender_id, m.receiver_id })
@@ -193,6 +201,52 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
             }
 
+            // --- Smart token merge ---
+            var candidateName = conv.candidate_name ?? $"User #{otherId}";
+            var firstName = candidateName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "there";
+            var jobTitle = conv.job_title ?? conv.job_listing.job_title ?? string.Empty;
+            var recruiterRow = await _db.users
+                .Where(u => u.user_id == recruiterId)
+                .Select(u => new { u.first_name, u.last_name })
+                .FirstOrDefaultAsync();
+            var recruiterName = $"{recruiterRow?.first_name} {recruiterRow?.last_name}".Trim();
+            var company = conv.job_listing.company?.company_name ?? ""; // FIX
+
+            var context = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FirstName"] = firstName,
+                ["JobTitle"] = jobTitle,
+                ["RecruiterName"] = recruiterName,
+                ["Company"] = company,
+                ["Date"] = date ?? "",
+                ["DueDate"] = tokens != null && tokens.TryGetValue("DueDate", out var dd) ? dd : "",
+                ["Time"] = time ?? ""
+            };
+
+            tokens ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            string processed = text;
+
+            processed = ReplaceInsensitive(processed, "Hi User", $"Hi {firstName}");
+
+            var tokenRegex = new Regex(@"\{\{\s*([A-Za-z0-9_]+)\s*\}\}", RegexOptions.Compiled);
+            var matches = tokenRegex.Matches(processed);
+            foreach (Match m in matches)
+            {
+                var token = m.Groups[1].Value;
+                string? value = null;
+
+                if (tokens.TryGetValue(token, out var v1) && !string.IsNullOrWhiteSpace(v1))
+                    value = v1.Trim();
+                else if (context.TryGetValue(token, out var v2) && !string.IsNullOrWhiteSpace(v2))
+                    value = v2.Trim();
+
+                if (value != null)
+                {
+                    processed = ReplaceInsensitive(processed, "{{" + token + "}}", value);
+                }
+            }
+
             var now = DateTime.Now;
 
             var msg = new message
@@ -200,21 +254,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 conversation_id = id,
                 sender_id = recruiterId,
                 receiver_id = otherId,
-                msg_content = text,
+                msg_content = processed,
                 msg_timestamp = now,
                 is_read = false
             };
 
             _db.messages.Add(msg);
 
-            // Keep denormalized conversation summary & unread counters in sync
             conv.last_message_at = now;
-            conv.last_snippet = text.Length > 200 ? text.Substring(0, 200) : text;
+            conv.last_snippet = processed.Length > 200 ? processed.Substring(0, 200) : processed;
 
             if (otherId == conv.recruiter_id) conv.unread_for_recruiter++;
             else conv.unread_for_candidate++;
 
-            // cache participant info if missing
             if (conv.candidate_id == null && otherId != recruiterId)
             {
                 conv.candidate_id = otherId;
@@ -238,5 +290,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             return RedirectToAction(nameof(Thread), new { id });
         }
+
+        // WHY: case-insensitive, culture-invariant token replacement
+        private static string ReplaceInsensitive(string input, string search, string replace)
+            => Regex.Replace(input,
+                             Regex.Escape(search),
+                             replace.Replace("$", "$$"),
+                             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 }

@@ -1,0 +1,180 @@
+@* ===============================================
+   File: Areas/Recruiter/Views/JobPostTemplates/Preview.cshtml
+   Side-by-side only when jobId>0; otherwise single-pane.
+   =============================================== *@
+@{
+    ViewData["Title"] = "Preview Job Template";
+
+    int tplId = (int)ViewBag.TemplateId;
+    string name = ViewBag.Name ?? "";
+
+    // BUGFIX: don't use `as int?` (boxed int → null). Use pattern match.
+    int? jobId = ViewBag.JobId is int v ? v : (int?)null;
+    bool hasJob = jobId.HasValue && jobId.Value > 0;
+
+    string tTitle = ViewBag.Title ?? "";
+    string tDesc = ViewBag.Description ?? "";
+    string tMust = ViewBag.Must ?? "";
+    string tNice = ViewBag.Nice ?? "";
+    string tStatus = ViewBag.Status ?? "Open";
+
+    string cTitle = ViewBag.CurTitle ?? "";
+    string cDesc = ViewBag.CurDescription ?? "";
+    string cMust = ViewBag.CurMust ?? "";
+    string cNice = ViewBag.CurNice ?? "";
+    string cStatus = ViewBag.CurStatus ?? "";
+
+    bool diffTitle = hasJob && !string.Equals(cTitle, tTitle, StringComparison.Ordinal);
+    bool diffDesc = hasJob && !string.Equals(cDesc, tDesc, StringComparison.Ordinal);
+    bool diffMust = hasJob && !string.Equals(cMust, tMust, StringComparison.Ordinal);
+    bool diffNice = hasJob && !string.Equals(cNice, tNice, StringComparison.Ordinal);
+    bool diffStat = hasJob && !string.Equals(cStatus, tStatus, StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-0">@ViewData["Title"]</h3>
+        <div class="small text-muted">Template: <strong>@name</strong></div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Edit"
+            asp-route-id="@tplId">Edit</a>
+
+        @if (hasJob)
+        {
+            <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Apply"
+                asp-route-id="@tplId" asp-route-jobId="@jobId">Apply to this job</a>
+        }
+        else
+        {
+            <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Apply"
+                asp-route-id="@tplId" asp-route-jobId="0">Use this template</a>
+        }
+    </div>
+</div>
+
+@if (!hasJob)
+{
+    <div class="diff-card">
+        <div class="diff-head d-flex justify-content-between">
+            <span>Template Details</span>
+            <span class="small text-muted">Status: @tStatus</span>
+        </div>
+        <div class="field">
+            <div class="field-label">JOB TITLE</div>
+            <div>@tTitle</div>
+        </div>
+        <div class="field">
+            <div class="field-label">JOB DESCRIPTION</div>
+            <div>@tDesc</div>
+        </div>
+        <div class="field">
+            <div class="field-label">MUST-HAVE</div>
+            <div>@tMust</div>
+        </div>
+        <div class="field">
+            <div class="field-label">NICE-TO-HAVE</div>
+            <div>@tNice</div>
+        </div>
+        <div class="field">
+            <div class="field-label">STATUS</div>
+            <div>@tStatus</div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="diff-grid">
+        <div class="diff-card">
+            <div class="diff-head d-flex justify-content-between">
+                <span>Current Job</span>
+                <span class="small text-muted">Status: @cStatus</span>
+            </div>
+
+            <div class="field @(diffTitle ? "changed" : "")">
+                <div class="field-label">TITLE</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>@cTitle</div>
+                    @if (diffTitle)
+                    {
+                        <span class="badge rounded-pill text-bg-warning">WILL CHANGE</span>
+                    }
+                </div>
+            </div>
+
+            <div class="field @(diffDesc ? "changed" : "")">
+                <div class="field-label">DESCRIPTION</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>@cDesc</div>
+                    @if (diffDesc)
+                    {
+                        <span class="badge rounded-pill text-bg-warning">WILL CHANGE</span>
+                    }
+                </div>
+            </div>
+
+            <div class="field @(diffMust ? "changed" : "")">
+                <div class="field-label">MUST-HAVE</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>@cMust</div>
+                    @if (diffMust)
+                    {
+                        <span class="badge rounded-pill text-bg-warning">WILL CHANGE</span>
+                    }
+                </div>
+            </div>
+
+            <div class="field @(diffNice ? "changed" : "")">
+                <div class="field-label">NICE-TO-HAVE</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>@cNice</div>
+                    @if (diffNice)
+                    {
+                        <span class="badge rounded-pill text-bg-warning">WILL CHANGE</span>
+                    }
+                </div>
+            </div>
+
+            <div class="field @(diffStat ? "changed" : "")">
+                <div class="field-label">STATUS</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>@cStatus</div>
+                    @if (diffStat)
+                    {
+                        <span class="badge rounded-pill text-bg-warning">WILL CHANGE</span>
+                    }
+                </div>
+            </div>
+
+            <div class="small text-muted mt-2">Highlighted sections indicate values that will change if you apply the
+                template.</div>
+        </div>
+
+        <div class="diff-card">
+            <div class="diff-head d-flex justify-content-between">
+                <span>Template</span>
+                <span class="small text-muted">Status: @tStatus</span>
+            </div>
+            <div class="field changed">
+                <div class="field-label">TITLE</div>
+                <div>@tTitle</div>
+            </div>
+            <div class="field changed">
+                <div class="field-label">DESCRIPTION</div>
+                <div>@tDesc</div>
+            </div>
+            <div class="field changed">
+                <div class="field-label">MUST-HAVE</div>
+                <div>@tMust</div>
+            </div>
+            <div class="field changed">
+                <div class="field-label">NICE-TO-HAVE</div>
+                <div>@tNice</div>
+            </div>
+            <div class="field changed">
+                <div class="field-label">STATUS</div>
+                <div>@tStatus</div>
+            </div>
+        </div>
+    </div>
+}

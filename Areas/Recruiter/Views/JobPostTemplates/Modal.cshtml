@@ -1,0 +1,76 @@
+@* ===============================================
+   File: Areas/Recruiter/Views/JobPostTemplates/Modal.cshtml
+   Apply Template… modal partial (AJAX-loaded)
+   =============================================== *@
+@model JobPortal.Areas.Recruiter.Models.TemplateModalVM
+@{
+    int jobId = Model.JobId;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <h6 class="mb-0">Apply Template</h6>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<form class="mb-3" onsubmit="return loadTplModal(@jobId, (document.getElementById('tplModalQ')||{}).value);">
+    <div class="input-group">
+        <input id="tplModalQ" class="form-control" name="q" value="@Model.Query" placeholder="Search templates..." />
+        <button class="btn btn-outline-secondary" type="submit">Search</button>
+    </div>
+</form>
+
+@if (Model.Recents?.Any() == true)
+{
+    <div class="mb-2 small text-muted">Recently used</div>
+    <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+            <tbody>
+                @foreach (var t in Model.Recents)
+                {
+                    <tr>
+                        <td class="fw-semibold" style="width:40%">@t.Name</td>
+                        <td class="text-muted">@t.Snippet</td>
+                        <td class="text-end" style="width:210px">
+                            <a class="btn btn-outline-primary btn-sm me-1" target="_blank" asp-area="Recruiter"
+                                asp-controller="JobPostTemplates" asp-action="Preview" asp-route-id="@t.Id"
+                                asp-route-jobId="@jobId">Preview</a>
+                            <a class="btn btn-primary btn-sm" asp-area="Recruiter" asp-controller="JobPostTemplates"
+                                asp-action="Apply" asp-route-id="@t.Id" asp-route-jobId="@jobId">Apply</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<div class="mb-2 small text-muted">All templates</div>
+<div class="table-responsive" style="max-height:50vh;overflow:auto;">
+    <table class="table table-sm align-middle">
+        <tbody>
+            @if (!Model.Items.Any())
+            {
+                <tr>
+                    <td class="text-muted">No templates found.</td>
+                </tr>
+            }
+            else
+            {
+                foreach (var t in Model.Items)
+                {
+                    <tr>
+                        <td class="fw-semibold" style="width:40%">@t.Name</td>
+                        <td class="text-muted">@t.Snippet</td>
+                        <td class="text-end" style="width:210px">
+                            <a class="btn btn-outline-primary btn-sm me-1" target="_blank" asp-area="Recruiter"
+                                asp-controller="JobPostTemplates" asp-action="Preview" asp-route-id="@t.Id"
+                                asp-route-jobId="@jobId">Preview</a>
+                            <a class="btn btn-primary btn-sm" asp-area="Recruiter" asp-controller="JobPostTemplates"
+                                asp-action="Apply" asp-route-id="@t.Id" asp-route-jobId="@jobId">Apply</a>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>

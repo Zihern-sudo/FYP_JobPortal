@@ -1,66 +1,180 @@
-@using JobPortal.Areas.Recruiter.Models
 @{
   ViewData["Title"] = ViewData["Title"] ?? "Thread";
-  var msgs = (IEnumerable<NoteVM>)(ViewBag.Messages ?? Enumerable.Empty<NoteVM>());
-  int threadId = (int)ViewBag.ThreadId;
-  string jobTitle = (string)(ViewBag.JobTitle ?? "");
-  string otherUser = (string)ViewBag.OtherUser;
-  string firstName = (otherUser ?? "").Trim().Split(' ').FirstOrDefault() ?? "there";
-  string? beforeCursor = ViewBag.BeforeCursor as string;
-
-  // Pull the merged template text back into the input box
-  var draftVal = (Context?.Request?.Query["draft"].ToString()) ?? "";
+  var messages = (IEnumerable<JobPortal.Areas.Recruiter.Models.NoteVM>)ViewBag.Messages;
+  var threadId = (int)ViewBag.ThreadId;
+  string otherFirst = ViewBag.OtherUserFirst ?? "there";
+  string jobTitle = ViewBag.JobTitle ?? "";
+  string recruiterName = ViewBag.RecruiterNameFirst ?? "";
+  string company = ViewBag.Company ?? "";
+  string? draft = ViewBag.Draft as string;
 }
-
-<h3 class="mb-3">Thread #@threadId — @ViewBag.JobTitle</h3>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>@ViewData["Title"]</h3>
+  <a class="btn btn-outline-secondary"
+    href="@(Url.Action("Index", "Templates", new { area = "Recruiter", threadId = threadId, firstName = otherFirst, jobTitle = jobTitle }))">
+    Open Templates
+  </a>
+</div>
 
 <div class="card mb-3">
-  <div class="card-header">Conversation with @otherUser</div>
-  <div class="card-body" style="min-height:320px;">
-
-    @if (!string.IsNullOrEmpty(beforeCursor))
+  <div class="card-header">Conversation with @ViewBag.OtherUser</div>
+  <div class="card-body">
+    @foreach (var m in messages)
     {
-      <div class="text-center mb-3">
-        <a class="btn btn-outline-secondary btn-sm" asp-area="Recruiter" asp-controller="Inbox" asp-action="Thread"
-          asp-route-id="@threadId" asp-route-before="@beforeCursor">
-          Load older
-        </a>
-      </div>
-    }
-
-    @if (!msgs.Any())
-    {
-      <div class="text-muted">No messages yet.</div>
-    }
-    else
-    {
-      foreach (var m in msgs)
-      {
-        <div class="d-flex mb-3 @(m.FromRecruiter ? "justify-content-end" : "justify-content-start")">
-          <div class="p-3 rounded-3 border" style="max-width:640px;">
-            <div class="small text-muted">@m.Author • @m.CreatedAt</div>
-            <div class="mt-1">@m.Text</div>
-          </div>
+      <div class="mb-3 @(m.FromRecruiter ? "text-end" : "text-start")">
+        <div class="d-inline-block border rounded p-2">
+          <div class="small text-muted">@m.Author • @m.CreatedAt</div>
+          <div>@m.Text</div>
         </div>
-      }
-    }
-  </div>
-
-  <div class="card-footer">
-    <div class="d-flex justify-content-between mb-2">
-      <a class="btn btn-outline-secondary btn-sm" asp-area="Recruiter" asp-controller="Templates" asp-action="Index"
-        asp-route-threadId="@threadId" asp-route-jobTitle="@jobTitle" asp-route-firstName="@firstName">
-        Open Templates
-      </a>
-    </div>
-
-    <form asp-area="Recruiter" asp-controller="Inbox" asp-action="Send" method="post">
-      @Html.AntiForgeryToken()
-      <input type="hidden" name="id" value="@threadId" />
-      <div class="input-group">
-        <input name="text" class="form-control" placeholder="Type a message..." value="@draftVal" />
-        <button class="btn btn-primary" type="submit">Send</button>
       </div>
-    </form>
+    }
   </div>
 </div>
+
+<form asp-action="Send" asp-controller="Inbox" asp-area="Recruiter" method="post" class="card" id="sendForm">
+  @Html.AntiForgeryToken()
+  <input type="hidden" name="id" value="@threadId" />
+  <div id="token-helper" class="card-header d-none">
+    <div class="row g-2 align-items-end" id="token-fields">
+      <div class="col-auto">
+        <span class="small text-muted">Placeholders detected. Fill to auto-merge.</span>
+      </div>
+    </div>
+  </div>
+  <div class="card-body">
+    <textarea name="text" id="composer" class="form-control" rows="3" placeholder="Type a message…">@draft</textarea>
+  </div>
+  <div class="card-footer d-flex justify-content-end gap-2">
+    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveTplModal">
+      Save as Template
+    </button>
+    <button class="btn btn-primary" type="submit">Send</button>
+  </div>
+</form>
+
+<!-- Modal: Save as Template / Save & Use -->
+<div class="modal fade" id="saveTplModal" tabindex="-1" aria-labelledby="saveTplLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" asp-area="Recruiter" asp-controller="Templates" asp-action="QuickSave" id="quickSaveForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="threadId" value="@threadId" />
+        <input type="hidden" name="body" id="quickSaveBody" />
+        <input type="hidden" name="useNow" id="quickSaveUseNow" value="false" />
+        <div class="modal-header">
+          <h5 class="modal-title" id="saveTplLabel">Save as Template</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Template Name <span class="text-danger">*</span></label>
+            <input name="name" id="quickSaveName" class="form-control" maxlength="120" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Subject (optional)</label>
+            <input name="subject" id="quickSaveSubject" class="form-control" maxlength="200" />
+          </div>
+          <div class="small text-muted">
+            The current message text will be saved as the template body. Placeholders like <code>{{FirstName}}</code>,
+            <code>{{Date}}</code> are supported.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-outline-primary" id="btnSaveOnly">Save</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveUse">Save &amp; Use</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@section Scripts {
+  <script>
+    (function () {
+      const composer = document.getElementById('composer');
+      const helper = document.getElementById('token-helper');
+      const fields = document.getElementById('token-fields');
+
+      const ctx = {
+        FirstName: '@otherFirst',
+        JobTitle: '@jobTitle',
+        RecruiterName: '@recruiterName',
+        Company: '@company'
+      };
+
+      function replaceAllCaseInsensitive(s, find, repl) {
+        const esc = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return s.replace(new RegExp(esc, 'ig'), repl);
+      }
+
+      function ensureFriendlyDefaults() {
+        let v = composer.value || '';
+        if (/hi\s+user/i.test(v)) v = v.replace(/hi\s+user/ig, 'Hi ' + ctx.FirstName);
+        v = replaceAllCaseInsensitive(v, '{{FirstName}}', ctx.FirstName);
+        v = replaceAllCaseInsensitive(v, '{{JobTitle}}', ctx.JobTitle);
+        v = replaceAllCaseInsensitive(v, '{{RecruiterName}}', ctx.RecruiterName);
+        v = replaceAllCaseInsensitive(v, '{{Company}}', ctx.Company);
+        composer.value = v;
+      }
+
+      function scanTokens() {
+        const v = composer.value || '';
+        const re = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+        const found = new Set();
+        let m;
+        while ((m = re.exec(v)) !== null) found.add(m[1]);
+
+        fields.innerHTML = '<div class="col-auto"><span class="small text-muted">Placeholders detected. Fill to auto-merge.</span></div>';
+
+        const needs = Array.from(found);
+        const visible = needs.length > 0;
+        helper.classList.toggle('d-none', !visible);
+        if (!visible) return;
+
+        needs.forEach(tok => {
+          if (['FirstName', 'JobTitle', 'RecruiterName', 'Company'].includes(tok)) {
+            const hint = document.createElement('div');
+            hint.className = 'col-auto';
+            hint.innerHTML = `<span class="badge bg-light text-dark"> ${tok}: ${ctx[tok] || '(auto)'} </span>`;
+            fields.appendChild(hint);
+            return;
+          }
+
+          const col = document.createElement('div');
+          col.className = 'col-auto';
+          let inputType = 'text';
+          if (tok.toLowerCase() === 'date' || tok.toLowerCase() === 'duedate') inputType = 'date';
+          else if (tok.toLowerCase() === 'time') inputType = 'time';
+
+          col.innerHTML = `
+                  <label class="form-label mb-0 small">${tok}</label>
+                  <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
+              `;
+          fields.appendChild(col);
+        });
+      }
+
+      function init() {
+        ensureFriendlyDefaults();
+        scanTokens();
+
+        // Hook QuickSave modal submit: copy composer text and set useNow flag
+        const quickSaveForm = document.getElementById('quickSaveForm');
+        const quickSaveBody = document.getElementById('quickSaveBody');
+        const useNowField = document.getElementById('quickSaveUseNow');
+
+        function prepForm(useNow) {
+          quickSaveBody.value = composer.value || '';
+          useNowField.value = useNow ? 'true' : 'false';
+        }
+
+        document.getElementById('btnSaveOnly').addEventListener('click', function () { prepForm(false); });
+        document.getElementById('btnSaveUse').addEventListener('click', function () { prepForm(true); });
+      }
+
+      composer.addEventListener('input', scanTokens);
+      document.addEventListener('DOMContentLoaded', init);
+    })();
+  </script>
+}

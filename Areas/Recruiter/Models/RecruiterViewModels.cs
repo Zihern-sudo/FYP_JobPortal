@@ -125,4 +125,37 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Notes")]
         public string? Notes { get; set; }
     }
+
+    public class JobTemplateFormVM
+    {
+        public int? TemplateId { get; set; }
+
+        [Required, Display(Name = "Template Name")]
+        public string Name { get; set; } = "";
+
+        [Required, Display(Name = "Job Title")]
+        public string Title { get; set; } = "";
+
+        [Display(Name = "Job Description")]
+        public string? Description { get; set; }
+
+        [Display(Name = "Must-have Requirements")]
+        public string? MustHaves { get; set; }
+
+        [Display(Name = "Nice-to-have Requirements")]
+        public string? NiceToHaves { get; set; }
+
+        [Display(Name = "Status")]
+        public JobStatus Status { get; set; } = JobStatus.Open;
+    }
+
+
+    public record TemplateRowVM(int Id, string Name, string Snippet);
+
+    public record TemplateModalVM(
+        int JobId,
+        string Query,
+        IList<TemplateRowVM> Recents,
+        IList<TemplateRowVM> Items
+    );
 }

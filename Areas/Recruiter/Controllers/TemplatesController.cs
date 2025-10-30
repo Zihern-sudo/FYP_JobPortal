@@ -24,7 +24,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewData["Title"] = "Message Templates";
             ViewBag.ThreadId = threadId;
 
-            // Only show the current recruiter's active, message-type templates
             var raw = await _db.templates.AsNoTracking()
                 .Where(t => t.template_status == "Active"
                             && !t.template_name.StartsWith("[JOB]")
@@ -68,7 +67,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }).ToList();
 
             ViewBag.Items = items;
-            return View("Index"); // reuse Index view
+            return View("Index");
         }
 
         // Unarchive
@@ -95,7 +94,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            // 1) Load the active template owned by this recruiter
             var tpl = await _db.templates
                 .AsNoTracking()
                 .FirstOrDefaultAsync(t => t.template_id == id
@@ -103,7 +101,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                                        && t.user_id == recruiterId);
             if (tpl == null) return NotFound();
 
-            // 2) Best-effort context from conversation, fallback to query args
             var conv = await _db.conversations
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.conversation_id == threadId);
@@ -114,21 +111,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var jt = !string.IsNullOrWhiteSpace(jobTitle)
                        ? jobTitle!
                        : (conv?.job_title ?? string.Empty);
-            var co = string.Empty; // extend if you add company fields later
+            var co = string.Empty;
 
-            // 3) Simple token merge (case-sensitive for now)
             string draft = tpl.template_body ?? "";
             draft = draft.Replace("{{FirstName}}", fn)
                          .Replace("{{JobTitle}}", jt)
                          .Replace("{{Company}}", co);
 
-            // 4) Redirect back with the draft prefilled
+            // NOTE: we leave {{Date}} and {{Time}} in place so the Thread view can show pickers.
             return RedirectToAction("Thread", "Inbox", new { area = "Recruiter", id = threadId, draft });
         }
 
         private static string Merge(string text, string firstName, string jobTitle)
             => text.Replace("{{FirstName}}", firstName, StringComparison.OrdinalIgnoreCase)
                    .Replace("{{JobTitle}}", jobTitle, StringComparison.OrdinalIgnoreCase);
+
 
         // Create
         [HttpGet]
@@ -237,6 +234,42 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             TempData["Message"] = "Template archived.";
             return RedirectToAction(nameof(Index));
+        }
+
+        // NEW: QuickSave supports Save & Use
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickSave(string name, string? subject, string body, int? threadId, bool useNow = false)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(body))
+            {
+                TempData["Message"] = "Template name and body are required.";
+                return RedirectToAction("Thread", "Inbox", new { area = "Recruiter", id = threadId });
+            }
+
+            var row = new template
+            {
+                user_id = recruiterId,
+                template_name = name.Trim(),
+                template_subject = string.IsNullOrWhiteSpace(subject) ? null : subject!.Trim(),
+                template_body = body,
+                template_status = "Active",
+                date_created = DateTime.Now,
+                date_updated = DateTime.Now
+            };
+
+            _db.templates.Add(row);
+            await _db.SaveChangesAsync();
+
+            TempData["Message"] = useNow ? "Template saved and inserted." : "Template saved.";
+
+            // Save & Use → return with composer prefilled
+            if (useNow && threadId.HasValue)
+                return RedirectToAction("Thread", "Inbox", new { area = "Recruiter", id = threadId.Value, draft = body });
+
+            // Normal save → just return to thread (no draft)
+            return RedirectToAction("Thread", "Inbox", new { area = "Recruiter", id = threadId });
         }
     }
 }

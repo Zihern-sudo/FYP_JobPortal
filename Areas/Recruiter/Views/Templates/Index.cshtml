@@ -16,10 +16,9 @@
   : (isArchived ? "Archived Templates" : "Message Templates");
 }
 
-
 <h3 class="mb-3">@pageTitle</h3>
 
-<div class="d-flex gap-2 mb-3">
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
   @if (!isArchived)
   {
     <a class="btn btn-primary" asp-area="Recruiter" asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")"
@@ -27,6 +26,16 @@
 
     <a class="btn btn-outline-secondary" asp-area="Recruiter"
       asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")" asp-action="Archived">Archived</a>
+
+    <div class="vr mx-1 d-none d-sm-block"></div>
+
+    <!-- Favourites toolbar -->
+    <button type="button" class="btn btn-outline-primary" id="btnMarkFav" title="Mark selected templates as favourite">
+      Mark as favourite
+    </button>
+    <button type="button" class="btn btn-outline-secondary" id="btnUnmarkFav" title="Remove favourite from selected">
+      Unmark favourite
+    </button>
   }
   else
   {
@@ -42,9 +51,12 @@
 else
 {
   <div class="table-responsive">
-    <table class="table align-middle">
+    <table class="table align-middle" id="tplTable">
       <thead>
         <tr>
+          <th style="width:34px">
+            <input type="checkbox" id="chkAll" title="Select all" />
+          </th>
           <th style="width:26%">Name</th>
           <th style="width:24%">Subject</th>
           <th>Snippet</th>
@@ -54,8 +66,17 @@ else
       <tbody>
         @foreach (var t in items)
         {
-          <tr>
-            <td>@t.Name</td>
+          <tr data-tpl-id="@t.Id">
+            <td>
+              <input type="checkbox" class="form-check-input fav-check" data-id="@t.Id"
+                aria-label="select template @t.Name" />
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <span class="fav-indicator badge bg-light text-muted d-none">Favourite</span>
+                <span>@t.Name</span>
+              </div>
+            </td>
             <td>@t.Subject</td>
             <td>@t.Snippet</td>
             <td class="text-end">
@@ -66,7 +87,6 @@ else
                   asp-action="Fill" asp-route-id="@t.Id" asp-route-threadId="@threadId" asp-route-firstName="@qFirst"
                   asp-route-jobTitle="@qJob">Use</a>
               }
-
 
               @if (!isArchived)
               {
@@ -95,4 +115,88 @@ else
       </tbody>
     </table>
   </div>
+}
+
+@section Scripts {
+  <script>
+    // Client-side favourites using localStorage. WHY: quick UX without DB changes.
+    (function () {
+      const KEY = 'favTemplates';
+      const table = document.getElementById('tplTable');
+      if (!table) return;
+      const body = table.querySelector('tbody');
+      const chkAll = document.getElementById('chkAll');
+      const btnMark = document.getElementById('btnMarkFav');
+      const btnUnmark = document.getElementById('btnUnmarkFav');
+
+      function getFavs() {
+        try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; }
+      }
+      function setFavs(arr) {
+        localStorage.setItem(KEY, JSON.stringify(arr));
+      }
+      function setFav(id, fav) {
+        const list = getFavs();
+        const idx = list.indexOf(id);
+        if (fav && idx < 0) list.push(id);
+        if (!fav && idx >= 0) list.splice(idx, 1);
+        setFavs(list);
+      }
+      function isFav(id) { return getFavs().includes(id); }
+
+      function applyFavUI() {
+        body.querySelectorAll('tr').forEach(tr => {
+          const id = parseInt(tr.getAttribute('data-tpl-id'));
+          const ind = tr.querySelector('.fav-indicator');
+          if (!ind) return;
+          const fav = isFav(id);
+          ind.classList.toggle('d-none', !fav);
+          tr.classList.toggle('table-warning', fav);
+          // keep checkbox checked state independent; it's for bulk actions
+        });
+      }
+
+      function reorder() {
+        const rows = Array.from(body.querySelectorAll('tr'));
+        const favs = getFavs();
+        rows.sort((a, b) => {
+          const ida = parseInt(a.getAttribute('data-tpl-id'));
+          const idb = parseInt(b.getAttribute('data-tpl-id'));
+          const af = favs.includes(ida) ? 1 : 0;
+          const bf = favs.includes(idb) ? 1 : 0;
+          if (af !== bf) return bf - af; // favourites first
+          return 0;
+        });
+        rows.forEach(r => body.appendChild(r));
+      }
+
+      function selectedIds() {
+        return Array.from(body.querySelectorAll('.fav-check:checked')).map(i => parseInt(i.getAttribute('data-id')));
+      }
+
+      // Bulk mark/unmark
+      if (btnMark) btnMark.addEventListener('click', () => {
+        const ids = selectedIds();
+        ids.forEach(id => setFav(id, true));
+        applyFavUI(); reorder();
+      });
+      if (btnUnmark) btnUnmark.addEventListener('click', () => {
+        const ids = selectedIds();
+        ids.forEach(id => setFav(id, false));
+        applyFavUI(); reorder();
+      });
+
+      // Select all checkbox
+      if (chkAll) chkAll.addEventListener('change', () => {
+        const checked = chkAll.checked;
+        body.querySelectorAll('.fav-check').forEach(cb => cb.checked = checked);
+      });
+
+      // Init
+      document.addEventListener('DOMContentLoaded', () => {
+        applyFavUI();
+        reorder();
+      });
+    })();
+  </script>
 }
