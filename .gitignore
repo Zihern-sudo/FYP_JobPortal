@@ -3,12 +3,48 @@ bin/
 obj/
 .vs/
 .vscode/
+.idea/                 # JetBrains Rider (if ever used)
+
+# Node / tooling (if you use them)
+node_modules/
+dist/
+build/
+coverage/
+
+# Static web assets generated on build (ASP.NET Core)
+*.staticwebassets.runtime.json
+*.staticwebassets.endpoints.json
+obj/**/staticwebassets/
+obj/**/scopedcss/
+
+# NuGet / packages
+*.nupkg
+*.snupkg
+packages/
+
+# Publish output (dotnet publish)
+publish/
+out/
 
 # User-specific or secret configs
-appsettings.Development.json
 *.user
 *.suo
+*.pubxml
+*.pubxml.user
+appsettings.Development.json
+appsettings.*.local.json
+.env
+
+# Logs & test results
+*.log
+TestResult*/
+*.trx
+*.coverage
+*.coveragexml
 
 # OS files
 *.DS_Store
 Thumbs.db
+
+# Optional front-end libraries restored by LibMan
+wwwroot/lib/
