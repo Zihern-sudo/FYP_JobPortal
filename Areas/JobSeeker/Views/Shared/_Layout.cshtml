@@ -1,0 +1,61 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - JobPortal</title>
+
+    <!-- CSS Links -->
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/jobseekerstyle.css" asp-append-version="true" />
+
+</head>
+
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-light">
+            <div class="container-fluid px-5 py-2">
+                <!-- ✅ Logo -->
+                <a class="navbar-brand" asp-controller="Home" asp-action="Index">
+                    <img src="~/images/logo.svg" alt="Logo" width="24" height="24" class="me-2" />
+                    JobPortal
+                </a>
+
+                <!-- ✅ Nav Links -->
+                <div class="d-flex align-items-center">
+                    <ul class="navbar-nav d-flex flex-row gap-3 me-3">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Jobs" asp-action="Index">Jobs</a>
+                        </li>
+                    </ul>
+
+                    <!-- ✅ "Post a Job" Button -->
+                    <a href="/jobs/post" class="post-job-btn">Post a Job</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ✅ Main Body -->
+    <div class="container my-5">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- ✅ Footer -->
+    <footer>
+        &copy; 2025 - JobPortal. All Rights Reserved.
+    </footer>
+
+    <!-- Scripts -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,8 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.IO.Compression;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Recruiter.Models;
+using JobPortal.Areas.Shared.Extensions; // <-- add this
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -21,10 +27,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
         // GET: /Recruiter/Bulk
         public async Task<IActionResult> Index()
         {
-            ViewData["Title"] = "Bulk Actions";
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            // TODO: replace this hard-coded recruiter with the logged-in recruiter later
-            var recruiterId = 3;
+            ViewData["Title"] = "Bulk Actions";
 
             var apps = await _db.job_applications
                 .Include(a => a.user)
@@ -85,6 +90,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MoveToShortlisted([FromForm] int[] selectedIds)
         {
+            if (!this.TryGetUserId(out _, out var early)) return early!;
+
             if (selectedIds == null || selectedIds.Length == 0)
             {
                 TempData["Message"] = "No candidates selected.";
@@ -112,34 +119,31 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ExportCvsZip([FromForm] int[] selectedIds)
         {
+            if (!this.TryGetUserId(out _, out var early)) return early!;
+
             if (selectedIds == null || selectedIds.Length == 0)
             {
                 TempData["Message"] = "No candidates selected.";
                 return RedirectToAction(nameof(Index));
             }
 
-            // Get the applications + users for the requested IDs
             var apps = await _db.job_applications
                 .Include(a => a.user)
                 .Where(a => selectedIds.Contains(a.application_id))
                 .ToListAsync();
 
-            // Which user_ids are we exporting?
             var userIds = apps.Select(a => a.user_id).Distinct().ToList();
 
-            // Pull ALL resumes for those users (not just "latest")
             var allResumes = await _db.resumes
                 .Where(r => userIds.Contains(r.user_id))
                 .OrderByDescending(r => r.upload_date)
                 .ToListAsync();
 
-            // We'll choose the first existing file on disk for each user
             var root = _env.WebRootPath ?? AppContext.BaseDirectory;
             var chosenByUser = new Dictionary<int, (string absPath, string ext)>();
 
             foreach (var uid in userIds)
             {
-                // all resumes for this user, newest first
                 var candidatesForUser = allResumes
                     .Where(r => r.user_id == uid)
                     .OrderByDescending(r => r.upload_date)
@@ -147,19 +151,16 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
                 foreach (var r in candidatesForUser)
                 {
-                    // normalise DB path to relative under wwwroot
-                    // e.g. "/uploads\resumes\Lee.pdf" -> "uploads/resumes/Lee.pdf"
                     var rel = (r.file_path ?? "")
                         .Replace('\\', '/')
                         .TrimStart('/');
 
-                    // build absolute full path on disk
                     var abs = Path.Combine(root, rel);
 
                     if (System.IO.File.Exists(abs))
                     {
                         chosenByUser[uid] = (abs, Path.GetExtension(abs));
-                        break; // stop at first valid physical file
+                        break;
                     }
                 }
             }
@@ -179,17 +180,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     var absPath = kvp.Value.absPath;
                     var ext = kvp.Value.ext;
 
-                    // Find the related application/user so we can name the file nicely
                     var appForUser = apps.FirstOrDefault(a => a.user_id == uid);
                     var first = appForUser?.user?.first_name ?? "";
                     var last = appForUser?.user?.last_name ?? "";
 
                     var safeBase = $"{first}_{last}".Trim();
                     if (string.IsNullOrWhiteSpace(safeBase))
-                    {
                         safeBase = $"user_{uid}";
-                    }
-
                     safeBase = safeBase.Replace(' ', '_');
 
                     var entryName = $"{safeBase}{ext}";

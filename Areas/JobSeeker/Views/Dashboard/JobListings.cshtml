@@ -1,0 +1,54 @@
+@model IEnumerable<JobPortal.Areas.Shared.Models.job_listing>
+
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Job Listings";
+}
+
+<link rel="stylesheet" href="~/css/dashboard.css" />
+
+<section class="job-listings-section">
+    <div class="header-bar">
+        <h1 class="page-title">Available Job Listings</h1>
+        <button class="favourite-btn">⭐ Favourited</button>
+    </div>
+
+    <!-- 🔍 Search Bar -->
+    <form asp-action="JobListings" method="get" class="job-filter-bar">
+        <input type="text" name="search" class="search-input"
+            placeholder="Search for job titles or companies..." value="@(Context.Request.Query["search"].ToString())" />
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <!-- 🧩 Dynamic Job Listings -->
+    <div class="job-listings-container">
+        @if (!Model.Any())
+        {
+            <p>No job listings available.</p>
+        }
+        else
+        {
+            foreach (var job in Model)
+            {
+                <div class="job-item">
+                    <div class="job-info">
+                        <h3>@job.job_title</h3>
+                        <p class="company">Company ID: @job.company_id</p>
+                        <p class="details">@job.date_posted.ToString("MMM dd, yyyy") · @job.job_status</p>
+                        <p class="description">@job.job_description</p>
+                    </div>
+                    <div class="job-logo">
+                        <img src="~/images/company1.png" alt="Company Logo">
+                        <a asp-controller="Dashboard" asp-action="JobDetails" asp-route-id="@job.job_listing_id"
+                           class="apply-btn">View Details</a>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- 📄 Pagination Placeholder -->
+    <div class="pagination">
+        <span>Showing @Model.Count() jobs</span>
+    </div>
+</section>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Recruiter.Models;   // TemplateItemVM, TemplateFormVM
 using JobPortal.Areas.Shared.Models;      // AppDbContext, template entity
+using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -18,18 +19,16 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [HttpGet]
         public async Task<IActionResult> Index(int? threadId = null)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             ViewData["Title"] = "Message Templates";
             ViewBag.ThreadId = threadId;
 
-            int? userId = null; // TODO: set when auth is wired
-
-            var query = _db.templates.AsNoTracking()
-                        .Where(t => t.template_status == "Active" &&
-                                    !t.template_name.StartsWith("[JOB]")); // message-only
-
-            if (userId.HasValue) query = query.Where(t => t.user_id == userId.Value);
-
-            var raw = await query
+            // Only show the current recruiter's active, message-type templates
+            var raw = await _db.templates.AsNoTracking()
+                .Where(t => t.template_status == "Active"
+                            && !t.template_name.StartsWith("[JOB]")
+                            && t.user_id == recruiterId)
                 .OrderByDescending(t => t.date_updated)
                 .ThenByDescending(t => t.date_created)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
@@ -46,15 +45,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // === New: Archived list
+        // Archived list
         [HttpGet]
         public async Task<IActionResult> Archived()
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             ViewData["Title"] = "Archived Templates";
-            ViewBag.IsArchivedList = true;   // <-- add this line
+            ViewBag.IsArchivedList = true;
 
             var raw = await _db.templates.AsNoTracking()
-                .Where(t => t.template_status == "Archived")
+                .Where(t => t.template_status == "Archived" && t.user_id == recruiterId)
                 .OrderByDescending(t => t.date_updated)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
                 .ToListAsync();
@@ -67,35 +68,42 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }).ToList();
 
             ViewBag.Items = items;
-            return View("Index"); // reuse
+            return View("Index"); // reuse Index view
         }
 
-        // === New: Unarchive
+        // Unarchive
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Unarchive(int id)
         {
-            var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id);
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id && t.user_id == recruiterId);
             if (row == null) return NotFound();
+
             row.template_status = "Active";
             row.date_updated = DateTime.Now;
             await _db.SaveChangesAsync();
+
             TempData["Message"] = "Template restored.";
             return RedirectToAction(nameof(Archived));
         }
 
+        // Prefill and jump to Inbox thread with a merged draft
         [HttpGet]
         public async Task<IActionResult> Fill(int id, int threadId, string? firstName = null, string? jobTitle = null)
         {
-            // 1) Load the active Message template
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            // 1) Load the active template owned by this recruiter
             var tpl = await _db.templates
                 .AsNoTracking()
                 .FirstOrDefaultAsync(t => t.template_id == id
-                                       && t.template_status == "Active");
-                                       //&& t.template_type == "Message"); --> Haven't add to Database
+                                       && t.template_status == "Active"
+                                       && t.user_id == recruiterId);
             if (tpl == null) return NotFound();
 
-            // 2) Best-effort context: prefer DB values from conversations, fallback to query
+            // 2) Best-effort context from conversation, fallback to query args
             var conv = await _db.conversations
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.conversation_id == threadId);
@@ -106,9 +114,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var jt = !string.IsNullOrWhiteSpace(jobTitle)
                        ? jobTitle!
                        : (conv?.job_title ?? string.Empty);
-            var co = string.Empty; // fill from your model later if you add it
+            var co = string.Empty; // extend if you add company fields later
 
-            // 3) Simple token merge
+            // 3) Simple token merge (case-sensitive for now)
             string draft = tpl.template_body ?? "";
             draft = draft.Replace("{{FirstName}}", fn)
                          .Replace("{{JobTitle}}", jt)
@@ -118,16 +126,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction("Thread", "Inbox", new { area = "Recruiter", id = threadId, draft });
         }
 
-
         private static string Merge(string text, string firstName, string jobTitle)
             => text.Replace("{{FirstName}}", firstName, StringComparison.OrdinalIgnoreCase)
                    .Replace("{{JobTitle}}", jobTitle, StringComparison.OrdinalIgnoreCase);
 
-        // ===== existing create/edit/archive kept the same =====
-
+        // Create
         [HttpGet]
         public IActionResult Create()
         {
+            if (!this.TryGetUserId(out _, out var early)) return early!;
             ViewData["Title"] = "New Template";
             return View(new TemplateFormVM());
         }
@@ -136,13 +143,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(TemplateFormVM vm)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             if (!ModelState.IsValid)
             {
                 ViewData["Title"] = "New Template";
                 return View(vm);
             }
 
-            var recruiterId = 3; // TODO
             var row = new template
             {
                 user_id = recruiterId,
@@ -153,16 +161,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 date_created = DateTime.Now,
                 date_updated = DateTime.Now
             };
+
             _db.templates.Add(row);
             await _db.SaveChangesAsync();
+
             TempData["Message"] = "Template created.";
             return RedirectToAction(nameof(Index));
         }
 
+        // Edit
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
-            var recruiterId = 3; // TODO
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id && t.user_id == recruiterId);
             if (row == null) return NotFound();
 
@@ -174,6 +186,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Body = row.template_body,
                 Status = row.template_status ?? "Active"
             };
+
             ViewData["Title"] = "Edit Template";
             return View(vm);
         }
@@ -182,9 +195,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(TemplateFormVM vm)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             if (!vm.TemplateId.HasValue) return NotFound();
 
-            var recruiterId = 3; // TODO
             var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == vm.TemplateId && t.user_id == recruiterId);
             if (row == null) return NotFound();
 
@@ -201,35 +215,28 @@ namespace JobPortal.Areas.Recruiter.Controllers
             row.date_updated = DateTime.Now;
 
             await _db.SaveChangesAsync();
+
             TempData["Message"] = "Template updated.";
             return RedirectToAction(nameof(Index));
         }
 
-
-
-
-
-
+        // Archive
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Archive(int id)
         {
-            var recruiterId = 3; // TODO
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id && t.user_id == recruiterId);
             if (row == null) return NotFound();
 
             row.template_status = "Archived";
             row.date_updated = DateTime.Now;
+
             await _db.SaveChangesAsync();
+
             TempData["Message"] = "Template archived.";
             return RedirectToAction(nameof(Index));
         }
-
-
-
-
-
-
-
     }
 }

@@ -1,10 +1,11 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using JobPortal.Areas.Shared.Models;      // AppDbContext, entities (job_application, job_offer, job_seeker_note)
+using JobPortal.Areas.Shared.Models;      // AppDbContext, entities
 using JobPortal.Areas.Recruiter.Models;   // CandidateVM, NoteVM, OfferFormVM
-using System;
+using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -19,6 +20,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [HttpGet]
         public async Task<IActionResult> Detail(int id)
         {
+            // Ensure logged-in and fetch recruiterId from session
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             var app = await _db.job_applications
                 .Include(a => a.user)
                 .FirstOrDefaultAsync(a => a.application_id == id);
@@ -37,8 +41,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             );
 
             // Load conversation/notes for this application (newest first)
-            var recruiterId = 3; // TODO: replace with logged-in recruiter id
-
             var raw = await _db.job_seeker_notes
                 .Where(n => n.application_id == id)
                 .Include(n => n.job_recruiter)
@@ -90,20 +92,36 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public Task<IActionResult> Shortlist(int id) => SetStatus(id, "Shortlisted");
+        public Task<IActionResult> Shortlist(int id)
+        {
+            if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
+            return SetStatus(id, "Shortlisted");
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public Task<IActionResult> Interview(int id) => SetStatus(id, "Interview");
+        public Task<IActionResult> Interview(int id)
+        {
+            if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
+            return SetStatus(id, "Interview");
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public Task<IActionResult> Reject(int id) => SetStatus(id, "Rejected");
+        public Task<IActionResult> Reject(int id)
+        {
+            if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
+            return SetStatus(id, "Rejected");
+        }
 
         // Mark as Hired (used after Offer is accepted, or recruiter confirms)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public Task<IActionResult> Hire(int id) => SetStatus(id, "Hired");
+        public Task<IActionResult> Hire(int id)
+        {
+            if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
+            return SetStatus(id, "Hired");
+        }
 
         // ==========================
         // Send Offer (EF insert)
@@ -115,6 +133,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SendOffer(OfferFormVM vm)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             if (!ModelState.IsValid)
             {
                 TempData["Message"] = "Offer form has validation errors.";
@@ -129,7 +149,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             // FIX 1: use Guid, not string
             var token = Guid.NewGuid();
             var now = DateTime.Now;
-            var recruiterId = 3; // TODO: replace with logged-in recruiter id
 
             // FIX 2: convert DateTime? -> DateOnly? for start_date
             DateOnly? startDate = vm.StartDate.HasValue
@@ -144,10 +163,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 application_id = vm.ApplicationId,
                 offer_status = "Sent",
                 salary_offer = vm.SalaryOffer,
-                start_date = startDate,        // <-- DateOnly?
+                start_date = startDate,        // DateOnly?
                 contract_type = vm.ContractType,
                 notes = vm.Notes,
-                candidate_token = token,       // <-- Guid
+                candidate_token = token,       // Guid
                 date_sent = now
             };
             _db.job_offers.Add(offer);
@@ -156,7 +175,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             app.application_status = "Offer";
             app.date_updated = now;
 
-            // 3) Log a short summary note for context (optional but helpful)
+            // 3) Log a short summary note for context
             var offerLines = new[]
             {
                 "=== Offer Sent ===",
@@ -183,7 +202,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
         }
 
-        // Central helper so logic is in one place
+        // Central helper so status-change logic is in one place
         private async Task<IActionResult> SetStatus(int applicationId, string nextStatus)
         {
             var app = await _db.job_applications
@@ -191,9 +210,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (app == null) return NotFound();
 
-            // DB enum values expected: 'Submitted','AI-Screened','Shortlisted','Interview','Offer','Hired','Rejected'
+            // Allowed values: 'Submitted','AI-Screened','Shortlisted','Interview','Offer','Hired','Rejected'
             app.application_status = nextStatus;
-            app.date_updated = System.DateTime.Now;
+            app.date_updated = DateTime.Now;
 
             await _db.SaveChangesAsync();
 
@@ -206,6 +225,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SendMessage(int id, string text)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             if (string.IsNullOrWhiteSpace(text))
             {
                 TempData["Message"] = "Message is empty.";
@@ -216,15 +237,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync(a => a.application_id == id);
             if (app == null) return NotFound();
 
-            var recruiterId = 3; // TODO: replace with logged-in recruiter id
-
             var note = new job_seeker_note
             {
                 application_id = id,
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = text,
-                created_at = System.DateTime.Now
+                created_at = DateTime.Now
             };
 
             _db.job_seeker_notes.Add(note);

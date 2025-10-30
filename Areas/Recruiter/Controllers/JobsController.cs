@@ -4,7 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
-using JobPortal.Areas.Recruiter.Models;  // <-- add this
+using JobPortal.Areas.Recruiter.Models;   // ViewModels, enums
+using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -14,7 +15,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private readonly AppDbContext _db;
         public JobsController(AppDbContext db) => _db = db;
 
-        // NEW: single source of truth for splitting/combining
+        // Single source of truth for splitting/combining requirements
         private const string NICE_DELIM = "\n||NICE||\n";
 
         private static (string must, string? nice) SplitReq(string? stored)
@@ -33,16 +34,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return string.IsNullOrEmpty(nice) ? must : $"{must}{NICE_DELIM}{nice}";
         }
 
-
+        // LIST
         public async Task<IActionResult> Index(string? order)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             ViewData["Title"] = "Jobs";
-            var recruiterId = 3; // (your existing placeholder)
 
             // base query
             var query = _db.job_listings.Where(j => j.user_id == recruiterId);
 
-            // sort by id only when explicitly requested; otherwise keep your current default (date_posted desc)
+            // sort by id only when explicitly requested; otherwise default to date_posted desc
             if (string.Equals(order, "asc", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.OrderBy(j => j.job_listing_id);
@@ -55,7 +57,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
             else
             {
-                // preserve your original behavior
                 query = query.OrderByDescending(j => j.date_posted);
                 ViewBag.Order = null; // no highlight in the UI
             }
@@ -63,11 +64,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var jobs = await query.ToListAsync();
             return View(jobs);
         }
+
         // --- CREATE (GET/POST) ---
 
         [HttpGet]
         public IActionResult Add()
         {
+            if (!this.TryGetUserId(out _, out var early)) return early!;
             var vm = new JobCreateVm { job_status = JobStatus.Open };
             return View(vm);
         }
@@ -76,6 +79,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(JobCreateVm vm)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             if (!ModelState.IsValid)
             {
                 var firstError = ModelState.Values.SelectMany(v => v.Errors)
@@ -84,15 +89,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            var recruiterId = 3;
+            // TODO: If company is tied to recruiter, fetch it; keeping existing default for now.
             var companyId = 1;
 
             var entity = new job_listing
             {
                 job_title = vm.job_title,
-                job_description = vm.job_description,                    // description stays in its own column
-                job_requirements = CombineReq(vm.job_requirements,       // must + nice stored together
-                                              vm.job_requirements_nice),
+                job_description = vm.job_description,
+                job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice),
                 salary_min = vm.salary_min,
                 salary_max = vm.salary_max,
                 job_status = vm.job_status.ToString(),
@@ -108,13 +112,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // --- EDIT (GET only — status remains editable as before) ---
+        // --- EDIT (GET/POST) ---
 
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
             ViewData["Title"] = "Edit Job";
-            var recruiterId = 3;
 
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
@@ -142,7 +147,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(JobEditVm vm, string? setStatus)
         {
-            var recruiterId = 3;
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == vm.job_listing_id)
@@ -157,11 +162,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 vm.job_status = quick;
             }
 
-            // ✅ Persist ALL editable fields
+            // Persist editable fields
             job.job_status = vm.job_status.ToString();
             job.job_title = vm.job_title;
-            job.job_description = vm.job_description;                                  // NEW: update description
-            job.job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice); // NEW: must + nice
+            job.job_description = vm.job_description;
+            job.job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice);
 
             await _db.SaveChangesAsync();
 
@@ -169,13 +174,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-
         // --- PREVIEW ---
 
         [HttpGet]
         public async Task<IActionResult> Preview(int id)
         {
-            var recruiterId = 3;
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var job = await _db.job_listings
                 .Include(j => j.company)
@@ -202,7 +206,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             ViewBag.Job = item;
             ViewBag.Req = req;
-            ViewBag.Desc = job.job_description;             // so the view can render Description above Requirements
+            ViewBag.Desc = job.job_description;
             ViewBag.SalaryMin = job.salary_min;
             ViewBag.SalaryMax = job.salary_max;
             ViewBag.Company = job.company?.company_name;
@@ -210,11 +214,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // PIPELINE (Kanban)
+        // --- PIPELINE (Kanban) ---
+
         [HttpGet]
         public async Task<IActionResult> Pipeline(int id)
         {
-            var recruiterId = 3;
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var job = await _db.job_listings
                 .Include(j => j.company)
@@ -277,22 +282,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Stage: MapStage(a.application_status),
                 Score: scoreLookup.TryGetValue(a.user_id, out var sc) ? sc : 0,
                 AppliedAt: a.date_updated.ToString("yyyy-MM-dd HH:mm"),
-                LowConfidence: false,  // wire real flags later
+                LowConfidence: false,
                 Override: false
             )).ToList();
-
-            // Debug breadcrumbs (you can remove later)
-            ViewBag.DebugAppsCount = apps.Count;
-            ViewBag.DebugCandsCount = cands.Count;
 
             ViewBag.Job = item;
             ViewBag.Cands = cands;
 
             return View();
         }
-
-
-
-
     }
 }

@@ -104,12 +104,72 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcQWRtaW5cVmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Account/ForgotPassword.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcRm9yZ290UGFzc3dvcmQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Account/Login.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcTG9naW4uY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Account/Recover.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcUmVjb3Zlci5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Account/ResetPassword.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEFjY291bnRcUmVzZXRQYXNzd29yZC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Applications.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxBcHBsaWNhdGlvbnMuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Apply.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxBcHBseS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Enable2FA.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxFbmFibGUyRkEuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Feedback.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxGZWVkYmFjay5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Index.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxJbmRleC5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/JobDetails.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxKb2JEZXRhaWxzLmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/JobListings.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxKb2JMaXN0aW5ncy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Dashboard/Settings.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXERhc2hib2FyZFxTZXR0aW5ncy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Home/About.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEhvbWVcQWJvdXQuY3NodG1s
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEhvbWVcSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Shared/_JobSeekerLayout.cshtml]
-build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXFNoYXJlZFxfSm9iU2Vla2VyTGF5b3V0LmNzaHRtbA==
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Home/Privacy.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXEhvbWVcUHJpdmFjeS5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Shared/Error.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXFNoYXJlZFxFcnJvci5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Shared/_LayoutDashboard.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXFNoYXJlZFxfTGF5b3V0RGFzaGJvYXJkLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Shared/_ValidationScriptsPartial.cshtml]
@@ -211,3 +271,7 @@ build_metadata.AdditionalFiles.CssScope =
 [C:/Users/USER/JobPortal/Areas/Recruiter/Views/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = QXJlYXNcUmVjcnVpdGVyXFZpZXdzXF9WaWV3U3RhcnQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/USER/JobPortal/Areas/JobSeeker/Views/Shared/_Layout.cshtml]
+build_metadata.AdditionalFiles.TargetPath = QXJlYXNcSm9iU2Vla2VyXFZpZXdzXFNoYXJlZFxfTGF5b3V0LmNzaHRtbA==
+build_metadata.AdditionalFiles.CssScope = b-0v2xb7dj8z

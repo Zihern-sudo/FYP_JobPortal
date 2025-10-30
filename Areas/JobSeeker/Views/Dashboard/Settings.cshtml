@@ -1,0 +1,380 @@
+@model JobPortal.Areas.JobSeeker.Models.ProfileViewModel
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "My Profile";
+}
+
+<link rel="stylesheet" href="~/css/dashboard.css" />
+
+<section class="profile-section">
+    <h1 class="page-title">Personal Information</h1>
+
+    <form asp-action="SaveProfile" asp-controller="Dashboard" method="post" class="profile-form">
+        <!-- Name -->
+        <div class="form-group-row">
+            <div class="form-group">
+                <label>First Name</label>
+                <input asp-for="FirstName" type="text" class="form-control" placeholder="Enter first name" />
+            </div>
+            <div class="form-group">
+                <label>Last Name</label>
+                <input asp-for="LastName" type="text" class="form-control" placeholder="Enter last name" />
+            </div>
+        </div>
+
+        <!-- Email + 2FA -->
+        <div class="form-group-row">
+            <div class="form-group">
+                <label>Email</label>
+                <input asp-for="Email" type="email" class="form-control" placeholder="example@email.com" readonly />
+            </div>
+
+            <div class="form-group switch-group">
+                <label>Two-Factor Authentication</label>
+                <label class="switch">
+                    <input asp-for="TwoFAEnabled" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Password -->
+        <div class="form-group-row">
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" class="form-control" placeholder="••••••••" readonly />
+            </div>
+            <div class="form-group">
+                <label>&nbsp;</label>
+                <button type="button" class="change-btn">Change Password</button>
+            </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="form-group-row">
+            <div class="form-group small-field">
+                <label>Phone Number</label>
+                <input asp-for="Phone" type="text" class="form-control" placeholder="+60 123-456789" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Address</label>
+            <textarea asp-for="Address" class="form-control" rows="4" placeholder="Enter your address"></textarea>
+        </div>
+
+        <!-- Resume -->
+        <div class="form-group resume-upload">
+            <label>Resume / CV</label>
+            <button type="button" class="upload-btn">Upload</button>
+        </div>
+
+        <!-- Experience & Education -->
+        <div class="form-group">
+            <label>Work Experience</label>
+            <textarea asp-for="WorkExperience" class="form-control" rows="3"
+                placeholder="Describe your work experience..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Education</label>
+            <textarea asp-for="Education" class="form-control" rows="3"
+                placeholder="List your education background..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Skills</label>
+            <textarea asp-for="Skills" class="form-control" rows="2"
+                placeholder="e.g., C#, SQL, ASP.NET, UI Design"></textarea>
+        </div>
+
+        <!-- Notification Preferences -->
+        <h2 class="section-title">Notification Preferences</h2>
+        <div class="notification-options">
+            <label><input type="checkbox" checked> In-App (Default)</label>
+            <label><input type="checkbox"> Email</label>
+            <label><input type="checkbox"> SMS</label>
+        </div>
+
+        <!-- Notification Types -->
+        <h2 class="section-title">Notification Types</h2>
+        <div class="toggle-list">
+            <div><span>Job Application Updates</span> <label class="switch"><input type="checkbox" checked><span
+                        class="slider"></span></label></div>
+            <div><span>Recruiter Feedbacks</span> <label class="switch"><input type="checkbox" checked><span
+                        class="slider"></span></label></div>
+            <div><span>Messages from Recruiters</span> <label class="switch"><input type="checkbox" checked><span
+                        class="slider"></span></label></div>
+            <div><span>System Alerts</span> <label class="switch"><input type="checkbox"><span
+                        class="slider"></span></label></div>
+            <div><span>Saved Job Reminders</span> <label class="switch"><input type="checkbox"><span
+                        class="slider"></span></label></div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="form-actions">
+            <button type="submit" class="save-btn">Save Changes</button>
+        </div>
+        <!-- Danger Zone -->
+        <hr class="mt-5">
+        <div class="form-actions danger-zone">
+            <button type="button" class="delete-btn">Delete Account</button>
+        </div>
+
+    </form>
+</section>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+
+            // 🔹 Handle Change Password popup
+            document.querySelector(".change-btn")?.addEventListener("click", function () {
+                Swal.fire({
+                    title: "Change Password",
+                    html: `
+                                                <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
+                                                <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
+                                                <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
+                                            `,
+                    confirmButtonText: "Update Password",
+                    focusConfirm: false,
+                    preConfirm: () => {
+                        const currentPassword = document.getElementById("currentPassword").value;
+                        const newPassword = document.getElementById("newPassword").value;
+                        const confirmPassword = document.getElementById("confirmPassword").value;
+
+                        if (!currentPassword || !newPassword || !confirmPassword) {
+                            Swal.showValidationMessage("Please fill in all fields.");
+                            return false;
+                        }
+                        if (newPassword !== confirmPassword) {
+                            Swal.showValidationMessage("New passwords do not match.");
+                            return false;
+                        }
+
+                        // ✅ Send AJAX request to backend
+                        return fetch("/JobSeeker/Dashboard/ChangePassword", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/x-www-form-urlencoded"
+                            },
+                            body: new URLSearchParams({
+                                currentPassword,
+                                newPassword,
+                                confirmPassword
+                            })
+                        })
+                            .then(response => {
+                                if (!response.ok) throw new Error("Network error");
+                                return response.text();
+                            })
+                            .catch(() => {
+                                Swal.showValidationMessage("Error connecting to server.");
+                            });
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        Swal.fire({
+                            icon: "success",
+                            title: "Password Updated!",
+                            text: "Your password has been changed successfully.",
+                            confirmButtonColor: "#28a745"
+                        });
+                    }
+                });
+            });
+
+            // 🔹 Display TempData messages (save changes, delete, etc.)
+            const message = '@TempData["Message"]';
+            if (message && message.length > 0) {
+                Swal.fire({
+                    icon: message.includes("deleted") ? "warning" :
+                        message.includes("successfully") ? "success" : "info",
+                    title: "Notification",
+                    text: message,
+                    confirmButtonColor: "#007bff"
+                });
+            }
+        });
+        // 🔹 Handle Two-Factor Authentication toggle
+        document.querySelector("input[name='TwoFAEnabled']")?.addEventListener("change", function () {
+            if (this.checked) {
+                // ✅ When user turns ON 2FA
+                fetch("/JobSeeker/Dashboard/Generate2FA", { method: "POST" })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                title: "Enable Two-Factor Authentication",
+                                html: `
+                                                    <p>Scan this QR code with <b>Google Authenticator</b> app:</p>
+                                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
+                                                    <p>Secret Key: <b>${data.secret}</b></p>
+                                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
+                                                `,
+                                confirmButtonText: "Verify Code",
+                                focusConfirm: false,
+                                preConfirm: () => {
+                                    const code = document.getElementById("verifyCode").value;
+                                    if (!code) {
+                                        Swal.showValidationMessage("Please enter the 6-digit code.");
+                                        return false;
+                                    }
+
+                                    // ✅ Verify 2FA code
+                                    return fetch("/JobSeeker/Dashboard/Verify2FA", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                        body: new URLSearchParams({ code })
+                                    })
+                                        .then(res => res.json())
+                                        .then(result => {
+                                            if (!result.success) {
+                                                Swal.showValidationMessage("Invalid code, please try again.");
+                                                return false;
+                                            }
+                                            return true;
+                                        });
+                                }
+                            }).then(result => {
+                                if (result.isConfirmed) {
+                                    Swal.fire({
+                                        icon: "success",
+                                        title: "2FA Enabled!",
+                                        text: "Two-Factor Authentication is now active.",
+                                        confirmButtonColor: "#28a745"
+                                    });
+                                }
+                            });
+                        }
+                    })
+                    .catch(() => {
+                        Swal.fire("Error", "Unable to generate QR code.", "error");
+                    });
+            } else {
+                Swal.fire({
+                    icon: "info",
+                    title: "2FA Disabled",
+                    text: "Two-Factor Authentication has been turned off.",
+                    confirmButtonColor: "#007bff"
+                });
+            }
+        });
+        // 🔹 Handle Two-Factor Authentication toggle
+        const twoFASwitch = document.querySelector("input[name='TwoFAEnabled']");
+
+        if (twoFASwitch) {
+            // On load, set state based on session (via ViewBag)
+            const is2FAEnabled = '@Model.TwoFAEnabled.ToString().ToLower()';
+            if (is2FAEnabled === "true") {
+                twoFASwitch.checked = true;
+            }
+
+            twoFASwitch.addEventListener("change", function () {
+                const enabled = this.checked;
+
+                // Update backend session
+                fetch("/JobSeeker/Dashboard/Toggle2FA", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: new URLSearchParams({ enabled })
+                });
+
+                if (enabled) {
+                    // existing QR popup code
+                    fetch("/JobSeeker/Dashboard/Generate2FA", { method: "POST" })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                Swal.fire({
+                                    title: "Enable Two-Factor Authentication",
+                                    html: `
+                                                    <p>Scan this QR code with <b>Google Authenticator</b>:</p>
+                                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
+                                                    <p>Secret Key: <b>${data.secret}</b></p>
+                                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
+                                                `,
+                                    confirmButtonText: "Verify Code",
+                                    focusConfirm: false,
+                                    preConfirm: () => {
+                                        const code = document.getElementById("verifyCode").value;
+                                        if (!code) {
+                                            Swal.showValidationMessage("Please enter the 6-digit code.");
+                                            return false;
+                                        }
+                                        return fetch("/JobSeeker/Dashboard/Verify2FA", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                                            body: new URLSearchParams({ code })
+                                        })
+                                            .then(res => res.json())
+                                            .then(result => {
+                                                if (!result.success) {
+                                                    Swal.showValidationMessage("Invalid code, please try again.");
+                                                    return false;
+                                                }
+                                                return true;
+                                            });
+                                    }
+                                }).then(result => {
+                                    if (result.isConfirmed) {
+                                        Swal.fire({
+                                            icon: "success",
+                                            title: "2FA Enabled!",
+                                            text: "Two-Factor Authentication is now active.",
+                                            confirmButtonColor: "#28a745"
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                } else {
+                    Swal.fire({
+                        icon: "info",
+                        title: "2FA Disabled",
+                        text: "Two-Factor Authentication has been turned off.",
+                        confirmButtonColor: "#007bff"
+                    });
+                }
+            });
+        }
+        // 🔹 Handle Delete Account button
+        document.querySelector(".delete-btn")?.addEventListener("click", function () {
+            Swal.fire({
+                title: "Are you sure?",
+                text: "This action will permanently delete your account and all related data. This cannot be undone.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: "Yes, delete it!",
+                cancelButtonText: "Cancel",
+                confirmButtonColor: "#dc3545",
+                cancelButtonColor: "#6c757d"
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // ✅ Send POST request to backend
+                    fetch("/JobSeeker/Dashboard/DeleteAccount", {
+                        method: "POST"
+                    })
+                        .then(response => {
+                            if (response.ok) {
+                                Swal.fire({
+                                    icon: "success",
+                                    title: "Account Deleted",
+                                    text: "Your account has been permanently removed.",
+                                    confirmButtonColor: "#28a745"
+                                }).then(() => {
+                                    // ✅ Redirect to login after confirmation
+                                    window.location.href = "/JobSeeker/Account/Login";
+                                });
+                            } else {
+                                Swal.fire("Error", "Failed to delete account.", "error");
+                            }
+                        })
+                        .catch(() => Swal.fire("Error", "Server connection failed.", "error"));
+                }
+            });
+        });
+    </script>
+}

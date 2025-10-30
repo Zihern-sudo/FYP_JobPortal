@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;          // DbContext + entities
 using JobPortal.Areas.Recruiter.Models;       // VMs
+using JobPortal.Areas.Shared.Extensions;      // TryGetUserId extension
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -16,13 +17,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
         public InboxController(AppDbContext db) => _db = db;
 
         // GET: /Recruiter/Inbox
-        // Now uses cached conversation fields (last_message_at, last_snippet, unread_for_recruiter, candidate_name)
+        // Uses cached conversation fields (last_message_at, last_snippet, unread_for_recruiter, candidate_name)
         [HttpGet]
         public async Task<IActionResult> Index()
         {
-            ViewData["Title"] = "Inbox";
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            var recruiterId = 3; // TODO: replace with logged-in recruiter id
+            ViewData["Title"] = "Inbox";
 
             // Prefer conversations where recruiter_id is set; otherwise fall back to job owner for safety
             var convs = await _db.conversations
@@ -63,7 +64,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [HttpGet]
         public async Task<IActionResult> Thread(int id, string? before = null)
         {
-            var recruiterId = 3; // TODO
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var conv = await _db.conversations
                 .Include(c => c.job_listing)
@@ -152,7 +153,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Send(int id, string text)
         {
-            var recruiterId = 3; // TODO
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             if (string.IsNullOrWhiteSpace(text))
             {

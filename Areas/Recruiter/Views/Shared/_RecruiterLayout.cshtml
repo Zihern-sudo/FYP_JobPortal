@@ -1,5 +1,28 @@
+@using Microsoft.AspNetCore.Http
+
+@{
+  // Get recruiter id from session (supports int or string).
+  int? userId = Context.Session.GetInt32("user_id") ?? Context.Session.GetInt32("UserId");
+  if (userId is null)
+  {
+    var idStr = Context.Session.GetString("user_id") ?? Context.Session.GetString("UserId");
+    if (!string.IsNullOrWhiteSpace(idStr) && int.TryParse(idStr, out var parsed))
+    {
+      userId = parsed;
+    }
+  }
+
+  // Optional: display name from session (does not change the layout)
+  var userName = Context.Session.GetString("UserName") ?? "Recruiter";
+}
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,19 +32,20 @@
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" asp-append-version="true" />
   <link rel="stylesheet" href="~/css/recruiter.css" asp-append-version="true" />
 </head>
-<body>
+
+<body data-user-id="@(userId ?? 0)">
   <header class="border-bottom p-3 d-flex justify-content-between align-items-center">
     <div class="fw-bold">JobPortal • Recruiter</div>
     <div>
       <span class="me-3">🔔</span>
-      <span class="chip">Aisyah (Recruiter)</span>
+      <span class="chip">@userName (Recruiter)</span>
     </div>
   </header>
 
   @{
     var rc = ViewContext.RouteData.Values;
     string curCtrl = rc["controller"]?.ToString() ?? "";
-    string curAct  = rc["action"]?.ToString() ?? "";
+    string curAct = rc["action"]?.ToString() ?? "";
     string active(string c) => string.Equals(curCtrl, c, StringComparison.OrdinalIgnoreCase) ? "active" : "";
   }
 
@@ -29,18 +53,18 @@
     <aside class="sidebar p-3">
       <div class="text-uppercase text-muted small mb-2">Navigation</div>
       <div class="list-group">
-        <a class="list-group-item list-group-item-action @active("Home")"
-           asp-area="Recruiter" asp-controller="Home" asp-action="Index">Home</a>
-        <a class="list-group-item list-group-item-action @active("Jobs")"
-           asp-area="Recruiter" asp-controller="Jobs" asp-action="Index">Jobs</a>
-        <a class="list-group-item list-group-item-action @active("Screening")"
-           asp-area="Recruiter" asp-controller="Screening" asp-action="Queue">Screening Queue</a>
-        <a class="list-group-item list-group-item-action @active("Inbox")"
-           asp-area="Recruiter" asp-controller="Inbox" asp-action="Index">Inbox</a>
-        <a class="list-group-item list-group-item-action @active("Templates")"
-           asp-area="Recruiter" asp-controller="Templates" asp-action="Index">Templates</a>
-        <a class="list-group-item list-group-item-action @active("Bulk")"
-           asp-area="Recruiter" asp-controller="Bulk" asp-action="Index">Bulk Tools</a>
+        <a class="list-group-item list-group-item-action @active("Home")" asp-area="Recruiter" asp-controller="Home"
+          asp-action="Index">Home</a>
+        <a class="list-group-item list-group-item-action @active("Jobs")" asp-area="Recruiter" asp-controller="Jobs"
+          asp-action="Index">Jobs</a>
+        <a class="list-group-item list-group-item-action @active("Screening")" asp-area="Recruiter"
+          asp-controller="Screening" asp-action="Queue">Screening Queue</a>
+        <a class="list-group-item list-group-item-action @active("Inbox")" asp-area="Recruiter" asp-controller="Inbox"
+          asp-action="Index">Inbox</a>
+        <a class="list-group-item list-group-item-action @active("Templates")" asp-area="Recruiter"
+          asp-controller="Templates" asp-action="Index">Templates</a>
+        <a class="list-group-item list-group-item-action @active("Bulk")" asp-area="Recruiter" asp-controller="Bulk"
+          asp-action="Index">Bulk Tools</a>
       </div>
     </aside>
 
@@ -48,7 +72,8 @@
       <h1 class="h4 mb-2">@ViewData["Title"]</h1>
       <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb mb-0">
-          <li class="breadcrumb-item"><a asp-area="Recruiter" asp-controller="Home" asp-action="Index">Recruiter</a></li>
+          <li class="breadcrumb-item"><a asp-area="Recruiter" asp-controller="Home" asp-action="Index">Recruiter</a>
+          </li>
           <li class="breadcrumb-item">@curCtrl</li>
           <li class="breadcrumb-item active" aria-current="page">@curAct</li>
         </ol>
@@ -63,10 +88,12 @@
 
   <!-- Toast container (re-usable) -->
   <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1080">
-    <div id="appToast" class="toast align-items-center text-bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div id="appToast" class="toast align-items-center text-bg-primary border-0" role="alert" aria-live="assertive"
+      aria-atomic="true">
       <div class="d-flex">
         <div class="toast-body" id="appToastBody">Action done.</div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+          aria-label="Close"></button>
       </div>
     </div>
   </div>
@@ -75,7 +102,7 @@
   <script>
     function showToast(message, variant = "primary", redirectTo = null, delayMs = 1200) {
       const toastEl = document.getElementById("appToast");
-      const bodyEl  = document.getElementById("appToastBody");
+      const bodyEl = document.getElementById("appToastBody");
       bodyEl.textContent = message;
       toastEl.className = toastEl.className.replace(/text-bg-\w+/g, "text-bg-" + variant);
       const t = new bootstrap.Toast(toastEl, { delay: delayMs });
@@ -85,4 +112,5 @@
   </script>
   @RenderSection("Scripts", required: false)
 </body>
+
 </html>

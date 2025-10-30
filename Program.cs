@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
-
-
+using JobPortal.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,11 +10,19 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))));
 
-
 // MVC
 builder.Services.AddControllersWithViews();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+});
+
+// ✅ Add Email Service (IMPORTANT — before building)
+builder.Services.AddScoped<EmailService>();
 
 var app = builder.Build();
+
+app.UseSession();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -25,9 +32,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseAuthorization();
 
 // ✅ Add this BEFORE the default route

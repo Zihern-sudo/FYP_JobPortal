@@ -1,6 +1,18 @@
 {
   "Files": [
     {
+      "Id": "C:\\Users\\USER\\JobPortal\\obj\\Debug\\net9.0\\scopedcss\\projectbundle\\JobPortal.bundle.scp.css",
+      "PackagePath": "staticwebassets\\JobPortal.k974i52jks.bundle.scp.css"
+    },
+    {
+      "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\css\\jobseekerdashboard.css",
+      "PackagePath": "staticwebassets\\css\\jobseekerdashboard.css"
+    },
+    {
+      "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\css\\jobseekerstyle.css",
+      "PackagePath": "staticwebassets\\css\\jobseekerstyle.css"
+    },
+    {
       "Id": "C:\\Users\\USER\\JobPortal\\wwwroot\\css\\recruiter.css",
       "PackagePath": "staticwebassets\\css\\recruiter.css"
     },

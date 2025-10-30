@@ -1,0 +1,44 @@
+@model JobPortal.Areas.JobSeeker.Models.ApplyViewModel
+
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Apply for Job";
+}
+
+<link rel="stylesheet" href="~/css/dashboard.css" />
+
+<section class="apply-job-section">
+    <h2 class="page-title">Apply for @Model.JobTitle</h2>
+
+    <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post" enctype="multipart/form-data" class="card shadow-sm p-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="JobId" />
+
+        <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input asp-for="FullName" class="form-control" readonly />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input asp-for="Email" class="form-control" readonly />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Position Applying For</label>
+            <input asp-for="JobTitle" class="form-control" readonly />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Skills</label>
+            <textarea asp-for="Skills" class="form-control" placeholder="List relevant skills or experiences"></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Upload Resume</label>
+            <input asp-for="ResumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx" />
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Submit Application</button>
+    </form>
+</section>

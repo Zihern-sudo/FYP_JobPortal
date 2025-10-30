@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "EF: Regenerate DB.cs",
+            "type": "shell",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\tools\\regen-model.ps1",
+                "-Conn",
+                "--%",
+                "Server=localhost;Port=3306;Database=jobportal;User=root;Password=root;TreatTinyAsBoolean=true",
+                "-ContextName",
+                "AppDbContext"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

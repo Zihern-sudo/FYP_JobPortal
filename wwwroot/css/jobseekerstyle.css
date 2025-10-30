@@ -1,0 +1,180 @@
+/* 🎨 style.css - JobPortal Purple Theme */
+
+/* Header / Navbar */
+header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e5e8ea;
+    box-shadow: 0 2px 4px rgba(79, 22, 206, 0.05);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    color: #4f16ce !important;
+}
+
+.nav-link {
+    color: #110c1c !important;
+    font-weight: 500;
+    margin-right: 1rem;
+}
+
+.nav-link:hover {
+    color: #4f16ce !important;
+}
+
+/* Post a Job button */
+.post-job-btn {
+    background-color: #eae8f2;
+    color: #110c1c !important;
+    font-weight: 600;
+    padding: 6px 18px;
+    border-radius: 8px;
+    text-decoration: none;
+}
+
+.post-job-btn:hover {
+    background-color: #dcd7f0;
+}
+
+.auth-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 60px auto 100px auto; /* bottom margin ensures footer gap */
+  min-height: 70vh;
+  text-align: center;
+}
+
+/* Centered heading */
+.auth-container h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #4f16ce;
+  margin-bottom: 25px;
+  width: 100%;
+  text-align: center;
+}
+
+/* Tabs stay left-aligned */
+.tabs {
+  display: flex;
+  justify-content: flex-start;
+  gap: 2rem;
+  border-bottom: 1px solid #d6d1e8;
+  margin-bottom: 30px;
+  padding-bottom: 10px;
+  width: 100%;
+  max-width: 1000px;
+  padding-left: 80px;
+}
+
+.tabs span {
+  font-weight: 700;
+  color: #634f96;
+  cursor: pointer;
+  padding-bottom: 6px;
+  transition: all 0.3s ease;
+}
+
+.tabs .active {
+  border-bottom: 3px solid #4f16ce;
+  color: #4f16ce;
+}
+
+/* Wrapper for login/register area */
+.form-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  justify-content: flex-start;
+  padding-left: 80px;
+  min-height: 430px;
+}
+
+/* White background container — wide for balance */
+.auth-form {
+  display: none;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(79, 22, 206, 0.08);
+  padding: 40px 60px;
+  width: 90%; /* reaches almost to tab edge */
+  max-width: 900px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.auth-form.active {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Label and input alignment — stacked neatly left-aligned */
+.auth-form label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 6px;
+  text-align: left;
+  color: #2e2a47;
+  width: 70%; /* limit label area so text doesn’t stretch too wide */
+}
+
+/* Input fields directly below each label */
+.auth-form input {
+  display: block;
+  width: 70%; /* keeps them visually narrower inside wide container */
+  padding: 12px;
+  border: 1px solid #d6d1e8;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  background-color: #f9f7fc;
+  font-size: 16px;
+  color: #4f16ce;
+  text-align: left;
+}
+
+/* Button width matches inputs */
+.login-btn {
+  width: 70%;
+  background-color: #4f16ce;
+  color: white;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.login-btn:hover {
+  background-color: #3d10a9;
+}
+
+/* Slight gap before footer to prevent bounce */
+footer {
+  margin-top: 60px;
+}
+
+.alt-option {
+    text-align: center;
+    margin-top: 10px;
+}
+
+.alt-btn {
+    display: inline-block;
+    background-color: #eae8f2;
+    color: #4f16ce;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.3s;
+}
+
+.alt-btn:hover {
+    background-color: #dcd7f0;
+}

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - JobPortal Dashboard</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/jobseekerdashboard.css" asp-append-version="true" />
+</head>
+
+<body>
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="profile-section">
+                <img src="~/images/profile.png" alt="Profile" class="profile-img" />
+                <p class="username">@((Context.Session.GetString("UserName")) ?? "Guest User")</p>
+
+            <a asp-area="JobSeeker" asp-controller="Account" asp-action="Logout" class="logout-link">Logout</a>
+    </div>
+
+    <nav class="nav-menu">
+        <a asp-controller="Dashboard" asp-action="Index"
+            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")">
+            Home
+        </a>
+
+        <a asp-controller="Dashboard" asp-action="JobListings"
+            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "JobListings" ? "active" : "")">
+            Job Listings
+        </a>
+
+        <a asp-controller="Dashboard" asp-action="Applications"
+            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Applications" ? "active" : "")">
+            My Applications
+        </a>
+
+        <a asp-controller="Dashboard" asp-action="Feedback"
+            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Feedback" ? "active" : "")">
+            Resume Feedback
+        </a>
+
+        <a asp-controller="Dashboard" asp-action="Settings"
+            class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Settings" ? "active" : "")">
+            Settings
+        </a>
+    </nav>
+    </aside>
+
+    <main class="main-content">
+        @RenderBody()
+    </main>
+    </div>
+
+    <footer class="text-center py-3">
+        &copy; 2025 JobPortal System. All rights reserved.
+    </footer>
+
+    <!-- ✅ Add this line below -->
+    @RenderSection("Scripts", required: false)
+
+
+
+</body>
+
+</html>

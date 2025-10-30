@@ -1,0 +1,68 @@
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Resume Feedback";
+}
+
+<section class="resume-feedback-section">
+    <h1 class="page-title">Upload Your Resume</h1>
+    <p class="subtitle">Upload your resume below to analyze and get AI-powered keyword insights.</p>
+
+    <!-- ✅ FIXED: added asp-area="JobSeeker" -->
+    <form asp-area="JobSeeker" asp-controller="Resume" asp-action="UploadResume" method="post" enctype="multipart/form-data">
+        <div class="upload-area" onclick="document.getElementById('resumeFile').click()">
+            <div class="upload-content">
+                <span class="upload-icon">📄</span>
+                <p class="upload-text">Drag and drop your resume here, or <span>click to browse</span></p>
+                <p class="upload-note">Accepted file types: PDF. Max size: 5MB</p>
+            </div>
+            <input type="file" id="resumeFile" name="resumeFile" accept=".pdf" style="display:none;" />
+        </div>
+
+        <div style="text-align:center; margin-top:20px;">
+            <button type="submit" class="login-btn">Upload & Analyze</button>
+        </div>
+    </form>
+
+    <div id="resultContainer"></div> <!-- optional, cleaner placement for results -->
+
+</section>
+
+@section Scripts {
+<script>
+document.querySelector("form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("resumeFile");
+    if (fileInput.files.length === 0) {
+        alert("Please select a PDF resume file first!");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("resumeFile", fileInput.files[0]);
+
+    // ✅ FIXED: added /JobSeeker to match the area route
+    const response = await fetch("/JobSeeker/Resume/UploadResume", {
+        method: "POST",
+        body: formData
+    });
+
+    const data = await response.json();
+    console.log("Response:", data); // helpful for debugging
+
+    const resultDiv = document.querySelector("#resultContainer");
+    resultDiv.classList.add("analysis-results");
+
+    if (data.success) {
+        resultDiv.innerHTML = `
+            <h2>Matched Keywords</h2>
+            <ul>${data.matchedKeywords.map(k => `<li>${k}</li>`).join("")}</ul>
+            <h3>Match Score: ${data.matchScore}%</h3>
+            <p>Total Extracted Keywords: ${data.totalExtracted}</p>
+        `;
+    } else {
+        resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
+    }
+});
+</script>
+}

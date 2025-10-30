@@ -1,0 +1,51 @@
+@model IEnumerable<JobPortal.Areas.Shared.Models.job_application>
+
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Applications";
+}
+
+<link rel="stylesheet" href="~/css/dashboard.css" />
+
+<section class="my-applications-section">
+    <h1 class="page-title">My Applications</h1>
+
+    <div class="applications-table-container">
+        <table class="applications-table">
+            <thead>
+                <tr>
+                    <th>Job Title</th>
+                    <th>Company</th>
+                    <th>Last Updated</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="4" class="text-center">You haven’t applied to any jobs yet.</td></tr>
+                }
+                else
+                {
+                    foreach (var app in Model)
+                    {
+                        <tr>
+                            <td>@app.job_listing?.job_title</td>
+                            <td>@app.job_listing?.company_id</td>
+                            <td>@app.date_updated.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                <span class="status status-@app.application_status.ToLower().Replace(" ", "")">
+                                    @app.application_status
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination">
+        <span>Showing @Model.Count() applications</span>
+    </div>
+</section>

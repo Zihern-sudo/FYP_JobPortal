@@ -1,0 +1,30 @@
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Enable 2FA";
+}
+
+<h2>Two-Factor Authentication Setup</h2>
+
+@if (ViewBag.QrImage != null)
+{
+    <p>Scan this QR code with Google Authenticator:</p>
+    <img src="@ViewBag.QrImage" alt="QR Code" />
+    <p><b>Secret:</b> @ViewBag.Secret</p>
+
+    <form method="post" asp-action="Verify2FA">
+        <label>Enter the 6-digit code:</label>
+        <input type="text" name="code" required maxlength="6" />
+        <button type="submit">Verify</button>
+    </form>
+
+    @if (ViewBag.Verified != null)
+    {
+        <p style="color:@(ViewBag.Verified ? "green" : "red")">@ViewBag.Message</p>
+    }
+}
+else
+{
+    <form method="get" asp-action="Enable2FA">
+        <button type="submit">Generate QR Code</button>
+    </form>
+}
