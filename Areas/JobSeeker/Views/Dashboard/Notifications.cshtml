@@ -1,0 +1,99 @@
+@model IEnumerable<JobPortal.Areas.Shared.Models.notification>
+
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Notifications Center";
+}
+
+<h2 class="mb-4">Notification Center</h2>
+
+<form id="markReadForm">
+    @Html.AntiForgeryToken()
+    <div class="d-flex justify-content-between mb-3">
+        <div>
+            <button type="button" id="markSelectedBtn" class="btn btn-success btn-sm" disabled>
+                Mark Selected as Read
+            </button>
+        </div>
+    </div>
+
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th style="width: 40px;">
+                    <input type="checkbox" id="selectAll" />
+                </th>
+                <th>Title</th>
+                <th>Message</th>
+                <th>Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var n in Model)
+            {
+                <tr class="@(n.notification_read_status ? "table-light" : "table-warning")">
+                    <td>
+                        <input type="checkbox" name="selectedNotifications" value="@n.notification_id"
+                            class="notif-checkbox" @(n.notification_read_status ? "disabled" : "") />
+                    </td>
+                    <td>@n.notification_title</td>
+                    <td>@n.notification_msg</td>
+                    <td>@n.notification_date_created.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@(n.notification_read_status ? "Read" : "Unread")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</form>
+
+@section Scripts {
+    <script>
+        // ✅ Enable/Disable "Mark Selected" button based on selection
+        const checkboxes = document.querySelectorAll(".notif-checkbox");
+        const markBtn = document.getElementById("markSelectedBtn");
+        const selectAll = document.getElementById("selectAll");
+
+        function updateButtonState() {
+            const anyChecked = [...checkboxes].some(cb => cb.checked);
+            markBtn.disabled = !anyChecked;
+        }
+
+        checkboxes.forEach(cb => cb.addEventListener("change", updateButtonState));
+
+        // ✅ Select all toggle
+        selectAll.addEventListener("change", (e) => {
+            checkboxes.forEach(cb => {
+                if (!cb.disabled) cb.checked = e.target.checked;
+            });
+            updateButtonState();
+        });
+
+        // ✅ Handle "Mark Selected" button click
+        markBtn.addEventListener("click", () => {
+            const selectedIds = [...checkboxes]
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+
+            if (selectedIds.length === 0) return;
+
+            fetch('@Url.Action("MarkSelectedAsRead", "Dashboard")', {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "RequestVerificationToken": document.querySelector('input[name="__RequestVerificationToken"]')?.value
+                },
+                body: JSON.stringify(selectedIds)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert("Something went wrong.");
+                    }
+                })
+                .catch(err => console.error(err));
+        });
+    </script>
+}

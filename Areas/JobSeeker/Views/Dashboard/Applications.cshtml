@@ -16,6 +16,9 @@
                 <tr>
                     <th>Job Title</th>
                     <th>Company</th>
+                    <th>Location</th>
+                    <th>Industry</th>
+                    <th>Salary Range</th>
                     <th>Last Updated</th>
                     <th>Status</th>
                 </tr>
@@ -23,15 +26,30 @@
             <tbody>
                 @if (!Model.Any())
                 {
-                    <tr><td colspan="4" class="text-center">You haven’t applied to any jobs yet.</td></tr>
+                    <tr><td colspan="7" class="text-center">You haven’t applied to any jobs yet.</td></tr>
                 }
                 else
                 {
                     foreach (var app in Model)
                     {
+                        var job = app.job_listing;
+                        var company = job?.company;
+
                         <tr>
-                            <td>@app.job_listing?.job_title</td>
-                            <td>@app.job_listing?.company_id</td>
+                            <td>@job?.job_title</td>
+                            <td>@company?.company_name</td>
+                            <td>@company?.company_location</td>
+                            <td>@company?.company_industry</td>
+                            <td>
+                                @if (job?.salary_min != null && job?.salary_max != null)
+                                {
+                                    @:RM @job.salary_min - RM @job.salary_max
+                                }
+                                else
+                                {
+                                    @:Not specified
+                                }
+                            </td>
                             <td>@app.date_updated.ToString("yyyy-MM-dd")</td>
                             <td>
                                 <span class="status status-@app.application_status.ToLower().Replace(" ", "")">

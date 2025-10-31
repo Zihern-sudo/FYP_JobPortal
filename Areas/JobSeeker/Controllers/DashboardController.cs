@@ -322,6 +322,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             var applications = await _db.job_applications
                 .Include(a => a.job_listing)
+                    .ThenInclude(j => j.company)
                 .Where(a => a.user_id == id)
                 .OrderByDescending(a => a.date_updated)
                 .ToListAsync();
@@ -329,51 +330,103 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(applications);
         }
 
+        
+
         // ✅ Dynamic Job Listings with Pagination
-        public async Task<IActionResult> JobListings(string? search, int page = 1)
+        public async Task<IActionResult> JobListings(string? search, string? location, string? salaryRange, string? internshipType, string? workMode, int page = 1)
         {
-            int pageSize = 10; // ✅ Show 10 jobs per page
+            int pageSize = 10;
 
             var jobsQuery = _db.job_listings
+                .Include(j => j.company)
                 .Where(j => j.job_status == "Open");
 
-            // Optional search by job title or description
+            // 🔍 Keyword search
             if (!string.IsNullOrEmpty(search))
             {
                 jobsQuery = jobsQuery.Where(j =>
                     j.job_title.Contains(search) ||
-                    j.job_description.Contains(search));
+                    j.job_description.Contains(search) ||
+                    j.company.company_name.Contains(search) ||
+                    j.company.company_industry.Contains(search));
             }
 
-            // ✅ Get total job count
-            int totalJobs = await jobsQuery.CountAsync();
+            // 📍 Filter by Location
+            if (!string.IsNullOrEmpty(location))
+            {
+                jobsQuery = jobsQuery.Where(j => j.company.company_location == location);
+            }
 
-            // ✅ Get paged results
+            // 💰 Filter by Salary Range
+            if (!string.IsNullOrEmpty(salaryRange))
+            {
+                var parts = salaryRange.Split('-');
+                if (parts.Length == 2)
+                {
+                    int min = int.Parse(parts[0]);
+                    int max = int.Parse(parts[1]);
+
+                    // 🧭 Filter using only the minimum salary
+                    jobsQuery = jobsQuery.Where(j => j.salary_min >= min && j.salary_min <= max);
+                }
+            }
+
+
+            // 🎓 Internship Type (placeholder – not yet in DB)
+            if (!string.IsNullOrEmpty(internshipType))
+            {
+                // TODO: apply filter once field exists
+            }
+
+            // 🏠 Work Mode (placeholder – not yet in DB)
+            if (!string.IsNullOrEmpty(workMode))
+            {
+                // TODO: apply filter once field exists
+            }
+
+            // 📄 Pagination
+            int totalJobs = await jobsQuery.CountAsync();
             var jobList = await jobsQuery
                 .OrderByDescending(j => j.date_posted)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // ✅ Pass pagination info to the view
+            // 🪣 Pass filters to view
             ViewBag.CurrentPage = page;
             ViewBag.TotalPages = (int)Math.Ceiling(totalJobs / (double)pageSize);
             ViewBag.Search = search;
+            ViewBag.Location = location;
+            ViewBag.SalaryRange = salaryRange;
+            ViewBag.InternshipType = internshipType;
+            ViewBag.WorkMode = workMode;
+
+            // 🗺️ Get all distinct locations for dropdown
+            ViewBag.Locations = await _db.companies
+                .Select(c => c.company_location)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToListAsync();
 
             return View(jobList);
         }
+
+
 
 
         // ✅ Optional: Job Details page
         public async Task<IActionResult> JobDetails(int id)
         {
             var job = await _db.job_listings
+                .Include(j => j.company) // ✅ include company details
                 .FirstOrDefaultAsync(j => j.job_listing_id == id);
 
-            if (job == null) return NotFound();
+            if (job == null)
+                return NotFound();
 
             return View(job);
         }
+
 
         [HttpPost]
         public async Task<IActionResult> AnalyzeResume(IFormFile resumeFile)
@@ -516,6 +569,79 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             TempData["Message"] = "Resume saved successfully!";
             return RedirectToAction("MyResumes"); // Make sure MyResumes exists
         }
+
+        public IActionResult GetRecentNotifications()
+        {
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId))
+                return Json(new { success = false, message = "User not logged in." });
+
+            int parsedId = int.Parse(userId);
+
+            var notifications = _db.notifications
+                .Where(n => n.user_id == parsedId && !n.notification_read_status)
+                .OrderByDescending(n => n.notification_date_created)
+                .Take(3)
+                .Select(n => new
+                {
+                    title = n.notification_title,
+                    message = n.notification_msg,
+                    date = n.notification_date_created.ToString("yyyy-MM-dd HH:mm"),
+                    read = n.notification_read_status
+                })
+                .ToList();
+
+            return Json(new { success = true, data = notifications });
+        }
+
+        public IActionResult Notifications()
+        {
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int parsedId = int.Parse(userId);
+
+            var notifications = _db.notifications
+                .Where(n => n.user_id == parsedId)
+                .OrderByDescending(n => n.notification_date_created)
+                .ToList();
+
+            return View(notifications);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult MarkSelectedAsRead([FromBody] List<int> ids)
+        {
+            if (ids == null || ids.Count == 0)
+                return Json(new { success = false, message = "No notifications selected." });
+
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId))
+                return Json(new { success = false, message = "User not logged in." });
+
+            int parsedId = int.Parse(userId);
+
+            var userNotifs = _db.notifications
+                .Where(n => n.user_id == parsedId && ids.Contains(n.notification_id))
+                .ToList();
+
+            foreach (var n in userNotifs)
+            {
+                n.notification_read_status = true;
+            }
+
+            _db.SaveChanges();
+
+            return Json(new { success = true });
+        }
+
+
+
+
+
+
 
     }
 }

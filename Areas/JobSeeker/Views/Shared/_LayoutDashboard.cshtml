@@ -45,7 +45,7 @@
                 <a asp-controller="Dashboard" asp-action="ResumeBuilder"
                     class="@(ViewContext.RouteData.Values["action"]?.ToString() == "ResumeBuilder" ? "active" : "")">
                     Resume Builder
-                </a>    
+                </a>
                 <a asp-controller="Dashboard" asp-action="Settings"
                     class="@(ViewContext.RouteData.Values["action"]?.ToString() == "Settings" ? "active" : "")">
                     Settings
@@ -57,10 +57,12 @@
         <main class="main-content">
             <!-- === Header with Notification Bell === -->
             <div class="dashboard-header">
-                <h1></h1>
-
+                <div class="header-spacer"></div> <!-- acts as flexible left space -->
                 <div class="notification-wrapper">
-                    <button id="notifBell" class="notif-icon bi bi-bell" data-count="3"></button>
+                    <a href="@Url.Action("Inbox", "Dashboard")" class="icon-btn">
+                        <i class="bi bi-envelope"></i>
+                    </a>
+                    <button id="notifBell" class="notif-icon bi bi-bell" data-count="0"></button>
 
                     <div class="notif-dropdown" id="notifDropdown">
                         <h4>Notifications</h4>
@@ -75,6 +77,7 @@
                     </div>
                 </div>
             </div>
+
 
             @RenderBody()
         </main>
@@ -106,6 +109,41 @@
                 dropdown.style.display = 'none';
             }
         });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetch('@Url.Action("GetRecentNotifications", "Dashboard")')
+                .then(response => response.json())
+                .then(data => {
+                    const list = document.querySelector("#notifDropdown ul");
+                    const bell = document.getElementById("notifBell");
+
+                    list.innerHTML = ""; // Clear old items
+
+                    if (!data.success || data.data.length === 0) {
+                        list.innerHTML = `<li class="no-notif">No recent notifications</li>`;
+                        bell.removeAttribute("data-count"); // ✅ Hide badge completely
+                        return;
+                    }
+
+                    // 🟢 Update count
+                    bell.dataset.count = data.data.length;
+
+                    // 📰 Display notifications
+                    data.data.forEach(n => {
+                        const li = document.createElement("li");
+                        li.innerHTML = `
+                    <strong>${n.title}</strong><br>
+                    <span>${n.message}</span><br>
+                    <small>${n.date}</small>
+                `;
+                        list.appendChild(li);
+                    });
+                })
+                .catch(err => console.error("Error fetching notifications:", err));
+        });
+
+
+
     </script>
 
 </body>

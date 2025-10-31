@@ -7,21 +7,52 @@
 
 <section class="job-details">
     <h1>@Model.job_title</h1>
-    <p><strong>Status:</strong> @Model.job_status</p>
-    <p><strong>Posted On:</strong> @Model.date_posted.ToString("yyyy-MM-dd")</p>
 
-    <h3>Description</h3>
-    <p>@Model.job_description</p>
+    <div class="job-meta">
 
-    <h3>Requirements</h3>
-    <p>@Model.job_requirements</p>
+        @*
+       // 🖼️ Company Logo (if available) 
+        @if (!string.IsNullOrEmpty(Model.company.company_logo_path))
+        {
+            <img src="~/uploads/@Model.company.company_logo_path" 
+                 alt="Company Logo" 
+                 class="company-logo mb-3" 
+                 style="width:120px; height:auto;" />
+        } 
+*@
 
-    <h3>Salary Range</h3>
-    <p>RM @Model.salary_min - RM @Model.salary_max</p>
+        <p><strong>Company:</strong> @Model.company.company_name</p>
+        <p><strong>Location:</strong> @Model.company.company_location</p>
+        <p><strong>Industry:</strong> @Model.company.company_industry</p>
+        <p><strong>Status:</strong> @Model.job_status</p>
+        <p><strong>Posted On:</strong> @Model.date_posted.ToString("yyyy-MM-dd")</p>
+    </div>
 
-    <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id" class="btn btn-success">
-    Apply Now
-    </a>
+    <hr />
 
-    <a href="@Url.Action("JobListings")" class="btn btn-secondary mt-3">← Back to Listings</a>
+    <div class="row mt-4">
+        <!-- Left column: Job description -->
+        <div class="col-md-8">
+            <h4>Description</h4>
+            <p>@Model.job_description</p>
+        </div>
+
+        <!-- Right column: Quick details box -->
+        <div class="col-md-4">
+            <div class="card shadow-sm p-3">
+                <h5 class="mb-3">Job Details</h5>
+                <p><strong>Requirements:</strong><br>@Model.job_requirements</p>
+                <hr>
+                <p><strong>Salary Range:</strong><br>RM @Model.salary_min - RM @Model.salary_max</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="@Url.Action("JobListing", "JobSeeker")" class="btn btn-secondary">← Back to Listing</a>
+
+        <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
+            class="btn btn-success">Apply Now</a>
+    </div>
+
 </section>

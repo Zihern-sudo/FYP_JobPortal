@@ -13,12 +13,50 @@
         <button class="favourite-btn">⭐ Favourited</button>
     </div>
 
-    <!-- 🔍 Search Bar -->
-    <form asp-action="JobListings" method="get" class="job-filter-bar">
-        <input type="text" name="search" class="search-input" placeholder="Search for job titles or companies..."
-            value="@(Context.Request.Query["search"].ToString())" />
-        <button type="submit" class="btn btn-primary">Search</button>
+    <!-- 🔍 Filter Bar -->
+    <form asp-action="JobListings" method="get" class="job-filter-bar d-flex flex-wrap gap-2 align-items-center">
+        <!-- Keyword Search -->
+        <input type="text" name="search" class="form-control w-auto" placeholder="Search jobs or companies..."
+            value="@ViewBag.Search" />
+
+        <!-- 📍 Location Filter -->
+        <select name="location" class="form-select w-auto">
+            <option value="">All Locations</option>
+            @foreach (var loc in ViewBag.Locations as List<string>)
+            {
+                <option value="@loc" selected="@(ViewBag.Location == loc ? "selected" : null)">@loc</option>
+
+            }
+        </select>
+
+        <!-- 💰 Salary Range -->
+        <select name="salaryRange" class="form-select w-auto">
+            <option value="">All Salaries</option>
+            <option value="0-500" selected="@(ViewBag.SalaryRange == "0-500" ? "selected" : null)">Below RM500</option>
+            <option value="500-1000" selected="@(ViewBag.SalaryRange == "500-1000" ? "selected" : null)">RM500 - RM1000</option>
+            <option value="1000-1500" selected="@(ViewBag.SalaryRange == "1000-1500" ? "selected" : null)">RM1000 - RM1500</option>
+            <option value="1500-2000" selected="@(ViewBag.SalaryRange == "1500-2000" ? "selected" : null)">RM1500 - RM2000</option>
+            <option value="2000-2500" selected="@(ViewBag.SalaryRange == "2000-2500" ? "selected" : null)">RM2000 - RM2500</option>
+            <option value="2500-3000" selected="@(ViewBag.SalaryRange == "2500-3000" ? "selected" : null)">RM2500 - RM3000</option>
+            <option value="3000-3500" selected="@(ViewBag.SalaryRange == "3000-3500" ? "selected" : null)">RM3000 - RM3500</option>
+            <option value="3500-4000" selected="@(ViewBag.SalaryRange == "3500-4000" ? "selected" : null)">RM3500 - RM4000</option>
+            <option value="4000-10000" selected="@(ViewBag.SalaryRange == "4000-10000" ? "selected" : null)">Above RM4000</option>
+
+        </select>
+
+        <!-- 🎓 Internship Type (placeholder) -->
+        <select name="internshipType" class="form-select w-auto">
+            <option value="">All Internship Types</option>
+        </select>
+
+        <!-- 🏠 Work Mode (placeholder) -->
+        <select name="workMode" class="form-select w-auto">
+            <option value="">All Work Modes</option>
+        </select>
+
+        <button type="submit" class="btn btn-primary">Filter</button>
     </form>
+
 
     <!-- 🧩 Dynamic Job Listings -->
     <div class="job-listings-container">
@@ -28,13 +66,18 @@
         }
         else
         {
-            foreach (var job in Model)
+            @foreach (var job in Model)
             {
                 <div class="job-item">
                     <div class="job-info">
                         <h3>@job.job_title</h3>
-                        <p class="company">Company ID: @job.company_id</p>
-                        <p class="details">@job.date_posted.ToString("MMM dd, yyyy") · @job.job_status</p>
+                        <p class="company">
+                            @job.company.company_name
+                            <span class="industry">· @job.company.company_industry</span>
+                        </p>
+                        <p class="details">
+                            @job.company.company_location · @job.date_posted.ToString("MMM dd, yyyy") · @job.job_status
+                        </p>
                         <p class="description">@job.job_description</p>
                     </div>
                     <div class="job-logo">
@@ -44,6 +87,7 @@
                     </div>
                 </div>
             }
+
         }
     </div>
 
