@@ -1,8 +1,43 @@
 ﻿@{
+    Layout = "_Layout";
     ViewData["Title"] = "Home Page";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<section class="home-welcome-section text-center">
+    <div class="container py-5">
+        <h1 class="display-4 mb-4">Welcome to JobPortal</h1>
+        <a asp-area="JobSeeker" asp-controller="Account" asp-action="Login"
+            class="btn btn-primary btn-lg me-3">Login</a>
+        <a asp-area="JobSeeker" asp-controller="Account" asp-action="Login"
+            class="btn btn-success btn-lg" id="signupBtn">Signup</a>
+    </div>
+</section>
+
+<section class="home-recent-jobs-section py-5">
+    <div class="container">
+        <h2 class="mb-4">Latest Job Openings</h2>
+        <div class="row">
+            @foreach (var job in Model)
+            {
+                <div class="col-md-3 mb-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">@job.JobTitle</h5>
+                            <p class="card-text">@job.CompanyName</p>
+                            <p class="card-text"><small class="text-muted">@job.Industry</small></p>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        document.getElementById("signupBtn").addEventListener("click", function (e) {
+            e.preventDefault();
+            window.location.href = this.href + "?tab=register";
+        });
+    </script>
+}

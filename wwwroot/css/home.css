@@ -1,0 +1,28 @@
+/* Upper welcome section background */
+.home-welcome-section {
+    background-color: #d6c1ff; /* light purple */
+    color: #fff; /* text color */
+}
+
+/* Buttons on top section */
+.home-welcome-section .btn-primary {
+    background-color: #6f42c1;
+    border-color: #6f42c1;
+}
+
+.home-welcome-section .btn-success {
+    background-color: #20c997;
+    border-color: #20c997;
+}
+
+/* Lower recent jobs section background */
+.home-recent-jobs-section {
+    background-color: #cce5ff; /* light blue */
+    color: #000;
+}
+
+/* Card styling */
+.home-recent-jobs-section .card {
+    border: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}

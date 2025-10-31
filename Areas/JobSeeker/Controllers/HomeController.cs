@@ -2,23 +2,41 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.JobSeeker.Models;
+using Microsoft.EntityFrameworkCore;
+
 
 namespace JobPortal.Areas.JobSeeker.Controllers;
 
 [Area("JobSeeker")]
 public class HomeController : Controller
 {
+    private readonly AppDbContext _db;
     private readonly ILogger<HomeController> _logger;
 
-    public HomeController(ILogger<HomeController> logger)
+    public HomeController(AppDbContext db)
     {
-        _logger = logger;
+        _db = db;
     }
 
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
-        return View();
+        var recentJobs = await _db.job_listings
+            .Include(j => j.company) // Include related company
+            .Where(j => j.job_status == "Open")
+            .OrderByDescending(j => j.date_posted)
+            .Take(4)
+            .Select(j => new
+            {
+                JobTitle = j.job_title,
+                CompanyName = j.company.company_name,   // from related company
+                Industry = j.company.company_industry  // from related company
+            })
+            .ToListAsync();
+
+        return View(recentJobs);
     }
+
+
 
     public IActionResult Privacy()
     {
@@ -38,5 +56,6 @@ public class HomeController : Controller
         ViewData["Message"] = "This is a simple About page.";
         return View();
     }
+
 
 }

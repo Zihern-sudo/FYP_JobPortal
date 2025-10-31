@@ -104,6 +104,15 @@
             switchToRegister?.addEventListener("click", e => { e.preventDefault(); showRegister(); });
             switchToLogin?.addEventListener("click", e => { e.preventDefault(); showLogin(); });
 
+            
+            // ===============================
+            // 🔹 AUTO SWITCH TAB VIA URL PARAM
+            // ===============================
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab') === 'register') {
+                showRegister();
+            }
+
             // ===============================
             // 🔹 SWEETALERT MESSAGES
             // ===============================
