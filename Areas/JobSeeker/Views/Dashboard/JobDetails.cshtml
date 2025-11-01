@@ -49,7 +49,7 @@
     </div>
 
     <div class="d-flex justify-content-between mt-4">
-        <a href="@Url.Action("JobListing", "JobSeeker")" class="btn btn-secondary">← Back to Listing</a>
+        <a href="@Url.Action("JobListings")" class="btn btn-secondary">← Back to Listing</a>
 
         <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
             class="btn btn-success">Apply Now</a>

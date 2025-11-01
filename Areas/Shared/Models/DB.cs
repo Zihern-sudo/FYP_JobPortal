@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace JobPortal.Areas.Shared.Models; // ===== admin_log.cs =====
+
 [Table("admin_log")]
 [Index("user_id", Name = "fk_adminlog_user")]
 public partial class admin_log
@@ -27,7 +28,7 @@ public partial class admin_log
     public virtual user user { get; set; } = null!;
 }
 
- // ===== ai_resume_analysis.cs =====
+// ===== ai_resume_analysis.cs =====
 [Table("ai_resume_analysis")]
 [Index("resume_id", Name = "fk_analysis_resume")]
 public partial class ai_resume_analysis
@@ -51,7 +52,7 @@ public partial class ai_resume_analysis
     public virtual resume resume { get; set; } = null!;
 }
 
- // ===== ai_resume_evaluation.cs =====
+// ===== ai_resume_evaluation.cs =====
 [Table("ai_resume_evaluation")]
 [Index("job_listing_id", Name = "fk_eval_job")]
 [Index("resume_id", Name = "fk_eval_resume")]
@@ -75,7 +76,7 @@ public partial class ai_resume_evaluation
     public virtual resume resume { get; set; } = null!;
 }
 
- // ===== company.cs =====
+// ===== company.cs =====
 [Table("company")]
 [Index("user_id", Name = "fk_company_user")]
 [Index("company_name", Name = "idx_company_name")]
@@ -109,7 +110,7 @@ public partial class company
     public virtual user user { get; set; } = null!;
 }
 
- // ===== conversation.cs =====
+// ===== conversation.cs =====
 [Table("conversation")]
 [Index("job_listing_id", Name = "fk_conversation_job")]
 [Index("last_message_at", Name = "idx_conv_last_at")]
@@ -155,7 +156,7 @@ public partial class conversation
     public virtual ICollection<message> messages { get; set; } = new List<message>();
 }
 
- // ===== conversation_monitor.cs =====
+// ===== conversation_monitor.cs =====
 [Table("conversation_monitor")]
 [Index("conversation_id", Name = "fk_monitor_conv")]
 [Index("user_id", Name = "fk_monitor_user")]
@@ -182,7 +183,7 @@ public partial class conversation_monitor
     public virtual user user { get; set; } = null!;
 }
 
- // ===== job_application.cs =====
+// ===== job_application.cs =====
 [Table("job_application")]
 [Index("job_listing_id", "application_status", Name = "ix_app_job_status")]
 [Index("job_listing_id", Name = "ix_application_job")]
@@ -201,6 +202,8 @@ public partial class job_application
 
     [Column(TypeName = "datetime")]
     public DateTime date_updated { get; set; }
+    [Column(TypeName = "varchar(255)")]
+    public string? resume_path { get; set; }
 
     [ForeignKey("job_listing_id")]
     [InverseProperty("job_applications")]
@@ -217,7 +220,7 @@ public partial class job_application
     public virtual user user { get; set; } = null!;
 }
 
- // ===== job_listing.cs =====
+// ===== job_listing.cs =====
 [Table("job_listing")]
 [Index("company_id", Name = "ix_joblisting_company")]
 [Index("user_id", Name = "ix_joblisting_user")]
@@ -250,6 +253,11 @@ public partial class job_listing
 
     [Column(TypeName = "datetime")]
     public DateTime date_posted { get; set; }
+    [StringLength(50)]
+    public string? job_category { get; set; } // Contract, Full Time, etc.
+
+    [StringLength(50)]
+    public string? work_mode { get; set; } // On-site, WFH, Hybrid
 
     [InverseProperty("job_listing")]
     public virtual ICollection<ai_resume_evaluation> ai_resume_evaluations { get; set; } = new List<ai_resume_evaluation>();
@@ -272,7 +280,7 @@ public partial class job_listing
     public virtual user user { get; set; } = null!;
 }
 
- // ===== job_offer.cs =====
+// ===== job_offer.cs =====
 [Table("job_offer")]
 [Index("application_id", Name = "ix_offer_app")]
 [Index("offer_status", Name = "ix_offer_status")]
@@ -311,7 +319,7 @@ public partial class job_offer
     public virtual job_application application { get; set; } = null!;
 }
 
- // ===== job_post_approval.cs =====
+// ===== job_post_approval.cs =====
 [Table("job_post_approval")]
 [Index("user_id", Name = "fk_approval_admin")]
 [Index("job_listing_id", Name = "fk_approval_job")]
@@ -342,7 +350,7 @@ public partial class job_post_approval
     public virtual user user { get; set; } = null!;
 }
 
- // ===== job_seeker_note.cs =====
+// ===== job_seeker_note.cs =====
 [Table("job_seeker_note")]
 [Index("application_id", Name = "fk_note_app")]
 [Index("job_recruiter_id", Name = "fk_note_recruiter")]
@@ -377,7 +385,7 @@ public partial class job_seeker_note
     public virtual user job_seeker { get; set; } = null!;
 }
 
- // ===== message.cs =====
+// ===== message.cs =====
 [Table("message")]
 [Index("conversation_id", "msg_timestamp", Name = "idx_msg_conv_ts")]
 [Index("receiver_id", "is_read", "msg_timestamp", Name = "idx_msg_recv_unread_ts")]
@@ -416,7 +424,7 @@ public partial class message
     public virtual user sender { get; set; } = null!;
 }
 
- // ===== notification.cs =====
+// ===== notification.cs =====
 [Table("notification")]
 [Index("user_id", Name = "ix_notification_user")]
 public partial class notification
@@ -445,7 +453,7 @@ public partial class notification
     public virtual user user { get; set; } = null!;
 }
 
- // ===== notification_preference.cs =====
+// ===== notification_preference.cs =====
 [Table("notification_preference")]
 [Index("user_id", Name = "fk_pref_user")]
 public partial class notification_preference
@@ -468,7 +476,7 @@ public partial class notification_preference
     public virtual user user { get; set; } = null!;
 }
 
- // ===== resume.cs =====
+// ===== resume.cs =====
 [Table("resume")]
 [Index("user_id", Name = "ix_resume_user")]
 public partial class resume
@@ -495,7 +503,7 @@ public partial class resume
     public virtual user user { get; set; } = null!;
 }
 
- // ===== template.cs =====
+// ===== template.cs =====
 [Table("template")]
 [Index("user_id", Name = "fk_template_user")]
 public partial class template
@@ -528,7 +536,7 @@ public partial class template
     public virtual user user { get; set; } = null!;
 }
 
- // ===== user.cs =====
+// ===== user.cs =====
 [Table("user")]
 [Index("email", Name = "email", IsUnique = true)]
 public partial class user

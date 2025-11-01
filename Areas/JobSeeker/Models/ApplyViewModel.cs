@@ -5,6 +5,8 @@ namespace JobPortal.Areas.JobSeeker.Models
 {
     public class ApplyViewModel
     {
+         // 🔹 Unique ID for the application (for edit/update operations)
+        public int ApplicationId { get; set; }
         // 🔹 The Job being applied for
         public int JobId { get; set; }
 

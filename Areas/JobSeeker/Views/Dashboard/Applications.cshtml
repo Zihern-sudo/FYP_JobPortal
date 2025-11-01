@@ -26,7 +26,9 @@
             <tbody>
                 @if (!Model.Any())
                 {
-                    <tr><td colspan="7" class="text-center">You haven’t applied to any jobs yet.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center">You haven’t applied to any jobs yet.</td>
+                    </tr>
                 }
                 else
                 {
@@ -50,7 +52,7 @@
                                     @:Not specified
                                 }
                             </td>
-                            <td>@app.date_updated.ToString("yyyy-MM-dd")</td>
+                            <td>@app.date_updated.ToString("yyyy-MM-dd HH:mm")</td>
                             <td>
                                 <span class="status status-@app.application_status.ToLower().Replace(" ", "")">
                                     @app.application_status
@@ -64,6 +66,24 @@
     </div>
 
     <div class="pagination">
-        <span>Showing @Model.Count() applications</span>
+        @if (ViewBag.TotalPages > 1)
+        {
+            <button disabled="@(ViewBag.CurrentPage == 1)"
+                onclick="location.href='@Url.Action("Applications", new { page = ViewBag.CurrentPage - 1 })'">
+                ⬅ Previous
+            </button>
+
+            <span>Page @ViewBag.CurrentPage of @ViewBag.TotalPages</span>
+
+            <button disabled="@(ViewBag.CurrentPage == ViewBag.TotalPages)"
+                onclick="location.href='@Url.Action("Applications", new { page = ViewBag.CurrentPage + 1 })'">
+                Next ➡
+            </button>
+        }
+        else
+        {
+            <span>Showing all @Model.Count() applications</span>
+        }
     </div>
+
 </section>

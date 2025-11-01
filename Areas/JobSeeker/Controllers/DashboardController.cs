@@ -28,7 +28,42 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         {
             _db = db;
         }
-        public IActionResult Index() => View();
+        public async Task<IActionResult> Index(string? search)
+        {
+            // Fetch 4 most recent open jobs
+            var recentJobsQuery = _db.job_listings
+                .Include(j => j.company)
+                .Where(j => j.job_status == "Open")
+                .OrderByDescending(j => j.date_posted)
+                .Take(4);
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                recentJobsQuery = recentJobsQuery.Where(j =>
+                    j.job_title.Contains(search) ||
+                    j.company.company_name.Contains(search) ||
+                    j.company.company_industry.Contains(search));
+            }
+
+            var recentJobs = await recentJobsQuery
+                .Select(j => new RecentJobViewModel
+                {
+                    JobId = j.job_listing_id,
+                    JobTitle = j.job_title,
+                    CompanyName = j.company.company_name,
+                    Industry = j.company.company_industry
+                })
+                .ToListAsync();
+
+            var model = new DashboardIndexViewModel
+            {
+                SearchKeyword = search,
+                RecentJobs = recentJobs
+            };
+
+            return View(model);
+        }
+
         public IActionResult Feedback() => View();
 
         // ✅ Settings Page (GET)
@@ -242,8 +277,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return Json(new { success = true });
         }
 
-
-
         // Apply Page
         [HttpGet]
         public async Task<IActionResult> Apply(int id)
@@ -279,38 +312,73 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (string.IsNullOrEmpty(userId))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
 
-            // 🗂️ Save uploaded resume (optional)
-            string? filePath = null;
+            string? relativePath = null;
+
+            // ✅ Retrieve user and job info
+            var user = await _db.users.FindAsync(int.Parse(userId));
+            var job = await _db.job_listings
+                .Include(j => j.company)
+                .FirstOrDefaultAsync(j => j.job_listing_id == model.JobId);
+
+            if (user == null || job == null)
+                return NotFound();
+
+            // ✅ Upload folder path
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "job_applications");
+            if (!Directory.Exists(uploadsDir))
+                Directory.CreateDirectory(uploadsDir);
+
+            // ✅ Save resume if uploaded
             if (resumeFile != null && resumeFile.Length > 0)
             {
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "resumes");
-                if (!Directory.Exists(uploadsDir))
-                    Directory.CreateDirectory(uploadsDir);
+                // Example: EasonLowCheeGuan_TechCorp_UIUXDesigner_20251101_1916_Resume.pdf
+                string safeFileName = $"{user.first_name}{user.last_name}_{job.company.company_name}_{job.job_title}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(resumeFile.FileName)}";
+                safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
 
-                filePath = Path.Combine(uploadsDir, $"{Guid.NewGuid()}_{resumeFile.FileName}");
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                string fullPath = Path.Combine(uploadsDir, safeFileName);
+                using (var stream = new FileStream(fullPath, FileMode.Create))
                 {
                     await resumeFile.CopyToAsync(stream);
                 }
+
+                relativePath = $"/uploads/job_applications/{safeFileName}";
             }
 
-            //Create new application record
-            var application = new job_application
+            // ✅ Check if existing application exists (edit mode)
+            var existingApp = await _db.job_applications
+                .FirstOrDefaultAsync(a => a.application_id == model.ApplicationId && a.user_id == int.Parse(userId));
+
+            if (existingApp != null)
             {
-                user_id = int.Parse(userId),
-                job_listing_id = model.JobId,
-                application_status = "Submitted",
-                date_updated = DateTime.Now
-            };
+                // 🔹 Update existing application
+                existingApp.resume_path = relativePath ?? existingApp.resume_path;
+                existingApp.date_updated = DateTime.Now;
+                existingApp.application_status = "Updated";
 
-            _db.job_applications.Add(application);
+                _db.job_applications.Update(existingApp);
+                TempData["Success"] = "Your application has been updated successfully!";
+            }
+            else
+            {
+                // 🆕 Create new application
+                var application = new job_application
+                {
+                    user_id = int.Parse(userId),
+                    job_listing_id = model.JobId,
+                    application_status = "Submitted",
+                    date_updated = DateTime.Now,
+                    resume_path = relativePath
+                };
+
+                _db.job_applications.Add(application);
+                TempData["Success"] = "Your application has been submitted successfully!";
+            }
+
             await _db.SaveChangesAsync();
-
-            TempData["Success"] = "Your application has been submitted successfully!";
             return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
         }
 
-        public async Task<IActionResult> Applications()
+        public async Task<IActionResult> Applications(int page = 1)
         {
             var userId = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userId))
@@ -319,21 +387,34 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
             int id = int.Parse(userId);
+            int pageSize = 10; // 10 applications per page
 
-            var applications = await _db.job_applications
+            // Query applications for the user, ordered by last updated
+            var query = _db.job_applications
                 .Include(a => a.job_listing)
                     .ThenInclude(j => j.company)
                 .Where(a => a.user_id == id)
-                .OrderByDescending(a => a.date_updated)
+                .OrderByDescending(a => a.date_updated);
+
+            // Total count for pagination
+            int totalApplications = await query.CountAsync();
+
+            // Get current page applications
+            var applications = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            // Pass pagination info to the view
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalApplications / (double)pageSize);
 
             return View(applications);
         }
 
-        
 
         // ✅ Dynamic Job Listings with Pagination
-        public async Task<IActionResult> JobListings(string? search, string? location, string? salaryRange, string? internshipType, string? workMode, int page = 1)
+        public async Task<IActionResult> JobListings(string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1)
         {
             int pageSize = 10;
 
@@ -371,17 +452,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 }
             }
 
-
-            // 🎓 Internship Type (placeholder – not yet in DB)
-            if (!string.IsNullOrEmpty(internshipType))
-            {
-                // TODO: apply filter once field exists
-            }
-
-            // 🏠 Work Mode (placeholder – not yet in DB)
+            // 🏠 Work Mode
             if (!string.IsNullOrEmpty(workMode))
             {
-                // TODO: apply filter once field exists
+                jobsQuery = jobsQuery.Where(j => j.work_mode == workMode);
+            }
+
+            // 💼 Job Category
+            if (!string.IsNullOrEmpty(jobCategory))
+            {
+                jobsQuery = jobsQuery.Where(j => j.job_category == jobCategory);
             }
 
             // 📄 Pagination
@@ -398,7 +478,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             ViewBag.Search = search;
             ViewBag.Location = location;
             ViewBag.SalaryRange = salaryRange;
-            ViewBag.InternshipType = internshipType;
+            ViewBag.JobCategory = jobCategory;
             ViewBag.WorkMode = workMode;
 
             // 🗺️ Get all distinct locations for dropdown

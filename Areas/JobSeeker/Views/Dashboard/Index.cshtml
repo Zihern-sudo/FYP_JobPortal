@@ -1,48 +1,47 @@
+@model JobPortal.Areas.JobSeeker.Models.DashboardIndexViewModel
 @{
     Layout = "_LayoutDashboard";
-    ViewData["Title"] = "Home Dashboard";
+    ViewData["Title"] = "Dashboard";
 }
 
 <link rel="stylesheet" href="~/css/dashboard.css" />
 
 <div class="dashboard-container">
-    <!-- Sidebar -->
 
-
-    <!-- Main content -->
     <main class="main-content">
 
+        <!-- 🔹 Search Bar -->
+        <div class="job-search mb-4">
+            <form asp-action="Index" method="get" class="d-flex">
+                <input type="text" name="search" value="@Model.SearchKeyword" class="form-control me-2"
+                       placeholder="Search jobs by title, company or industry" />
+                <button type="submit" class="btn btn-primary">Search</button>
+            </form>
+        </div>
 
-        <section class="summary">
-            <div class="summary-card">
-                <h3>Total Applications</h3>
-                <p class="summary-number">25</p>
+        <!-- 🔹 Latest Jobs Section -->
+        <section class="recent-jobs">
+            <h2>Latest Job Openings</h2>
+            <div class="row">
+                @foreach (var job in Model.RecentJobs)
+                {
+                    <div class="col-md-3 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title">@job.JobTitle</h5>
+                                <p class="card-text">@job.CompanyName</p>
+                                <p class="card-text"><small class="text-muted">@job.Industry</small></p>
+                                <a asp-area="JobSeeker" 
+                                asp-controller="Dashboard" 
+                                asp-action="JobDetails" 
+                                asp-route-id="@job.JobId"
+                                class="btn btn-sm btn-primary mt-auto">
+                                View Details</a>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
-            <div class="summary-card">
-                <h3>Applications in Review</h3>
-                <p class="summary-number">5</p>
-            </div>
-            <div class="summary-card">
-                <h3>Interviews Scheduled</h3>
-                <p class="summary-number">2</p>
-            </div>
-        </section>
-
-        <section class="recent-activity">
-            <h2>Recent Activity</h2>
-            <ul>
-                <li>📄 Applied for Senior Software Engineer at Tech Innovators Inc. <span>2025-07-15</span></li>
-                <li>📄 Application for Product Manager at Global Solutions Ltd. is in review <span>2025-07-10</span></li>
-                <li>📅 Interview scheduled for Data Analyst position at Data Insights Corp. <span>2025-07-05</span></li>
-            </ul>
-        </section>
-
-        <section class="recent-notifications">
-            <h2>Recent Notifications</h2>
-            <ul>
-                <li>📢 New job listing for Senior Software Engineer at Tech Innovators Inc. <span>2025-07-16</span></li>
-                <li>📢 Your application for Product Manager at Global Solutions Ltd. is in review <span>2025-07-15</span></li>
-            </ul>
         </section>
 
     </main>
