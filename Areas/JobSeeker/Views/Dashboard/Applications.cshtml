@@ -1,8 +1,8 @@
-@model IEnumerable<JobPortal.Areas.Shared.Models.job_application>
+@model JobPortal.Areas.JobSeeker.Models.MyApplicationsViewModel
 
 @{
     Layout = "_LayoutDashboard";
-    ViewData["Title"] = "Applications";
+    ViewData["Title"] = "My Applications";
 }
 
 <link rel="stylesheet" href="~/css/dashboard.css" />
@@ -10,7 +10,46 @@
 <section class="my-applications-section">
     <h1 class="page-title">My Applications</h1>
 
-    <div class="applications-table-container">
+    <!-- Dashboard Summary Cards -->
+    <section class="summary mb-4 d-flex gap-3">
+        <div class="summary-card">
+            <h3>Total Applications</h3>
+            <p class="summary-number">@Model.Dashboard.TotalApplications</p>
+        </div>
+        <div class="summary-card">
+            <h3>Applications in Review</h3>
+            <p class="summary-number">@Model.Dashboard.ApplicationsInReview</p>
+        </div>
+        <div class="summary-card">
+            <h3>Interviews Scheduled</h3>
+            <p class="summary-number">@Model.Dashboard.InterviewsScheduled</p>
+        </div>
+    </section>
+
+    <!-- Recent Activity -->
+    <section class="recent-activity mb-4">
+        <h2>Recent Activity</h2>
+        <ul>
+            @foreach (var activity in Model.Dashboard.RecentActivities)
+            {
+                <li>@activity.Message <span>@activity.Date.ToString("yyyy-MM-dd HH:mm")</span></li>
+            }
+        </ul>
+    </section>
+
+    <!-- Recent Notifications -->
+    <section class="recent-notifications mb-4">
+        <h2>Recent Notifications</h2>
+        <ul>
+            @foreach (var notif in Model.Dashboard.RecentNotifications)
+            {
+                <li>@notif.Message <span>@notif.Date.ToString("yyyy-MM-dd HH:mm")</span></li>
+            }
+        </ul>
+    </section>
+
+    <!-- Applications Table -->
+    <div class="applications-table-container mb-4">
         <table class="applications-table">
             <thead>
                 <tr>
@@ -24,7 +63,7 @@
                 </tr>
             </thead>
             <tbody>
-                @if (!Model.Any())
+                @if (!Model.Applications.Any())
                 {
                     <tr>
                         <td colspan="7" class="text-center">You haven’t applied to any jobs yet.</td>
@@ -32,7 +71,7 @@
                 }
                 else
                 {
-                    foreach (var app in Model)
+                    foreach (var app in Model.Applications)
                     {
                         var job = app.job_listing;
                         var company = job?.company;
@@ -65,25 +104,25 @@
         </table>
     </div>
 
+    <!-- Pagination -->
     <div class="pagination">
-        @if (ViewBag.TotalPages > 1)
+        @if (Model.TotalPages > 1)
         {
-            <button disabled="@(ViewBag.CurrentPage == 1)"
-                onclick="location.href='@Url.Action("Applications", new { page = ViewBag.CurrentPage - 1 })'">
+            <button disabled="@(Model.CurrentPage == 1)"
+                    onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage - 1 })'">
                 ⬅ Previous
             </button>
 
-            <span>Page @ViewBag.CurrentPage of @ViewBag.TotalPages</span>
+            <span>Page @Model.CurrentPage of @Model.TotalPages</span>
 
-            <button disabled="@(ViewBag.CurrentPage == ViewBag.TotalPages)"
-                onclick="location.href='@Url.Action("Applications", new { page = ViewBag.CurrentPage + 1 })'">
+            <button disabled="@(Model.CurrentPage == Model.TotalPages)"
+                    onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage + 1 })'">
                 Next ➡
             </button>
         }
         else
         {
-            <span>Showing all @Model.Count() applications</span>
+            <span>Showing all @Model.Applications.Count() applications</span>
         }
     </div>
-
 </section>

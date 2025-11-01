@@ -382,35 +382,50 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         {
             var userId = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userId))
-            {
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
-            }
 
             int id = int.Parse(userId);
-            int pageSize = 10; // 10 applications per page
+            int pageSize = 10;
 
-            // Query applications for the user, ordered by last updated
             var query = _db.job_applications
                 .Include(a => a.job_listing)
                     .ThenInclude(j => j.company)
                 .Where(a => a.user_id == id)
                 .OrderByDescending(a => a.date_updated);
 
-            // Total count for pagination
             int totalApplications = await query.CountAsync();
-
-            // Get current page applications
             var applications = await query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Pass pagination info to the view
-            ViewBag.CurrentPage = page;
-            ViewBag.TotalPages = (int)Math.Ceiling(totalApplications / (double)pageSize);
-
-            return View(applications);
+            var dashboard = new ApplicationsDashboardViewModel
+            {
+                TotalApplications = totalApplications,
+                ApplicationsInReview = await _db.job_applications.CountAsync(a => a.user_id == id && a.application_status == "In Review"),
+                InterviewsScheduled = await _db.job_applications.CountAsync(a => a.user_id == id && a.application_status == "Interview"),
+                RecentActivities = applications.Take(5).Select(a => new RecentActivityViewModel
+                {
+                    Message = $"Updated application for {a.job_listing.job_title} ({a.application_status})",
+                    Date = a.date_updated
+                }).ToList(),
+                RecentNotifications = new List<RecentNotificationViewModel>
+        {
+            new RecentNotificationViewModel { Message = "Keep track of your applications here!", Date = DateTime.Now }
         }
+            };
+
+            var model = new MyApplicationsViewModel
+            {
+                Dashboard = dashboard,
+                Applications = applications,
+                CurrentPage = page,
+                TotalPages = (int)Math.Ceiling(totalApplications / (double)pageSize)
+            };
+
+            return View(model);
+        }
+
 
 
         // ✅ Dynamic Job Listings with Pagination
