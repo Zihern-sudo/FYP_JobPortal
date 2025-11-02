@@ -9,7 +9,8 @@
 <section class="profile-section">
     <h1 class="page-title">Personal Information</h1>
 
-    <form asp-action="SaveProfile" asp-controller="Dashboard" method="post" class="profile-form">
+    <form asp-action="Settings" asp-controller="Dashboard" method="post" class="profile-form">
+        <input type="hidden" asp-for="UserId" />
         <!-- Name -->
         <div class="form-group-row">
             <div class="form-group">
@@ -91,24 +92,54 @@
         <!-- Notification Preferences -->
         <h2 class="section-title">Notification Preferences</h2>
         <div class="notification-options">
-            <label><input type="checkbox" checked> In-App (Default)</label>
-            <label><input type="checkbox"> Email</label>
-            <label><input type="checkbox"> SMS</label>
+            <label>
+                <input asp-for="notif_inapp" type="checkbox" /> In-App
+            </label>
+            <label>
+                <input asp-for="notif_email" type="checkbox" /> Email
+            </label>
+            <label>
+                <input asp-for="notif_sms" type="checkbox" /> SMS
+            </label>
         </div>
 
         <!-- Notification Types -->
         <h2 class="section-title">Notification Types</h2>
         <div class="toggle-list">
-            <div><span>Job Application Updates</span> <label class="switch"><input type="checkbox" checked><span
-                        class="slider"></span></label></div>
-            <div><span>Recruiter Feedbacks</span> <label class="switch"><input type="checkbox" checked><span
-                        class="slider"></span></label></div>
-            <div><span>Messages from Recruiters</span> <label class="switch"><input type="checkbox" checked><span
-                        class="slider"></span></label></div>
-            <div><span>System Alerts</span> <label class="switch"><input type="checkbox"><span
-                        class="slider"></span></label></div>
-            <div><span>Saved Job Reminders</span> <label class="switch"><input type="checkbox"><span
-                        class="slider"></span></label></div>
+            <div><span>Job Application Updates</span>
+                <label class="switch">
+                    <input asp-for="notif_job_updates" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div><span>Recruiter Feedbacks</span>
+                <label class="switch">
+                    <input asp-for="notif_feedback" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div><span>Messages from Recruiters</span>
+                <label class="switch">
+                    <input asp-for="notif_messages" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div><span>System Alerts</span>
+                <label class="switch">
+                    <input asp-for="notif_system" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div><span>Saved Job Reminders</span>
+                <label class="switch">
+                    <input asp-for="notif_reminders" type="checkbox" />
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
 
         <!-- Save Button -->
@@ -134,10 +165,10 @@
                 Swal.fire({
                     title: "Change Password",
                     html: `
-                                                    <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
-                                                    <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
-                                                    <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
-                                                `,
+                                                        <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
+                                                        <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
+                                                        <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
+                                                    `,
                     confirmButtonText: "Update Password",
                     focusConfirm: false,
                     preConfirm: () => {
@@ -217,11 +248,11 @@
                                 Swal.fire({
                                     title: "Enable Two-Factor Authentication",
                                     html: `
-                                    <p>Scan this QR code with <b>Google Authenticator</b>:</p>
-                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
-                                    <p>Secret Key: <b>${data.secret}</b></p>
-                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
-                                `,
+                                        <p>Scan this QR code with <b>Google Authenticator</b>:</p>
+                                        <img src="${data.qrImage}" style="width:200px; margin:10px;">
+                                        <p>Secret Key: <b>${data.secret}</b></p>
+                                        <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
+                                    `,
                                     confirmButtonText: "Verify Code",
                                     showCancelButton: true,
                                     cancelButtonText: "Cancel",

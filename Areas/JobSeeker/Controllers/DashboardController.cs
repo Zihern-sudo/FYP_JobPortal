@@ -87,11 +87,19 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 LastName = user.last_name,
                 Email = user.email,
                 TwoFAEnabled = user.user_2FA, // assuming 1 = enabled
-                Phone = "", // fill later when added to DB
-                Address = "",
-                Skills = "",
-                Education = "",
-                WorkExperience = ""
+                Phone = user.phone,
+                Address = user.address,
+                Skills = user.skills,
+                Education = user.education,
+                WorkExperience = user.work_experience,
+                notif_inapp = user.notif_inapp,
+                notif_email = user.notif_email,
+                notif_sms = user.notif_sms,
+                notif_job_updates = user.notif_job_updates,
+                notif_feedback = user.notif_feedback,
+                notif_messages = user.notif_messages,
+                notif_system = user.notif_system,
+                notif_reminders = user.notif_reminders 
             };
 
             return View(vm);
@@ -109,11 +117,24 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             user.last_name = vm.LastName;
             user.email = vm.Email;
             user.user_2FA = vm.TwoFAEnabled;
+            user.phone = vm.Phone;
+            user.address = vm.Address;
+            user.skills = vm.Skills;
+            user.education = vm.Education;
+            user.work_experience = vm.WorkExperience;
+            user.notif_inapp = vm.notif_inapp;
+            user.notif_email = vm.notif_email;
+            user.notif_sms = vm.notif_sms;
+            user.notif_job_updates = vm.notif_job_updates;
+            user.notif_feedback = vm.notif_feedback;
+            user.notif_messages = vm.notif_messages;
+            user.notif_system = vm.notif_system;
+            user.notif_reminders = vm.notif_reminders;
 
             await _db.SaveChangesAsync();
 
             ViewBag.Message = "Profile updated successfully!";
-            return View(vm);
+            return RedirectToAction("Settings");
         }
 
         // ==============================
