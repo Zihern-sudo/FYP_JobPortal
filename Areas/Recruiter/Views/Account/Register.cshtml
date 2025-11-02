@@ -1,0 +1,43 @@
+@model JobPortal.Areas.Recruiter.Models.RegisterVm
+@{
+    ViewData["Title"] = "Recruiter Registration";
+}
+<h2 class="mb-3">@ViewData["Title"]</h2>
+
+<form asp-action="Register" method="post" class="row g-3">
+    @Html.AntiForgeryToken()
+    <div class="col-md-6">
+        <label asp-for="first_name" class="form-label"></label>
+        <input asp-for="first_name" class="form-control" />
+        <span asp-validation-for="first_name" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="last_name" class="form-label"></label>
+        <input asp-for="last_name" class="form-control" />
+        <span asp-validation-for="last_name" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="email" class="form-label"></label>
+        <input asp-for="email" class="form-control" />
+        <span asp-validation-for="email" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="password" class="form-label"></label>
+        <input asp-for="password" class="form-control" />
+        <span asp-validation-for="password" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="confirm" class="form-label"></label>
+        <input asp-for="confirm" class="form-control" />
+        <span asp-validation-for="confirm" class="text-danger"></span>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">Create Account</button>
+        <a asp-area="Recruiter" asp-controller="Account" asp-action="Login" class="btn btn-link">Have an account?
+            Login</a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

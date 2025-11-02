@@ -158,4 +158,65 @@ namespace JobPortal.Areas.Recruiter.Models
         IList<TemplateRowVM> Recents,
         IList<TemplateRowVM> Items
     );
+
+    public class RegisterVm
+    {
+        [Required, Display(Name = "First Name"), StringLength(60)]
+        public string first_name { get; set; } = "";
+
+        [Required, Display(Name = "Last Name"), StringLength(60)]
+        public string last_name { get; set; } = "";
+
+        [Required, EmailAddress, Display(Name = "Email"), StringLength(190)]
+        public string email { get; set; } = "";
+
+        [Required, DataType(DataType.Password), StringLength(100, MinimumLength = 6)]
+        public string password { get; set; } = "";
+
+        [Required, DataType(DataType.Password), Display(Name = "Confirm Password"), Compare(nameof(password))]
+        public string confirm { get; set; } = "";
+    }
+
+    public class CompanyProfileVm
+    {
+        [Required, Display(Name = "Company Name"), StringLength(160)]
+        public string company_name { get; set; } = "";
+
+        [Display(Name = "Industry"), StringLength(120)]
+        public string? company_industry { get; set; }
+
+        [Display(Name = "Location"), StringLength(120)]
+        public string? company_location { get; set; }
+
+        [Display(Name = "Description")]
+        public string? company_description { get; set; }
+    }
+
+    public class DashboardVm
+    {
+        public int JobsCount { get; set; }
+        public int OpenJobs { get; set; }
+        public int ApplicationsCount { get; set; }
+        public int UnreadThreads { get; set; }
+
+        public IList<DashJobItem> LatestJobs { get; set; } = new List<DashJobItem>();
+        public IList<DashAppItem> LatestApplications { get; set; } = new List<DashAppItem>();
+    }
+
+    public record DashJobItem(int Id, string Title, string Status, string CreatedAt);
+    public record DashAppItem(int Id, string Candidate, string JobTitle, string Status, string UpdatedAt);
+
+    public class CandidatesIndexVM
+    {
+        public IList<CandidateItemVM> Items { get; set; } = new List<CandidateItemVM>();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalCount { get; set; }
+        public int TotalPages { get; set; }
+        public string Query { get; set; } = "";
+        public string Stage { get; set; } = "";
+    }
+
+
+
 }
