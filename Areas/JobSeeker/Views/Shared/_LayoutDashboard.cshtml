@@ -11,6 +11,15 @@
 </head>
 
 <body>
+@{
+    var userName = Context.Session.GetString("UserName");
+
+    if (string.IsNullOrEmpty(userName))
+    {
+        Context.Response.Redirect("/JobSeeker/Account/Login");
+    }
+}
+
 
     <div class="dashboard-container">
 
