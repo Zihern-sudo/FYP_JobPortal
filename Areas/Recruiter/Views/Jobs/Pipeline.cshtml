@@ -2,7 +2,7 @@
 
 @{
   // Safe casts with sensible fallbacks so the view never crashes
-  var job   = ViewBag.Job   as JobItemVM ?? new JobItemVM(0, "", "", JobStatus.Draft, "");
+  var job = ViewBag.Job as JobItemVM ?? new JobItemVM(0, "", "", JobStatus.Draft, "");
   var cands = ViewBag.Cands as List<CandidateItemVM> ?? new List<CandidateItemVM>();
 
   // Board columns
@@ -10,8 +10,8 @@
 
   // Group candidates by column; handle null Stage and compare case-insensitively
   var by = cols.ToDictionary(
-      c => c,
-      c => cands.Where(x => string.Equals(x.Stage ?? "", c, StringComparison.OrdinalIgnoreCase)).ToList()
+  c => c,
+  c => cands.Where(x => string.Equals(x.Stage ?? "", c, StringComparison.OrdinalIgnoreCase)).ToList()
   );
 }
 
@@ -28,6 +28,10 @@
     border-color: #9ec5fe;
   }
 </style>
+
+<a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+  &leftarrow; Back to Jobs
+</a>
 
 <div class="mb-2">
   <span class="chip">@job.Title</span> • <span class="chip">@job.Location</span>
@@ -47,14 +51,21 @@
           </div>
           <div class="small text-muted">@x.AppliedAt</div>
           <div class="mt-1">
-            @if (x.LowConfidence) { <span class="badge text-bg-warning">Low confidence</span> }
-            @if (x.Override)      { <span class="badge text-bg-info">Override</span> }
+            @if (x.LowConfidence)
+            {
+              <span class="badge text-bg-warning">Low confidence</span>
+            }
+            @* UPDATED: show Former employee when Override flag is true *@
+            @if (x.Override)
+            {
+              <span class="badge text-bg-info">Former employee</span>
+            }
           </div>
           <div class="mt-2 d-flex gap-2">
-            <a class="btn btn-sm btn-outline-primary"
-               asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@x.Id">Open</a>
-            <a class="btn btn-sm btn-outline-secondary"
-               asp-area="Recruiter" asp-controller="Screening" asp-action="Parsing" asp-route-candidateId="@x.Id">Parse</a>
+            <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail"
+              asp-route-id="@x.Id">Open</a>
+            <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Screening" asp-action="Parsing"
+              asp-route-candidateId="@x.Id">Parse</a>
           </div>
         </div>
       }
@@ -67,16 +78,16 @@
     let dragged = null;
     document.querySelectorAll('.candidate-card').forEach(card => {
       card.addEventListener('dragstart', e => { dragged = card; card.classList.add('dragging'); });
-      card.addEventListener('dragend',   e => {
+      card.addEventListener('dragend', e => {
         card.classList.remove('dragging');
         document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drop-hover'));
         if (typeof showToast === 'function') { showToast("Moved candidate", "primary"); }
       });
     });
     document.querySelectorAll('.kanban-col').forEach(col => {
-      col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drop-hover'); });
+      col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
       col.addEventListener('dragleave', e => { col.classList.remove('drop-hover'); });
-      col.addEventListener('drop',      e => { e.preventDefault(); if (dragged) { col.appendChild(dragged); col.classList.remove('drop-hover'); } });
+      col.addEventListener('drop', e => { e.preventDefault(); if (dragged) { col.appendChild(dragged); col.classList.remove('drop-hover'); } });
     });
   </script>
 }

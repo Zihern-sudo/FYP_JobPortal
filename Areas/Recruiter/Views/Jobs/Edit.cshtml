@@ -3,6 +3,10 @@
   ViewData["Title"] = "Edit Job";
 }
 
+<a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+  &leftarrow; Back to Jobs
+</a>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Edit Job</h2>
   <div class="d-flex gap-2">
@@ -38,17 +42,60 @@
     <span asp-validation-for="job_description" class="text-danger"></span>
   </div>
 
+  @* --- ORDER STARTS HERE: Must-have → Nice-to-have → Deadline --- *@
   <div class="mb-3">
     <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
     <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
     <span asp-validation-for="job_requirements" class="text-danger"></span>
   </div>
 
-  <div class="mb-4">
+  <div class="mb-3">
     <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
     <textarea asp-for="job_requirements_nice" class="form-control" rows="4"></textarea>
     <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
   </div>
+
+  <div class="mb-3">
+    <div class="row g-3">
+      <!-- Salary Min / Max -->
+      <div class="col-md-6">
+        <label asp-for="salary_min" class="form-label"></label>
+        <input asp-for="salary_min" class="form-control" />
+        <span asp-validation-for="salary_min" class="text-danger"></span>
+      </div>
+      <div class="col-md-6">
+        <label asp-for="salary_max" class="form-label"></label>
+        <input asp-for="salary_max" class="form-control" />
+        <span asp-validation-for="salary_max" class="text-danger"></span>
+      </div>
+
+      <!-- Job Category -->
+      <div class="col-md-6">
+        <label asp-for="job_category" class="form-label"></label>
+        <select asp-for="job_category" class="form-select"
+          asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.Categories)">
+        </select>
+        <span asp-validation-for="job_category" class="text-danger"></span>
+      </div>
+
+      <!-- Work Mode -->
+      <div class="col-md-6">
+        <label asp-for="work_mode" class="form-label"></label>
+        <select asp-for="work_mode" class="form-select"
+          asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.WorkModes)">
+        </select>
+        <span asp-validation-for="work_mode" class="text-danger"></span>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="mb-3">
+    <label asp-for="expiry_date" class="form-label">Application Deadline</label>
+    <input asp-for="expiry_date" class="form-control" type="date" />
+    <span asp-validation-for="expiry_date" class="text-danger"></span>
+  </div>
+  @* --- ORDER ENDS --- *@
 
   <div class="text-end">
     <button class="btn btn-success" type="submit">Save</button>

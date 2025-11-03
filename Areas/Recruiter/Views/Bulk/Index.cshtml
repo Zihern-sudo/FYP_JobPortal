@@ -1,65 +1,271 @@
+@* File: Areas/Recruiter/Views/Bulk/Index.cshtml *@
 @using JobPortal.Areas.Recruiter.Models
+@model JobPortal.Areas.Recruiter.Models.BulkIndexVM
 @{
-  var list = ViewBag.Items as List<CandidateItemVM> ?? new List<CandidateItemVM>();
+  ViewData["Title"] = "Bulk Tools";
+  var items = Model.Items;
+  var q = Model.Query;
+  var stage = Model.Stage;
+
+  // Helper for pagination links
+  string RoutePreserve(int page) => Url.Action("Index", new
+  {
+    q = q,
+    stage = stage,
+    page = page,
+    pageSize = Model.PageSize
+  })!;
 }
 
-<div class="card shadow-sm">
+@* MODIFIED: Added Search and Filter form *@
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" value="@q" class="form-control" placeholder="Search name, email, job title..." />
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="stage">
+      <option value="">All stages</option>
+      @* These stages match the MapStage logic in the controller *@
+      @foreach (var s in new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" })
+      {
+        <option value="@s" selected="@(stage == s ? "selected" : null)">@s</option>
+      }
+    </select>
+  </div>
+  <div class="col-md-3 text-end">
+    <button class="btn btn-primary" type="submit">Filter</button>
+    <a asp-area="Recruiter" asp-controller="Bulk" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
+  </div>
+</form>
 
-  <div class="card-body">
 
-    <!-- One form; submit to different endpoints via 'formaction' -->
-    <form id="bulkForm" method="post">
-      @Html.AntiForgeryToken()
+<div class="d-flex gap-2 mb-3">
+  <button id="btnMessage" type="button" class="btn btn-primary">Message</button>
 
-      <div class="d-flex gap-2 mb-3">
-        <button type="button" class="btn btn-outline-primary btn-sm"
-          onclick='showToast("Bulk messaging (UI coming soon)","primary")'>Message</button>
+  <button type="submit" form="bulkActionsForm"
+    formaction="@Url.Action("MoveToShortlisted", "Bulk", new { area = "Recruiter" })" class="btn btn-success">
+    Move to Shortlisted
+  </button>
 
-        <button type="submit" class="btn btn-outline-success btn-sm"
-          formaction="@Url.Action("MoveToShortlisted", "Bulk", new { area = "Recruiter" })">
-          Move to Shortlisted
-        </button>
+  <button type="submit" form="bulkActionsForm"
+    formaction="@Url.Action("ExportCvsZip", "Bulk", new { area = "Recruiter" })" class="btn btn-outline-secondary">
+    Export CVs
+  </button>
+</div>
 
-        <button type="submit" class="btn btn-outline-secondary btn-sm"
-          formaction="@Url.Action("ExportCvsZip", "Bulk", new { area = "Recruiter" })">
-          Export CVs
-        </button>
-      </div>
+<form id="bulkActionsForm" method="post">
+  @Html.AntiForgeryToken()
 
+  @if (Model.Items.Count == 0)
+  {
+    <div class="alert alert-info">No candidates found for your jobs.</div>
+  }
+  else
+  {
+    <div class="table-responsive">
       <table class="table align-middle">
         <thead>
           <tr>
-            <th style="width:36px;"></th>
+            <th style="width:36px;">
+              <input id="chkAll" type="checkbox" />
+            </th>
             <th>Name</th>
-            <th>Score</th>
-            <th>Stage</th>
-            <th>Applied</th>
+            <th style="width:120px;">Score</th>
+            <th style="width:160px;">Stage</th>
+            <th style="width:180px;">Applied</th>
           </tr>
         </thead>
         <tbody>
-          @if (list.Any())
-          {
-            foreach (var c in list)
-            {
-              <tr>
-                <td>
-                  <input type="checkbox" name="selectedIds" value="@c.Id" />
-                </td>
-                <td>@c.Name</td>
-                <td>@c.Score</td>
-                <td>@c.Stage</td>
-                <td>@c.AppliedAt</td>
-              </tr>
-            }
-          }
-          else
+          @foreach (var x in Model.Items)
           {
             <tr>
-              <td colspan="5" class="text-muted">No candidates found.</td>
+              <td>
+                <input type="checkbox" name="selectedIds" value="@x.Id" />
+              </td>
+              <td>@x.Name</td>
+              <td>@x.Score</td>
+              <td>@x.Stage</td>
+              <td>@x.AppliedAt</td>
             </tr>
           }
         </tbody>
       </table>
-    </form>
+    </div>
+  }
+</form>
+
+<nav aria-label="paging" class="mt-3"> @* <--- You can add the 'mt-3' class for spacing *@
+  <ul class="pagination justify-content-end">
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
+    </li>
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(Model.Page - 1))">Prev</a>
+    </li>
+
+    @{
+      var start = Math.Max(1, Model.Page - 2);
+      var end = Math.Min(Model.TotalPages, Model.Page + 2);
+      for (int p = start; p <= end; p++)
+      {
+        <li class="page-item @(p == Model.Page ? "active" : "")">
+          <a class="page-link" href="@RoutePreserve(p)">@p</a>
+        </li>
+      }
+    }
+
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
+    </li>
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
+    </li>
+  </ul>
+</nav>
+
+
+<div class="text-muted small">
+  Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+  <strong>@Model.TotalCount</strong> candidates
+</div>
+
+
+<div class="modal fade" id="bulkMsgModal" tabindex="-1" aria-labelledby="bulkMsgLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form id="bulkMsgForm" asp-area="Recruiter" asp-controller="Bulk" asp-action="SendMessages" method="post">
+        @Html.AntiForgeryToken()
+        <div class="modal-header">
+          <h5 class="modal-title" id="bulkMsgLabel">Send message to selected candidates</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          <div id="selectedIdsContainer"></div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="templateSelect" class="form-label">Use a message template (optional)</label>
+              <select id="templateSelect" name="TemplateId" class="form-select">
+                <option value="">— Choose a template —</option>
+              </select>
+              <div class="form-text">
+                Choosing a template auto-fills the editor;
+                you can still edit.
+              </div>
+            </div>
+
+            <div class="col-md-3">
+              <label for="msgDate" class="form-label">Date (optional)</label>
+              <input type="date" id="msgDate" name="Date" class="form-control" />
+            </div>
+            <div class="col-md-3">
+              <label for="msgTime" class="form-label">Time (optional)</label>
+              <input type="time" id="msgTime" name="Time" class="form-control" />
+            </div>
+
+            <div class="col-12">
+              <label for="msgText" class="form-label">Message</label>
+              <textarea id="msgText" name="Text" class="form-control" rows="8"
+                placeholder="Type your message or pick a template. Tokens: {{FirstName}}, {{JobTitle}}, {{Company}}, {{RecruiterName}}, {{Date}}, {{Time}}."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button id="sendBtn" type="submit" class="btn btn-primary">Send to Selected</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
+@* ===================== Success Toast (TempData["Message"]) ===================== *@
+@if (TempData["Message"] is string flash && !string.IsNullOrWhiteSpace(flash))
+{
+  <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:1080">
+    <div id="flashToast" class="toast align-items-center text-bg-success border-0" role="status" aria-live="polite"
+      aria-atomic="true" data-bs-delay="3500">
+      <div class="d-flex">
+        <div class="toast-body">@Html.Raw(Html.Encode(flash))</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+          aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+}
+
+@section Scripts {
+  <script>
+    (function () {
+      // Select-all
+      const chkAll = document.getElementById('chkAll');
+      if (chkAll) {
+        chkAll.addEventListener('change', function () {
+          document.querySelectorAll('input[name="selectedIds"]').forEach(cb => cb.checked = chkAll.checked);
+        });
+      }
+
+      // Bootstrap modal helper
+      const bsModal = () => new bootstrap.Modal(document.getElementById('bulkMsgModal'), { backdrop: 'static' });
+      // Open modal on Message click
+      document.getElementById('btnMessage')?.addEventListener('click', async function () {
+        const checked = Array.from(document.querySelectorAll('input[name="selectedIds"]:checked')).map(chk => chk.value);
+        if (checked.length === 0) { alert('Please select at least one candidate.'); return; }
+
+        // Inject SelectedIds[] inputs for SendMessages
+        const container = document.getElementById('selectedIdsContainer');
+        container.innerHTML = '';
+        checked.forEach(v => {
+          const h = document.createElement('input');
+          h.type = 'hidden';
+          h.name = 'SelectedIds';
+          h.value = v;
+          container.appendChild(h);
+        });
+
+        // Reset editor, load templates
+        document.getElementById('msgText').value = '';
+        document.getElementById('templateSelect').value = '';
+        await loadTemplates();
+
+        bsModal().show();
+      });
+      // Load templates for dropdown
+      async function loadTemplates() {
+        const sel = document.getElementById('templateSelect');
+        sel.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
+        try {
+          const res = await fetch('@Url.Action("TemplatesJson", "Bulk", new { area = "Recruiter" })', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store'
+          });
+          if (!res.ok) throw new Error('Failed to load templates');
+          const items = await res.json();
+          items.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            opt.dataset.body = t.body; // used to fill textarea
+            sel.appendChild(opt);
+          });
+        } catch (e) { console.error(e); }
+      }
+
+      // Fill textarea when template selected
+      document.getElementById('templateSelect')?.addEventListener('change', function () {
+        const body = this.selectedOptions?.[0]?.dataset?.body ?? '';
+        if (body) document.getElementById('msgText').value = body;
+      });
+      // Guard empty send
+      document.getElementById('bulkMsgForm')?.addEventListener('submit', function (e) {
+        const txt = document.getElementById('msgText').value.trim();
+        const tpl = document.getElementById('templateSelect').value;
+        if (!txt && !tpl) { e.preventDefault(); alert('Please type a message or pick a template.'); }
+      });
+      // Toast on redirect
+      const toastEl = document.getElementById('flashToast');
+      if (toastEl) new bootstrap.Toast(toastEl).show();
+    })();
+  </script>
+}

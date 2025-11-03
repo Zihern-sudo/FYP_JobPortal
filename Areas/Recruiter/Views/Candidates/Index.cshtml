@@ -24,8 +24,10 @@
     <div class="col-md-3">
         <select class="form-select" name="stage">
             <option value="">All stages</option>
-            @foreach (var s in new[] { "Submitted", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired", "Rejected" })
+            @* MODIFIED: Removed "Hired" from this list as per requirement *@
+            @foreach (var s in new[] { "Submitted", "AI-Screened", "Shortlisted", "Interview", "Offer", "Rejected" })
             {
+
                 <option value="@s" selected="@(stage == s ? "selected" : null)">@s</option>
             }
         </select>
@@ -47,6 +49,7 @@
             <th>Stage</th>
             <th>Score</th>
             <th>Applied</th>
+
             <th class="text-end">Action</th>
         </tr>
     </thead>
@@ -57,6 +60,7 @@
                 <td colspan="6" class="text-muted">No candidates found.</td>
             </tr>
         }
+
         else
         {
             foreach (var c in Model.Items)
@@ -64,27 +68,33 @@
                 <tr>
                     <td>@c.Id</td>
                     <td>
+
                         <div class="fw-semibold">@c.Name</div>
                         <div class="text-muted small">@c.AppliedAt</div>
                     </td>
                     <td>
+
                         <span class="badge bg-secondary">@c.Stage</span>
                         @if (c.Override)
                         {
                             <span class="badge bg-warning">Manual</span>
+
                         }
                         @if (c.LowConfidence)
                         {
                             <span class="badge bg-danger">Low confidence</span>
+
                         }
                     </td>
                     <td>@c.Score</td>
                     <td>@c.AppliedAt</td>
                     <td class="text-end">
+
                         <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@c.Id"
                             class="btn btn-sm btn-outline-primary">Open</a>
                     </td>
                 </tr>
+
             }
         }
     </tbody>
@@ -92,7 +102,8 @@
 
 <nav aria-label="paging">
     <ul class="pagination justify-content-end">
-        <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+        <li class="page-item @(Model.Page <= 1 ?
+                        "disabled" : "")">
             <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
         </li>
         <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
@@ -100,12 +111,14 @@
         </li>
 
         @{
-            var start = Math.Max(1, Model.Page - 2);
+            var start = Math.Max(1,
+            Model.Page - 2);
             var end = Math.Min(Model.TotalPages, Model.Page + 2);
             for (int p = start; p <= end; p++)
             {
                 <li class="page-item @(p == Model.Page ? "active" : "")">
                     <a class="page-link" href="@RoutePreserve(p)">@p</a>
+
                 </li>
             }
         }
@@ -113,7 +126,8 @@
         <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
             <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
         </li>
-        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+        <li class="page-item @(Model.Page >= Model.TotalPages ?
+                        "disabled" : "")">
             <a class="page-link"
                 href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
         </li>

@@ -1,21 +1,36 @@
 @* File: Areas/Recruiter/Views/JobPostTemplates/Index.cshtml *@
-@using JobPortal.Areas.Recruiter.Models
-
+@model JobPortal.Areas.Recruiter.Models.TemplatesIndexVM
 @{
-    ViewData["Title"] = "Job Post Templates";
+    ViewData["Title"] = Model.IsArchivedList ? "Archived Job Post Templates" : "Job Post Templates";
+    var items = Model.Items;
+    bool isArchived = Model.IsArchivedList;
+    int? jobId = Model.ThreadId; // Using ThreadId to hold JobId from VM
+    var q = Model.Query;
 
-    // Items are passed via ViewBag to keep this view flexible
-    var items = (IEnumerable<JobPortal.Areas.Recruiter.Models.TemplateItemVM>)
-                (ViewBag.Items ?? Enumerable.Empty<JobPortal.Areas.Recruiter.Models.TemplateItemVM>());
-
-    bool isArchived = (ViewBag.IsArchivedList as bool?) == true;
-
-    // If you arrive here from Jobs/Edit to pick/apply, this may be present (used by Preview/Apply)
-    int? jobId = ViewBag.JobId as int?;
+    string RoutePreserve(int page) => Url.Action(isArchived ? "Archived" : "Index", new
+    {
+        q = q,
+        page = page,
+        pageSize = Model.PageSize,
+        jobId = jobId
+    })!;
 }
 
+@* MODIFIED: Added Toast container for pop-up notifications *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+    <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toast-message">
+            </div>
+    </div>
+</div>
+
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Job Post Templates</h3>
+    <h3 class="mb-0">@ViewData["Title"]</h3>
 
     <div class="d-flex gap-2">
         <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Create">
@@ -37,6 +52,21 @@
     </div>
 </div>
 
+@* MODIFIED: Added Search Form *@
+<form method="get" asp-action="@(isArchived ? "Archived" : "Index")" class="row g-2 mb-3">
+    @if (jobId.HasValue)
+    {
+        <input type="hidden" name="jobId" value="@jobId" />
+    }
+    <div class="col-md-9">
+        <input type="text" name="q" value="@q" class="form-control" placeholder="Search name or content..." />
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-primary" type="submit">Search</button>
+        <a asp-controller="JobPostTemplates" asp-action="@(isArchived ? "Archived" : "Index")" asp-route-jobId="@jobId" class="btn btn-outline-secondary">Reset</a>
+    </div>
+</form>
+
 @if (!items.Any())
 {
     <div class="text-muted">No job templates found.</div>
@@ -53,50 +83,106 @@ else
                 </tr>
             </thead>
             <tbody>
-            @foreach (var t in items)
-            {
-                <tr>
-                    <td>@t.Name</td>
-                    <td>@t.Snippet</td>
+                @foreach (var t in items)
+                {
+                    <tr>
+                        <td>@t.Name</td>
+                        <td>@t.Snippet</td>
 
-                    <td class="text-end actions-cell">
-                        <div class="actions-toolbar">
-                            @* Create a job directly from this template (no preview) *@
-                            <a class="btn btn-success btn-sm"
-                               asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="CreateFrom"
-                               asp-route-id="@t.Id">Create from template</a>
+                        <td class="text-end actions-cell">
+                            <div class="actions-toolbar">
+                                @* Create a job directly from this template (no preview) *@
+                                <a class="btn btn-success btn-sm"
+                                   asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Fill"
+                                   asp-route-id="@t.Id">Create from template</a>
 
-                            <a class="btn btn-outline-secondary btn-sm"
-                               asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Preview"
-                               asp-route-id="@t.Id" asp-route-jobId="@(jobId ?? 0)">Preview</a>
-
-                            @if (!isArchived)
-                            {
                                 <a class="btn btn-outline-secondary btn-sm"
-                                   asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Edit"
-                                   asp-route-id="@t.Id">Edit</a>
+                                   asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Preview"
+                                   asp-route-id="@t.Id" asp-route-jobId="@jobId">Preview</a>
 
-                                <form method="post" class="d-inline"
-                                      asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Archive"
-                                      asp-route-id="@t.Id">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-outline-danger btn-sm">Archive</button>
-                                </form>
-                            }
-                            else
-                            {
-                                <form method="post" class="d-inline"
-                                      asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Unarchive"
-                                      asp-route-id="@t.Id">
-                                    @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-outline-success btn-sm">Unarchive</button>
-                                </form>
-                            }
-                        </div>
-                    </td>
-                </tr>
-            }
+                                @if (!isArchived)
+                                {
+                                    <a class="btn btn-outline-secondary btn-sm"
+                                       asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Edit"
+                                       asp-route-id="@t.Id">Edit</a>
+
+                                    <form method="post" class="d-inline"
+                                          asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Archive"
+                                          asp-route-id="@t.Id">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Archive</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form method="post" class="d-inline"
+                                          asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Unarchive"
+                                          asp-route-id="@t.Id">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-outline-success btn-sm">Unarchive</button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
             </tbody>
         </table>
     </div>
+
+    @* MODIFIED: Added Pagination Controls *@
+    <nav aria-label="paging">
+        <ul class="pagination justify-content-end">
+            <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
+            </li>
+            <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(Model.Page - 1))">Prev</a>
+            </li>
+
+            @{
+                var start = Math.Max(1, Model.Page - 2);
+                var end = Math.Min(Model.TotalPages, Model.Page + 2);
+                for (int p = start; p <= end; p++)
+                {
+                    <li class="page-item @(p == Model.Page ? "active" : "")">
+                        <a class="page-link" href="@RoutePreserve(p)">@p</a>
+                    </li>
+                }
+            }
+
+            <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
+            </li>
+            <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+                <a class="page-link"
+                   href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="text-muted small">
+        Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+        <strong>@Model.TotalCount</strong> templates
+    </div>
+}
+
+@* MODIFIED: Added script for Toast pop-up *@
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Check for TempData message
+            var message = '@(TempData["Message"] as string)';
+            if (message) {
+                // Get toast elements
+                var toastEl = document.getElementById('toast-notify');
+                var toastBody = document.getElementById('toast-message');
+
+                // Set message and show toast
+                toastBody.textContent = message;
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
+    </script>
 }

@@ -15,21 +15,60 @@ namespace JobPortal.Areas.Recruiter.Controllers
     [Area("Recruiter")]
     public class InboxController : Controller
     {
+        // MODIFIED: Added pagination constants
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
         private readonly AppDbContext _db;
         public InboxController(AppDbContext db) => _db = db;
 
         [HttpGet]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? q, string? filter, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Inbox";
 
-            var convs = await _db.conversations
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.conversations
                 .Include(c => c.job_listing)
                 .Where(c =>
                     (c.recruiter_id != null && c.recruiter_id == recruiterId) ||
-                    (c.recruiter_id == null && c.job_listing.user_id == recruiterId))
+                    (c.recruiter_id == null && c.job_listing.user_id == recruiterId));
+
+            // Apply filter
+            if (filter == "unread")
+            {
+                baseQuery = baseQuery.Where(c => c.unread_for_recruiter > 0);
+            }
+
+            // Apply search
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(c =>
+                    (c.job_title != null && c.job_title.Contains(qTrim)) ||
+                    (c.job_listing.job_title != null && c.job_listing.job_title.Contains(qTrim)) ||
+                    (c.candidate_name != null && c.candidate_name.Contains(qTrim)) ||
+                    (c.last_snippet != null && c.last_snippet.Contains(qTrim))
+                );
+            }
+
+            // Get total count for pagination
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            // Get paginated conversations
+            var convs = await baseQuery
+                .OrderByDescending(c => c.last_message_at ?? c.created_at)
+                .Skip(skip)
+                .Take(pageSize)
                 .ToListAsync();
 
             var threads = new List<ThreadListItemVM>(convs.Count);
@@ -51,10 +90,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 ));
             }
 
-            threads = threads.OrderByDescending(t => t.LastAt).ToList();
+            // Create the new view model
+            var vm = new InboxIndexVM
+            {
+                Items = threads,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                Filter = filter ?? string.Empty
+            };
 
-            ViewBag.Threads = threads;
-            return View();
+            return View(vm);
         }
 
         // GET: /Recruiter/Inbox/Thread/{id}?before=ISO8601&draft=...

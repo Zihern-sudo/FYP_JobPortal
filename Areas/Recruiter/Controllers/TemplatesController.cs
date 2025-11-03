@@ -12,24 +12,52 @@ namespace JobPortal.Areas.Recruiter.Controllers
     [Area("Recruiter")]
     public class TemplatesController : Controller
     {
+        // MODIFIED: Added pagination constants
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
         private readonly AppDbContext _db;
         public TemplatesController(AppDbContext db) => _db = db;
 
         // GET: /Recruiter/Templates
         [HttpGet]
-        public async Task<IActionResult> Index(int? threadId = null)
+        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = DefaultPageSize, int? threadId = null)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Message Templates";
-            ViewBag.ThreadId = threadId;
 
-            var raw = await _db.templates.AsNoTracking()
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.templates.AsNoTracking()
                 .Where(t => t.template_status == "Active"
                             && !t.template_name.StartsWith("[JOB]")
-                            && t.user_id == recruiterId)
+                            && t.user_id == recruiterId);
+
+            // Apply search
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(t =>
+                    t.template_name.Contains(qTrim) ||
+                    (t.template_subject != null && t.template_subject.Contains(qTrim)) ||
+                    (t.template_body != null && t.template_body.Contains(qTrim))
+                );
+            }
+
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            var raw = await baseQuery
                 .OrderByDescending(t => t.date_updated)
                 .ThenByDescending(t => t.date_created)
+                .Skip(skip)
+                .Take(pageSize)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
                 .ToListAsync();
 
@@ -40,22 +68,58 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return new TemplateItemVM(t.template_id, t.template_name, t.template_subject, snippet);
             }).ToList();
 
-            ViewBag.Items = items;
-            return View();
+            var vm = new TemplatesIndexVM
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                IsArchivedList = false,
+                IsJobPost = false,
+                ThreadId = threadId
+            };
+
+            return View(vm);
         }
 
         // Archived list
         [HttpGet]
-        public async Task<IActionResult> Archived()
+        public async Task<IActionResult> Archived(string? q, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Archived Templates";
-            ViewBag.IsArchivedList = true;
 
-            var raw = await _db.templates.AsNoTracking()
-                .Where(t => t.template_status == "Archived" && t.user_id == recruiterId)
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.templates.AsNoTracking()
+                .Where(t => t.template_status == "Archived" && t.user_id == recruiterId);
+
+            // Apply search
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(t =>
+                    t.template_name.Contains(qTrim) ||
+                    (t.template_subject != null && t.template_subject.Contains(qTrim)) ||
+                    (t.template_body != null && t.template_body.Contains(qTrim))
+                );
+            }
+
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            var raw = await baseQuery
                 .OrderByDescending(t => t.date_updated)
+                .Skip(skip)
+                .Take(pageSize)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
                 .ToListAsync();
 
@@ -66,8 +130,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return new TemplateItemVM(t.template_id, t.template_name, t.template_subject, snippet);
             }).ToList();
 
-            ViewBag.Items = items;
-            return View("Index");
+            var vm = new TemplatesIndexVM
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                IsArchivedList = true,
+                IsJobPost = false, // This controller is for message templates
+                ThreadId = null      // ThreadId doesn't make sense for archived list
+            };
+
+            return View("Index", vm);
         }
 
         // Unarchive

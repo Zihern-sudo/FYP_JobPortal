@@ -20,11 +20,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
         public JobPostTemplatesController(AppDbContext db) => _db = db;
 
         private const string JOB_PREFIX = "[JOB] ";
-        private const string NICE_DELIM = "\n||NICE||\n"; // must/nice splitter (same as JobsController)
-        private const int RECENT_LIMIT = 5;              // keep last 5 applied
-
-
+        private const int RECENT_LIMIT = 5;
         private const string TEMP_APPLY_KEY = "tpl_apply_payload";
+
+        // MODIFIED: Added pagination constants
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
 
         private sealed class JobTplDto
         {
@@ -35,7 +36,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             public string? status { get; set; }
         }
 
-        // ====== RECENTS (session) ======
+        // ===== RECENTS (session) =====
         private string RecentKey(int recruiterId) => $"recent_job_tpl_ids_{recruiterId}";
 
         private List<int> GetRecentIds(int recruiterId)
@@ -56,7 +57,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             HttpContext.Session.SetString(RecentKey(recruiterId), string.Join(",", list));
         }
 
-        // ====== MODAL (with Recents) ======
+        // ===== MODAL (with Recents) =====
         [HttpGet]
         public async Task<IActionResult> Modal(int jobId, string? q = null)
         {
@@ -99,7 +100,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 mainQuery = mainQuery.Where(t => !exclude.Contains(t.template_id));
             }
 
-            // EF-safe projection first, then map to VM
             var mainRows = await mainQuery
                 .OrderByDescending(t => t.date_updated)
                 .ThenByDescending(t => t.date_created)
@@ -146,7 +146,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var dto = JsonSerializer.Deserialize<JobTplDto>(row.template_body ?? "{}") ?? new JobTplDto();
 
-            // NEW: stash payload in TempData (safer than long querystrings)
+            // Stash payload in TempData (safer than long querystrings)
             TempData[TEMP_APPLY_KEY] = JsonSerializer.Serialize(dto);
 
             if (jobId <= 0)
@@ -177,51 +177,69 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Nice = dto.nice ?? "";
             ViewBag.Status = dto.status ?? "Open";
 
-            // NEW: only treat as "has job" when > 0; otherwise force single-template preview
+            // Show current job values when jobId is valid
             if (jobId.HasValue && jobId.Value > 0)
             {
                 var job = await _db.job_listings.AsNoTracking()
                     .FirstOrDefaultAsync(j => j.job_listing_id == jobId.Value && j.user_id == recruiterId);
                 if (job != null)
                 {
-                    var parts = (job.job_requirements ?? "").Split(NICE_DELIM);
-                    var curMust = parts.Length > 0 ? parts[0] : "";
-                    var curNice = parts.Length > 1 ? parts[1] : null;
-
                     ViewBag.CurTitle = job.job_title ?? "";
                     ViewBag.CurDescription = job.job_description ?? "";
-                    ViewBag.CurMust = curMust ?? "";
-                    ViewBag.CurNice = curNice ?? "";
+                    ViewBag.CurMust = job.job_requirements ?? "";
+                    ViewBag.CurNice = job.job_requirements_nice ?? "";
                     ViewBag.CurStatus = job.job_status ?? "Open";
-                    ViewBag.JobId = jobId.Value; // valid
+                    ViewBag.JobId = jobId.Value;
                 }
                 else
                 {
-                    ViewBag.JobId = null; // invalid id
+                    ViewBag.JobId = null;
                 }
             }
             else
             {
-                ViewBag.JobId = null; // no job context
+                ViewBag.JobId = null;
             }
 
             return View();
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(int? jobId = null)
+        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = DefaultPageSize, int? jobId = null)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             ViewData["Title"] = "Job Post Templates";
-            ViewBag.IsJobPost = true;
-            ViewBag.JobId = jobId;
 
-            var rows = await _db.templates.AsNoTracking()
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.templates.AsNoTracking()
                 .Where(t => t.user_id == recruiterId
                             && t.template_status == "Active"
-                            && t.template_name.StartsWith(JOB_PREFIX))
+                            && t.template_name.StartsWith(JOB_PREFIX));
+
+            // Apply search
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(t =>
+                    t.template_name.Contains(qTrim) ||
+                    (t.template_body != null && t.template_body.Contains(qTrim))
+                );
+            }
+
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            var rows = await baseQuery
                 .OrderByDescending(t => t.date_updated)
                 .ThenByDescending(t => t.date_created)
+                .Skip(skip)
+                .Take(pageSize)
                 .ToListAsync();
 
             var items = rows.Select(t =>
@@ -237,24 +255,58 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return new TemplateItemVM(t.template_id, t.template_name.Substring(JOB_PREFIX.Length), null, snippet);
             }).ToList();
 
-            ViewBag.Items = items;
-            return View();
+            var vm = new TemplatesIndexVM
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                IsArchivedList = false,
+                IsJobPost = true,
+                ThreadId = jobId // Using ThreadId to store JobId
+            };
+
+            return View(vm);
         }
 
         [HttpGet]
-        public async Task<IActionResult> Archived()
+        public async Task<IActionResult> Archived(string? q, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             ViewData["Title"] = "Archived Job Post Templates";
-            ViewBag.IsJobPost = true;
-            ViewBag.IsArchivedList = true;
 
-            var rows = await _db.templates.AsNoTracking()
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.templates.AsNoTracking()
                 .Where(t => t.user_id == recruiterId
                             && t.template_status == "Archived"
-                            && t.template_name.StartsWith(JOB_PREFIX))
+                            && t.template_name.StartsWith(JOB_PREFIX));
+
+            // Apply search
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(t =>
+                    t.template_name.Contains(qTrim) ||
+                    (t.template_body != null && t.template_body.Contains(qTrim))
+                );
+            }
+
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            var rows = await baseQuery
                 .OrderByDescending(t => t.date_updated)
                 .ThenByDescending(t => t.date_created)
+                .Skip(skip)
+                .Take(pageSize)
                 .ToListAsync();
 
             var items = rows.Select(t =>
@@ -270,8 +322,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return new TemplateItemVM(t.template_id, t.template_name.Substring(JOB_PREFIX.Length), null, snippet);
             }).ToList();
 
-            ViewBag.Items = items;
-            return View("Index");
+            var vm = new TemplatesIndexVM
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                IsArchivedList = true,
+                IsJobPost = true,
+                ThreadId = null // No JobId context in archived list
+            };
+
+            return View("Index", vm);
         }
 
         [HttpGet]
@@ -395,9 +459,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Archived));
         }
 
-
-
-        // Use to create new job
+        // Convenience: build a new job from a template via querystring (kept)
         [HttpGet]
         public async Task<IActionResult> Fill(int id)
         {

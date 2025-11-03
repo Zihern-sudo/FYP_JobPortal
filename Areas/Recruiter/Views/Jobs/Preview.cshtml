@@ -1,21 +1,32 @@
+@* File: Areas/Recruiter/Views/Jobs/Preview.cshtml *@
 @{
   var job = (JobPortal.Areas.Recruiter.Models.JobItemVM)ViewBag.Job;
   var req = (JobPortal.Areas.Recruiter.Models.JobRequirementVM)ViewBag.Req;
   string? desc = ViewBag.Desc as string;
   var company = ViewBag.Company as string;
+
   decimal? smin = ViewBag.SalaryMin as decimal?;
   decimal? smax = ViewBag.SalaryMax as decimal?;
   string SalaryText() => (smin.HasValue || smax.HasValue)
   ? $"{(smin.HasValue ? smin.Value.ToString("N0") : "—")} – {(smax.HasValue ? smax.Value.ToString("N0") : "—")}"
   : "Not disclosed";
 
+  // NEW: extra fields
+  string? jobCategory = ViewBag.JobCategory as string;
+  string? workMode = ViewBag.WorkMode as string;
+
   // small helpers: split bullets on newline or comma
   string[] Bullets(string? text)
   => string.IsNullOrWhiteSpace(text)
   ? Array.Empty<string>()
-  : text!.Replace("\r", "").Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries)
+  : text!.Replace("\r", "")
+  .Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries)
   .Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
 }
+
+<a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+  &leftarrow; Back to Jobs
+</a>
 
 <div class="card shadow-sm">
   <div class="card-body">
@@ -23,12 +34,28 @@
       <div>
         <h4 class="mb-1">@job.Title</h4>
         <div class="text-muted">
-          <span class="me-3"><i class="bi bi-geo-alt"></i> @(!string.IsNullOrWhiteSpace(job.Location) ? job.Location :
-                        "Location not specified")</span>
-          <span class="me-3"><i class="bi bi-building"></i> @(string.IsNullOrWhiteSpace(company) ? "Company" :
-                        company)</span>
-          <span class="me-3"><i class="bi bi-cash-coin"></i> @SalaryText()</span>
-          <span><i class="bi bi-clock-history"></i> Posted @job.CreatedAt</span>
+          <span class="me-3">
+            <i class="bi bi-geo-alt"></i>
+            @(!string.IsNullOrWhiteSpace(job.Location) ? job.Location : "Location not specified")
+          </span>
+          <span class="me-3">
+            <i class="bi bi-building"></i>
+            @(string.IsNullOrWhiteSpace(company) ? "Company" : company)
+          </span>
+          <span class="me-3">
+            <i class="bi bi-diagram-3"></i>
+            @(string.IsNullOrWhiteSpace(jobCategory) ? "Category not specified" : jobCategory)
+          </span>
+          <span class="me-3">
+            <i class="bi bi-laptop"></i>
+            @(string.IsNullOrWhiteSpace(workMode) ? "Work mode not specified" : workMode)
+          </span>
+          <span class="me-3">
+            <i class="bi bi-cash-coin"></i> @SalaryText()
+          </span>
+          <span>
+            <i class="bi bi-clock-history"></i> Posted @job.CreatedAt
+          </span>
         </div>
       </div>
       <span

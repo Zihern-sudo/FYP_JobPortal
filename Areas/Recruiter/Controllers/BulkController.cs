@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
     [Area("Recruiter")]
     public class BulkController : Controller
     {
+        // MODIFIED: Added pagination constants
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
         private readonly AppDbContext _db;
         private readonly IWebHostEnvironment _env;
 
@@ -25,27 +30,70 @@ namespace JobPortal.Areas.Recruiter.Controllers
         }
 
         // GET: /Recruiter/Bulk
-        public async Task<IActionResult> Index()
+        // MODIFIED: Added pagination, search, and filter parameters
+        public async Task<IActionResult> Index(string? q, string? stage, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Bulk Actions";
 
-            var apps = await _db.job_applications
+            // MODIFIED: Pagination and query logic
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            var baseQuery = _db.job_applications
                 .Include(a => a.user)
                 .Include(a => a.job_listing)
-                .Where(a => a.job_listing.user_id == recruiterId)
+                .Where(a => a.job_listing.user_id == recruiterId);
+
+            // Apply stage filter
+            // Note: This maps the view's filter (e.g., "New") back to the database status
+            if (!string.IsNullOrWhiteSpace(stage))
+            {
+                if (stage == "New")
+                    baseQuery = baseQuery.Where(a => a.application_status == "Submitted" || a.application_status == null);
+                else if (stage == "Hired/Rejected")
+                    baseQuery = baseQuery.Where(a => a.application_status == "Hired" || a.application_status == "Rejected");
+                else
+                    baseQuery = baseQuery.Where(a => a.application_status == stage);
+            }
+
+            // Apply search query
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                baseQuery = baseQuery.Where(a =>
+                    (a.user.first_name + " " + a.user.last_name).Contains(qTrim) ||
+                    a.user.email.Contains(qTrim) ||
+                    a.job_listing.job_title.Contains(qTrim));
+            }
+
+            // Get total count for pagination
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+
+            // Get paginated applications
+            var apps = await baseQuery
                 .OrderByDescending(a => a.date_updated)
+                .Skip(skip)
+                .Take(pageSize)
                 .ToListAsync();
 
+            // Fetch evals only for the candidates on the current page
             var jobIds = apps.Select(a => a.job_listing_id).Distinct().ToList();
+            var userIds = apps.Select(a => a.user_id).Distinct().ToList();
 
             var evals = await _db.ai_resume_evaluations
-                .Where(ev => jobIds.Contains(ev.job_listing_id))
+                // MODIFIED: Removed the incorrect user_id check.
+                .Where(ev => jobIds.Contains(ev.job_listing_id)) // Optimized query
                 .Join(_db.resumes,
                       ev => ev.resume_id,
                       r => r.resume_id,
                       (ev, r) => new { ev.job_listing_id, r.user_id, r.upload_date, ev.match_score })
+                .Where(e => userIds.Contains(e.user_id)) // This line correctly filters by user_id
                 .ToListAsync();
 
             string MapStage(string raw)
@@ -81,8 +129,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 );
             }).ToList();
 
-            ViewBag.Items = items;
-            return View();
+            // MODIFIED: Create and return the new view model
+            var vm = new BulkIndexVM
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                Stage = stage ?? string.Empty
+            };
+
+            return View(vm);
         }
 
         // POST: /Recruiter/Bulk/MoveToShortlisted
@@ -202,5 +261,171 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var outName = $"CVs_{DateTime.Now:yyyyMMdd_HHmm}.zip";
             return File(ms.ToArray(), "application/zip", outName);
         }
+
+        // ======== NEW: Bulk Messaging ========
+
+        // GET: /Recruiter/Bulk/TemplatesJson
+        // Why: supply active templates for the modal dropdown without navigating away.
+        [HttpGet]
+        public async Task<IActionResult> TemplatesJson()
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            var items = await _db.templates.AsNoTracking()
+                .Where(t => t.user_id == recruiterId && t.template_status == "Active" && !t.template_name.StartsWith("[JOB]"))
+                .OrderByDescending(t => t.date_updated)
+                .ThenByDescending(t => t.date_created)
+                .Select(t => new
+                {
+                    id = t.template_id,
+                    name = t.template_name,
+                    subject = t.template_subject,
+                    snippet = (t.template_body ?? "").Length <= 120 ? (t.template_body ?? "") : (t.template_body!.Substring(0, 120) + "…"),
+                    body = t.template_body ?? ""
+                })
+                .ToListAsync();
+
+            return Json(items);
+        }
+
+        // POST: /Recruiter/Bulk/SendMessages
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendMessages([FromForm] BulkMessagePostVM vm)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            if (vm.SelectedIds == null || vm.SelectedIds.Length == 0)
+            {
+                TempData["Message"] = "No candidates selected.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            // Resolve text: free-typed takes precedence, else template body
+            string? baseText = vm.Text;
+            if (string.IsNullOrWhiteSpace(baseText) && vm.TemplateId.HasValue)
+            {
+                var tpl = await _db.templates.AsNoTracking()
+                    .FirstOrDefaultAsync(t => t.template_id == vm.TemplateId.Value && t.user_id == recruiterId && t.template_status == "Active");
+                baseText = tpl?.template_body;
+            }
+
+            if (string.IsNullOrWhiteSpace(baseText))
+            {
+                TempData["Message"] = "Message is empty.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var apps = await _db.job_applications
+                .Include(a => a.user)
+                .Include(a => a.job_listing)
+                .ThenInclude(j => j.company)
+                .Where(a => vm.SelectedIds.Contains(a.application_id))
+                .ToListAsync();
+
+            int sent = 0;
+
+            // Pre-fetch recruiter name for token merge
+            var recruiterRow = await _db.users
+                .Where(u => u.user_id == recruiterId)
+                .Select(u => new { u.first_name, u.last_name })
+                .FirstOrDefaultAsync();
+            var recruiterName = $"{recruiterRow?.first_name} {recruiterRow?.last_name}".Trim();
+
+            foreach (var a in apps)
+            {
+                var candidateId = a.user_id;
+                var job = a.job_listing;
+
+                // Find an existing conversation for this recruiter/candidate/job
+                var conv = await _db.conversations
+                    .Include(c => c.job_listing)
+                    .FirstOrDefaultAsync(c =>
+                        c.job_listing_id == job.job_listing_id &&
+                        ((c.recruiter_id != null && c.recruiter_id == recruiterId) || (c.recruiter_id == null && c.job_listing.user_id == recruiterId)) &&
+                        (c.candidate_id == candidateId || c.candidate_id == null));
+
+                if (conv == null)
+                {
+                    // WHY: ensure a container exists so messages appear in Inbox
+                    conv = new conversation
+                    {
+                        job_listing_id = job.job_listing_id,
+                        recruiter_id = job.user_id, // owner of job (the recruiter)
+                        candidate_id = candidateId,
+                        candidate_name = $"{a.user.first_name} {a.user.last_name}".Trim(),
+                        job_title = job.job_title,
+                        created_at = DateTime.Now,
+                        last_message_at = DateTime.Now,
+                        last_snippet = "",
+                        unread_for_candidate = 0,
+                        unread_for_recruiter = 0
+                    };
+                    _db.conversations.Add(conv);
+                    await _db.SaveChangesAsync(); // need conversation_id for messages
+                }
+
+                // Token context
+                var candidateName = $"{a.user.first_name} {a.user.last_name}".Trim();
+                var firstName = (candidateName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "there");
+                var jobTitle = job.job_title ?? string.Empty;
+                var company = job.company?.company_name ?? "";
+
+                string text = baseText!;
+                text = ReplaceInsensitive(text, "Hi User", $"Hi {firstName}");
+
+                var context = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["FirstName"] = firstName,
+                    ["JobTitle"] = jobTitle,
+                    ["RecruiterName"] = recruiterName,
+                    ["Company"] = company,
+                    ["Date"] = vm.Date ?? "",
+                    ["Time"] = vm.Time ?? ""
+                };
+
+                var tokenRegex = new Regex(@"\{\{\s*([A-Za-z0-9_]+)\s*\}\}", RegexOptions.Compiled);
+                var matches = tokenRegex.Matches(text);
+                foreach (Match m in matches)
+                {
+                    var token = m.Groups[1].Value;
+                    if (context.TryGetValue(token, out var val) && !string.IsNullOrWhiteSpace(val))
+                    {
+                        text = ReplaceInsensitive(text, "{{" + token + "}}", val);
+                    }
+                }
+
+                var now = DateTime.Now;
+
+                var msg = new message
+                {
+                    conversation_id = conv.conversation_id,
+                    sender_id = recruiterId,
+                    receiver_id = candidateId,
+                    msg_content = text,
+                    msg_timestamp = now,
+                    is_read = false
+                };
+
+                _db.messages.Add(msg);
+
+                conv.last_message_at = now;
+                conv.last_snippet = text.Length > 200 ? text.Substring(0, 200) : text;
+                conv.unread_for_candidate += 1;
+
+                sent++;
+            }
+
+            await _db.SaveChangesAsync();
+
+            TempData["Message"] = $"Message sent to {sent} candidate(s).";
+            return RedirectToAction(nameof(Index));
+        }
+
+        // WHY: case-insensitive, culture-invariant token replacement
+        private static string ReplaceInsensitive(string input, string search, string replace)
+            => Regex.Replace(input,
+                             Regex.Escape(search),
+                             replace.Replace("$", "$$"),
+                             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 }

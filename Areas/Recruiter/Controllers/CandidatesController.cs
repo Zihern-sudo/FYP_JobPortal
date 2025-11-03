@@ -309,6 +309,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Include(a => a.job_listing)
                 .AsQueryable();
 
+            // MODIFIED: Per requirement, do not display "Hired" candidates on this list.
+            apps = apps.Where(a => a.application_status != "Hired");
+
             if (!string.IsNullOrWhiteSpace(stage))
                 apps = apps.Where(a => a.application_status == stage);
 
@@ -339,6 +342,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync(a => a.application_id == applicationId);
 
             if (app == null) return NotFound();
+
+            // MODIFIED: Prevent Hired -> Shortlisted
+            if (app.application_status == "Hired" && nextStatus == "Shortlisted")
+            {
+                TempData["Message"] = "A Hired candidate cannot be moved back to Shortlisted.";
+                return RedirectToAction(nameof(Detail), new { id = applicationId });
+            }
 
             app.application_status = nextStatus;
             app.date_updated = DateTime.Now;

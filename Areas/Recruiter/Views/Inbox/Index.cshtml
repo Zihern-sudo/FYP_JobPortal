@@ -1,10 +1,49 @@
 @using JobPortal.Areas.Recruiter.Models
+@model JobPortal.Areas.Recruiter.Models.InboxIndexVM
 @{
-  var threads = ViewBag.Threads as List<ThreadListItemVM> ?? new();
+  var q = Model.Query;
+  var filter = Model.Filter;
+  string RoutePreserve(int page) => Url.Action("Index", new
+  {
+    q = q,
+    filter = filter,
+    page = page,
+    pageSize = Model.PageSize
+  })!;
 }
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="fw-semibold">Inbox</div>
+
+@* MODIFIED: Added Toast container for pop-up notifications *@
+<div class="toast-container position-fixed top-0 end-0 p-3">
+  <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto">Notification</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-message">
+    </div>
+  </div>
 </div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="fw-semibold fs-5">Inbox</div>
+</div>
+
+@* MODIFIED: Added Search and Filter form *@
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" value="@q" class="form-control" placeholder="Search job, participant, message..." />
+  </div>
+  <div class="col-md-3">
+    <select class="form-select" name="filter">
+      <option value="">All messages</option>
+      <option value="unread" selected="@(filter == "unread" ? "selected" : null)">Unread only</option>
+    </select>
+  </div>
+  <div class="col-md-3 text-end">
+    <button class="btn btn-primary" type="submit">Filter</button>
+    <a asp-area="Recruiter" asp-controller="Inbox" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
+  </div>
+</form>
 
 <div class="card shadow-sm">
   <div class="card-body p-0">
@@ -19,17 +58,19 @@
         </tr>
       </thead>
       <tbody>
-        @if (!threads.Any())
+        @* MODIFIED: Use Model.Items and check count *@
+        @if (Model.Items.Count == 0)
         {
           <tr>
-            <td colspan="5" class="text-center text-muted">No conversations yet.</td>
+            <td colspan="5" class="text-center text-muted">No conversations found.</td>
           </tr>
         }
         else
         {
-          foreach (var t in threads)
+          @* MODIFIED: Iterate over Model.Items *@
+          foreach (var t in Model.Items)
           {
-            <tr>
+            <tr class="@(t.UnreadCount > 0 ? "fw-bold" : "")">
               <td>@t.JobTitle</td>
               <td>@t.Participant</td>
               <td class="text-muted">@t.LastSnippet</td>
@@ -51,3 +92,59 @@
     </table>
   </div>
 </div>
+
+@* MODIFIED: Added Pagination Controls *@
+<nav aria-label="paging" class="mt-3">
+  <ul class="pagination justify-content-end">
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
+    </li>
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(Model.Page - 1))">Prev</a>
+    </li>
+
+    @{
+      var start = Math.Max(1, Model.Page - 2);
+      var end = Math.Min(Model.TotalPages, Model.Page + 2);
+      for (int p = start; p <= end; p++)
+      {
+        <li class="page-item @(p == Model.Page ? "active" : "")">
+          <a class="page-link" href="@RoutePreserve(p)">@p</a>
+        </li>
+      }
+    }
+
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
+    </li>
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
+    </li>
+  </ul>
+</nav>
+
+<div class="text-muted small">
+  Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+  <strong>@Model.TotalCount</strong> conversations
+</div>
+
+
+@* MODIFIED: Added script for Toast pop-up *@
+@section Scripts {
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Check for TempData message
+      var message = '@(TempData["Message"] as string)';
+      if (message) {
+        // Get toast elements
+        var toastEl = document.getElementById('toast-notify');
+        var toastBody = document.getElementById('toast-message');
+
+        // Set message and show toast
+        toastBody.textContent = message;
+        var toast = new bootstrap.Toast(toastEl);
+        toast.show();
+      }
+    });
+  </script>
+}

@@ -8,7 +8,7 @@
     int tplId = (int)ViewBag.TemplateId;
     string name = ViewBag.Name ?? "";
 
-    // BUGFIX: don't use `as int?` (boxed int → null). Use pattern match.
+    // Use pattern match to read JobId safely
     int? jobId = ViewBag.JobId is int v ? v : (int?)null;
     bool hasJob = jobId.HasValue && jobId.Value > 0;
 
@@ -30,6 +30,11 @@
     bool diffNice = hasJob && !string.Equals(cNice, tNice, StringComparison.Ordinal);
     bool diffStat = hasJob && !string.Equals(cStatus, tStatus, StringComparison.OrdinalIgnoreCase);
 }
+
+<a asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Index"
+    class="d-inline-block text-decoration-none mb-3">
+    &leftarrow; Back to JobPostTemplates
+</a>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>

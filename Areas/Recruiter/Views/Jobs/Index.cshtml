@@ -1,31 +1,51 @@
+@* File: Areas/Recruiter/Views/Jobs/Index.cshtml *@
 @using JobPortal.Areas.Shared.Models
 @using JobPortal.Areas.Recruiter.Models
-@* enum: JobStatus *@
-@model IEnumerable<JobPortal.Areas.Shared.Models.job_listing>
+@model JobPortal.Areas.Recruiter.Models.JobsIndexVM
 
 @{
-  // Null-safe fallback so foreach never crashes
-  var jobs = Model ?? Enumerable.Empty<job_listing>();
+  ViewData["Title"] = "Jobs";
+  var jobs = Model.Items ?? Enumerable.Empty<job_listing>();
+  var order = Model.Order;
+
+  string RoutePreserve(int page) => Url.Action("Index", new
+  {
+    q = Model.Query,
+    status = Model.Status,
+    order = Model.Order,
+    page = page,
+    pageSize = Model.PageSize
+  })!;
 }
 
-@{
-  var order = (ViewBag.Order as string) ?? "desc";
-}
-
-
-<div class="d-flex gap-2 align-items-center mb-3">
-  <input id="q" class="form-control" placeholder="Search title or location…" style="max-width:320px" />
-  <select id="status" class="form-select" style="max-width:180px">
-    <option value="">All statuses</option>
-    <option>Open</option>
-    <option>Paused</option>
-    <option>Draft</option>
-    <option>Closed</option>
-  </select>
-  <a class="btn btn-primary btn-sm ms-auto" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add">New Job</a>
-  <a class="btn btn-link" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Index">New Job using
-    Template</a>
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+  <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto">Notification</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-message"></div>
+  </div>
 </div>
+
+<form method="get" class="d-flex gap-2 align-items-center mb-3">
+  <input name="q" value="@Model.Query" class="form-control" placeholder="Search title or location…"
+    style="max-width:320px" />
+  <select name="status" class="form-select" style="max-width:180px">
+    <option value="">All statuses</option>
+    @foreach (var s in new[] { "Open", "Paused", "Draft", "Closed" })
+    {
+      <option value="@s" selected="@(Model.Status == s ? "selected" : null)">@s</option>
+    }
+  </select>
+  <input type="hidden" name="order" value="@Model.Order" />
+  <button type="submit" class="btn btn-primary">Search</button>
+  <a asp-action="Index" class="btn btn-outline-secondary">Reset</a>
+
+  <a class="btn btn-primary btn-sm ms-auto" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add">New Job</a>
+  <a class="btn btn-outline-primary btn-sm" asp-area="Recruiter" asp-controller="JobPostTemplates"
+    asp-action="Index">New Job using Template</a>
+</form>
 
 <div class="card shadow-sm">
   <div class="card-body p-0">
@@ -35,16 +55,18 @@
           <tr>
             <th style="width:90px;">
               <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
-                asp-route-order="@(order == "asc" ? "desc" : "asc")" class="text-decoration-none text-body"
-                title="Toggle sort by ID">
+                asp-route-order="@(order == "asc" ? "desc" : "asc")" asp-route-q="@Model.Query"
+                asp-route-status="@Model.Status" class="text-decoration-none text-body" title="Toggle sort by ID">
                 <span class="me-1">ID</span>
                 <span class="small">@((order == "asc") ? "▲" : "▼")</span>
               </a>
             </th>
-
             <th>Title</th>
+            <th>Deadline</th>
             <th>Location</th>
             <th>Status</th>
+            <th>Job Category</th>
+            <th>Work Mode</th>
             <th>Created</th>
             <th></th>
           </tr>
@@ -54,21 +76,37 @@
           {
             foreach (var j in jobs)
             {
-              // Parse DB string -> enum for canonical display (fallback = Open)
               var status = Enum.TryParse<JobStatus>(j.job_status ?? "", true, out var s) ? s : JobStatus.Open;
+              string deadline = j.expiry_date.HasValue ? j.expiry_date.Value.ToString("yyyy-MM-dd") : "—";
               <tr>
                 <td>@j.job_listing_id</td>
                 <td>@j.job_title</td>
-                <td><!-- TODO: join company to show location --></td>
-                <td><span class="chip">@status</span></td>
+                <td>@deadline</td>
+                <td>@(j.company?.company_location ?? "")</td>
+
+                @* Status cell (close before adding new cells) *@
+                <td>
+                  <span class="chip">@status</span>
+                  @if (j.expiry_date.HasValue && j.expiry_date.Value.Date < DateTime.Today)
+                  {
+                    <span class="badge bg-secondary ms-2">Expired</span>
+                  }
+                  else
+                  {
+                    <span class="badge bg-success ms-2">Active</span>
+                  }
+                </td>
+
+                @* NEW: Job Category & Work Mode *@
+                <td>@j.job_category</td>
+                <td>@j.work_mode</td>
+
                 <td>@(j.date_posted == default(DateTime) ? "-" : j.date_posted.ToString("yyyy-MM-dd HH:mm"))</td>
                 <td class="text-end">
                   <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
                     asp-route-id="@j.job_listing_id">Edit</a>
-
                   <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview"
                     asp-route-id="@j.job_listing_id">Preview</a>
-
                   <a class="btn btn-sm btn-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Pipeline"
                     asp-route-id="@j.job_listing_id">Pipeline</a>
                 </td>
@@ -78,7 +116,8 @@
           else
           {
             <tr>
-              <td colspan="6" class="text-center text-muted">No jobs found.</td>
+              @* 9 visible columns including the empty actions column *@
+              <td colspan="9" class="text-center text-muted">No jobs found.</td>
             </tr>
           }
         </tbody>
@@ -87,21 +126,49 @@
   </div>
 </div>
 
+<nav aria-label="paging" class="mt-3">
+  <ul class="pagination justify-content-end">
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
+    </li>
+    <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(Model.Page - 1))">Prev</a>
+    </li>
+    @{
+      var start = Math.Max(1, Model.Page - 2);
+      var end = Math.Min(Model.TotalPages, Model.Page + 2);
+      for (int p = start; p <= end; p++)
+      {
+        <li class="page-item @(p == Model.Page ? "active" : "")">
+          <a class="page-link" href="@RoutePreserve(p)">@p</a>
+        </li>
+      }
+    }
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
+    </li>
+    <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+      <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
+    </li>
+  </ul>
+</nav>
+
+<div class="text-muted small">
+  Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+  <strong>@Model.TotalCount</strong> jobs
+</div>
+
 @section Scripts {
   <script>
-    const rows = [...document.querySelectorAll('#jobRows tr')];
-    function apply() {
-      const q = (document.getElementById('q').value || '').toLowerCase();
-      const s = document.getElementById('status').value;
-      rows.forEach(r => {
-        const title = (r.children[1]?.textContent || "").toLowerCase();
-        const loc = (r.children[2]?.textContent || "").toLowerCase();
-        const st = (r.children[3]?.innerText || "").trim();
-        const show = (!q || title.includes(q) || loc.includes(q)) && (!s || st === s);
-        r.style.display = show ? '' : 'none';
-      });
-    }
-    document.getElementById('q').addEventListener('input', apply);
-    document.getElementById('status').addEventListener('change', apply);
+    document.addEventListener("DOMContentLoaded", function () {
+      var message = '@(TempData["Message"] as string)';
+      if (message) {
+        var toastEl = document.getElementById('toast-notify');
+        var toastBody = document.getElementById('toast-message');
+        toastBody.textContent = message;
+        var toast = new bootstrap.Toast(toastEl);
+        toast.show();
+      }
+    });
   </script>
 }

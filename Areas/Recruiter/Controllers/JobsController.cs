@@ -17,11 +17,50 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private readonly AppDbContext _db;
         public JobsController(AppDbContext db) => _db = db;
 
-        // Single source of truth for splitting/combining requirements
-        private const string NICE_DELIM = "\n||NICE||\n";
         private const string TEMP_APPLY_KEY = "tpl_apply_payload";
 
-        // Typed DTO for TempData payload from JobPostTemplatesController.Apply
+        // Keep existing paging defaults
+        private const int DefaultPageSize = 20;
+        private const int MaxPageSize = 100;
+
+        // NEW: Guarantee 1 recruiter -> 1 company for inserts (post-DB cleanup).
+        // If a recruiter has no company yet, create a minimal placeholder so FK is valid.
+        private async Task<int> EnsureCompanyForRecruiterAsync(int recruiterId)
+        {
+            var companyId = await _db.companies
+                .Where(c => c.user_id == recruiterId)
+                .Select(c => (int?)c.company_id)
+                .FirstOrDefaultAsync();
+
+            if (companyId.HasValue)
+                return companyId.Value;
+
+            // Create a minimal company row (only when missing).
+            var user = await _db.users
+                .Where(u => u.user_id == recruiterId)
+                .Select(u => new { u.first_name, u.last_name })
+                .FirstOrDefaultAsync();
+
+            var displayName = (user is null)
+                ? $"Recruiter {recruiterId}"
+                : $"{user.first_name} {user.last_name}".Trim();
+
+            var co = new company
+            {
+                user_id = recruiterId,
+                company_name = $"{displayName}'s Company",
+                company_industry = null,
+                company_location = null,
+                company_description = null,
+                company_status = "Active"
+            };
+
+            _db.companies.Add(co);
+            await _db.SaveChangesAsync();
+            return co.company_id;
+        }
+
+        // Payload passed from JobPostTemplatesController.Apply via TempData
         private sealed class TplDto
         {
             public string? title { get; set; }
@@ -31,62 +70,74 @@ namespace JobPortal.Areas.Recruiter.Controllers
             public string? status { get; set; }
         }
 
-        private static (string must, string? nice) SplitReq(string? stored)
-        {
-            if (string.IsNullOrWhiteSpace(stored)) return ("", null);
-            var parts = stored.Split(NICE_DELIM);
-            var must = parts[0].Trim();
-            var nice = parts.Length > 1 ? parts[1].Trim() : null;
-            return (must, string.IsNullOrWhiteSpace(nice) ? null : nice);
-        }
-
-        private static string CombineReq(string? must, string? nice)
-        {
-            must = (must ?? "").Trim();
-            nice = (nice ?? "").Trim();
-            return string.IsNullOrEmpty(nice) ? must : $"{must}{NICE_DELIM}{nice}";
-        }
-
-        // LIST
-        public async Task<IActionResult> Index(string? order)
+        public async Task<IActionResult> Index(string? q, string? status, string? order, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Jobs";
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
 
-            var query = _db.job_listings.Where(j => j.user_id == recruiterId);
+            var query = _db.job_listings
+                .Include(j => j.company)
+                .Where(j => j.user_id == recruiterId);
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var qTrim = q.Trim();
+                query = query.Where(j =>
+                    j.job_title.Contains(qTrim) ||
+                    (j.company != null && j.company.company_location != null && j.company.company_location.Contains(qTrim))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(j => j.job_status == status);
+            }
 
             if (string.Equals(order, "asc", StringComparison.OrdinalIgnoreCase))
-            {
                 query = query.OrderBy(j => j.job_listing_id);
-                ViewBag.Order = "asc";
-            }
             else if (string.Equals(order, "desc", StringComparison.OrdinalIgnoreCase))
-            {
                 query = query.OrderByDescending(j => j.job_listing_id);
-                ViewBag.Order = "desc";
-            }
             else
-            {
                 query = query.OrderByDescending(j => j.date_posted);
-                ViewBag.Order = null;
-            }
 
-            var jobs = await query.ToListAsync();
-            return View(jobs);
+            var totalCount = await query.CountAsync();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            if (page > totalPages) page = totalPages;
+
+            var skip = (page - 1) * pageSize;
+            var jobs = await query.Skip(skip).Take(pageSize).ToListAsync();
+
+            var vm = new JobsIndexVM
+            {
+                Items = jobs,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                Query = q ?? string.Empty,
+                Status = status ?? string.Empty,
+                Order = order ?? string.Empty
+            };
+
+            return View(vm);
         }
 
         // --- CREATE (GET/POST) ---
 
         [HttpGet]
-        public IActionResult Add(
-            string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool? fromTemplate = null)
+        public IActionResult Add(string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool? fromTemplate = null)
         {
             if (!this.TryGetUserId(out _, out var early)) return early!;
 
-            var vm = new JobCreateVm();
+            var vm = new JobCreateVm
+            {
+                job_category = "Full Time",
+                work_mode = "On-site"
+            };
 
-            // Prefer TempData payload (typed)
             if (TempData.Peek(TEMP_APPLY_KEY) is string payload)
             {
                 try
@@ -100,7 +151,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
                 catch
                 {
-                    // Fallback to query params
                     vm.job_title = title ?? "";
                     vm.job_description = description ?? "";
                     vm.job_requirements = must ?? "";
@@ -110,7 +160,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
             else
             {
-                // Legacy query params path
                 vm.job_title = title ?? "";
                 vm.job_description = description ?? "";
                 vm.job_requirements = must ?? "";
@@ -136,19 +185,30 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            var companyId = 1; // keep existing default
+            if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
+            {
+                ModelState.AddModelError(nameof(vm.salary_min), "Minimum salary cannot exceed maximum salary.");
+                return View(vm);
+            }
+
+            // CHANGED: assign the recruiter's single company; create if missing.
+            var companyId = await EnsureCompanyForRecruiterAsync(recruiterId);
 
             var entity = new job_listing
             {
                 job_title = vm.job_title,
                 job_description = vm.job_description,
-                job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice),
+                job_requirements = vm.job_requirements,
+                job_requirements_nice = vm.job_requirements_nice,
                 salary_min = vm.salary_min,
                 salary_max = vm.salary_max,
-                job_status = vm.job_status.ToString(), // DB holds string
+                job_status = vm.job_status.ToString(),
+                job_category = vm.job_category,
+                work_mode = vm.work_mode,
                 user_id = recruiterId,
                 company_id = companyId,
-                date_posted = DateTime.Now
+                date_posted = DateTime.Now,
+                expiry_date = vm.expiry_date
             };
 
             _db.job_listings.Add(entity);
@@ -161,15 +221,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
         // --- EDIT (GET/POST) ---
 
         [HttpGet]
-        public async Task<IActionResult> Edit(
-            int id, string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool fromTemplate = false)
+        public async Task<IActionResult> Edit(int id, string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool fromTemplate = false)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             var job = await _db.job_listings.FirstOrDefaultAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
             if (job == null) return NotFound();
 
-            var (curMust, curNice) = SplitReq(job.job_requirements);
             var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var parsedStatus) ? parsedStatus : JobStatus.Open;
 
             var vm = new JobEditVm
@@ -177,12 +235,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_listing_id = job.job_listing_id,
                 job_title = job.job_title,
                 job_description = job.job_description,
-                job_requirements = curMust,
-                job_requirements_nice = curNice,
-                job_status = statusEnum
+                job_requirements = job.job_requirements,
+                job_requirements_nice = job.job_requirements_nice,
+                salary_min = job.salary_min,
+                salary_max = job.salary_max,
+                job_category = job.job_category,
+                work_mode = job.work_mode,
+                job_status = statusEnum,
+                date_posted = job.date_posted,
+                expiry_date = job.expiry_date
             };
 
-            // Prefer TempData payload (typed)
             if (TempData.Peek(TEMP_APPLY_KEY) is string payload)
             {
                 try
@@ -197,7 +260,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
                 catch
                 {
-                    // Fallback to legacy query overrides
                     if (!string.IsNullOrWhiteSpace(title)) vm.job_title = title!;
                     if (!string.IsNullOrWhiteSpace(description)) vm.job_description = description!;
                     if (!string.IsNullOrWhiteSpace(must)) vm.job_requirements = must!;
@@ -208,7 +270,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
             else
             {
-                // Legacy query overrides
                 if (!string.IsNullOrWhiteSpace(title)) vm.job_title = title!;
                 if (!string.IsNullOrWhiteSpace(description)) vm.job_description = description!;
                 if (!string.IsNullOrWhiteSpace(must)) vm.job_requirements = must!;
@@ -233,26 +294,34 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (job == null) return NotFound();
 
-            // Quick status buttons (if any) still work
             if (!string.IsNullOrWhiteSpace(setStatus) &&
                 Enum.TryParse<JobStatus>(setStatus, true, out var quick))
             {
                 vm.job_status = quick;
             }
 
-            // Persist editable fields
-            job.job_status = vm.job_status.ToString(); // DB holds string
+            if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
+            {
+                ModelState.AddModelError(nameof(vm.salary_min), "Minimum salary cannot exceed maximum salary.");
+                return View(vm);
+            }
+
+            job.job_status = vm.job_status.ToString();
             job.job_title = vm.job_title;
             job.job_description = vm.job_description;
-            job.job_requirements = CombineReq(vm.job_requirements, vm.job_requirements_nice);
+            job.job_requirements = vm.job_requirements;
+            job.job_requirements_nice = vm.job_requirements_nice;
+            job.salary_min = vm.salary_min;
+            job.salary_max = vm.salary_max;
+            job.job_category = vm.job_category;
+            job.work_mode = vm.work_mode;
+            job.expiry_date = vm.expiry_date;
 
             await _db.SaveChangesAsync();
 
             TempData["Message"] = $"Job #{job.job_listing_id} updated.";
             return RedirectToAction(nameof(Index));
         }
-
-        // --- PREVIEW ---
 
         [HttpGet]
         public async Task<IActionResult> Preview(int id)
@@ -267,7 +336,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (job == null) return NotFound();
 
             var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var s) ? s : JobStatus.Open;
-            var (must, nice) = SplitReq(job.job_requirements);
 
             var item = new JobItemVM(
                 Id: job.job_listing_id,
@@ -278,8 +346,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
             );
 
             var req = new JobRequirementVM(
-                MustHaves: string.IsNullOrWhiteSpace(must) ? "(not specified)" : must,
-                NiceToHaves: nice
+                MustHaves: string.IsNullOrWhiteSpace(job.job_requirements) ? "(not specified)" : job.job_requirements!,
+                NiceToHaves: job.job_requirements_nice
             );
 
             ViewBag.Job = item;
@@ -287,12 +355,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Desc = job.job_description;
             ViewBag.SalaryMin = job.salary_min;
             ViewBag.SalaryMax = job.salary_max;
+            ViewBag.JobCategory = job.job_category;
+            ViewBag.WorkMode = job.work_mode;
             ViewBag.Company = job.company?.company_name;
 
             return View();
         }
-
-        // --- PIPELINE (Kanban) ---
 
         [HttpGet]
         public async Task<IActionResult> Pipeline(int id)
@@ -338,6 +406,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 })
                 .ToDictionaryAsync(x => x.user_id, x => x.score);
 
+            var formerIds = await _db.job_applications
+                .Include(a => a.job_listing)
+                .Where(a => a.application_status == "Hired" && a.job_listing.company_id == job.company_id)
+                .Select(a => a.user_id)
+                .Distinct()
+                .ToListAsync();
+
             string MapStage(string dbStatusRaw)
             {
                 var dbStatus = (dbStatusRaw ?? "").Trim();
@@ -358,7 +433,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Score: scoreLookup.TryGetValue(a.user_id, out var sc) ? sc : 0,
                 AppliedAt: a.date_updated.ToString("yyyy-MM-dd HH:mm"),
                 LowConfidence: false,
-                Override: false
+                Override: formerIds.Contains(a.user_id)
             )).ToList();
 
             ViewBag.Job = item;
@@ -367,7 +442,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // --- SAVE CURRENT JOB AS TEMPLATE ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveAsTemplate(int id, string name)
@@ -378,14 +452,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var job = await _db.job_listings.FirstOrDefaultAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
             if (job == null) return NotFound();
 
-            var (must, nice) = SplitReq(job.job_requirements);
-
             var dto = new
             {
                 title = job.job_title,
                 description = job.job_description,
-                must = must,
-                nice = nice,
+                must = job.job_requirements,
+                nice = job.job_requirements_nice,
                 status = job.job_status
             };
             var body = JsonSerializer.Serialize(dto);

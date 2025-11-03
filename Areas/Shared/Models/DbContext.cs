@@ -82,7 +82,7 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.company_status).HasDefaultValueSql("'Active'");
 
-            entity.HasOne(d => d.user).WithMany(p => p.companies).HasConstraintName("fk_company_user");
+            entity.HasOne(d => d.user).WithOne(p => p.company).HasConstraintName("fk_company_user");
         });
 
         modelBuilder.Entity<conversation>(entity =>

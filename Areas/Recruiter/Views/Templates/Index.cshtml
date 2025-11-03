@@ -1,20 +1,39 @@
-@using JobPortal.Areas.Recruiter.Models
-
+@model JobPortal.Areas.Recruiter.Models.TemplatesIndexVM
 @{
-  var items = (IEnumerable<JobPortal.Areas.Recruiter.Models.TemplateItemVM>)
-  (ViewBag.Items ?? Enumerable.Empty<JobPortal.Areas.Recruiter.Models.TemplateItemVM>());
-  bool isArchived = (ViewBag.IsArchivedList as bool?) == true;
-  bool isJobPost = (ViewBag.IsJobPost as bool?) == true;
-  int? threadId = ViewBag.ThreadId as int?;
+  bool isArchived = Model.IsArchivedList;
+  bool isJobPost = Model.IsJobPost;
+  int? threadId = Model.ThreadId;
+  var q = Model.Query;
 
   // read values passed from Thread (if any)
   var qFirst = Context.Request.Query["firstName"].ToString();
   var qJob = Context.Request.Query["jobTitle"].ToString();
-
   var pageTitle = isJobPost
   ? (isArchived ? "Archived Job Post Templates" : "Job Post Templates")
   : (isArchived ? "Archived Templates" : "Message Templates");
+
+  // Helper for pagination links
+  string RoutePreserve(int page) => Url.Action(isArchived ? "Archived" : "Index", new
+  {
+    q = q,
+    page = page,
+    pageSize = Model.PageSize,
+    threadId = threadId
+  })!;
 }
+
+@* MODIFIED: Added Toast container for pop-up notifications *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+  <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto">Notification</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-message">
+    </div>
+  </div>
+</div>
+
 
 <h3 class="mb-3">@pageTitle</h3>
 
@@ -29,7 +48,6 @@
 
     <div class="vr mx-1 d-none d-sm-block"></div>
 
-    <!-- Favourites toolbar -->
     <button type="button" class="btn btn-outline-primary" id="btnMarkFav" title="Mark selected templates as favourite">
       Mark as favourite
     </button>
@@ -44,7 +62,23 @@
   }
 </div>
 
-@if (!items.Any())
+@* MODIFIED: Added Search Form *@
+<form method="get" asp-action="@(isArchived ? "Archived" : "Index")" class="row g-2 mb-3">
+  @if (threadId.HasValue)
+  {
+    <input type="hidden" name="threadId" value="@threadId" />
+  }
+  <div class="col-md-9">
+    <input type="text" name="q" value="@q" class="form-control" placeholder="Search name, subject, body..." />
+  </div>
+  <div class="col-md-3">
+    <button class="btn btn-primary" type="submit">Search</button>
+    <a asp-controller="Templates" asp-action="@(isArchived ? "Archived" : "Index")" asp-route-threadId="@threadId"
+      class="btn btn-outline-secondary">Reset</a>
+  </div>
+</form>
+
+@if (Model.Items.Count == 0)
 {
   <div class="text-muted">No templates found.</div>
 }
@@ -64,7 +98,7 @@ else
         </tr>
       </thead>
       <tbody>
-        @foreach (var t in items)
+        @foreach (var t in Model.Items)
         {
           <tr data-tpl-id="@t.Id">
             <td>
@@ -115,11 +149,64 @@ else
       </tbody>
     </table>
   </div>
+
+  @* MODIFIED: Added Pagination Controls *@
+  <nav aria-label="paging">
+    <ul class="pagination justify-content-end">
+      <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+        <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
+      </li>
+      <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
+        <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(Model.Page - 1))">Prev</a>
+      </li>
+
+      @{
+        var start = Math.Max(1, Model.Page - 2);
+        var end = Math.Min(Model.TotalPages, Model.Page + 2);
+        for (int p = start; p <= end; p++)
+        {
+          <li class="page-item @(p == Model.Page ? "active" : "")">
+            <a class="page-link" href="@RoutePreserve(p)">@p</a>
+          </li>
+        }
+      }
+
+      <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+        <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
+      </li>
+      <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
+        <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
+      </li>
+    </ul>
+  </nav>
+
+  <div class="text-muted small">
+    Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+    <strong>@Model.TotalCount</strong> templates
+  </div>
 }
 
 @section Scripts {
   <script>
-    // Client-side favourites using localStorage. WHY: quick UX without DB changes.
+    // MODIFIED: Added script for Toast pop-up
+    document.addEventListener("DOMContentLoaded", function () {
+      // Check for TempData message
+      var message = '@(TempData["Message"] as string)';
+      if (message) {
+        // Get toast elements
+        var toastEl = document.getElementById('toast-notify');
+        var toastBody = document.getElementById('toast-message');
+
+        // Set message and show toast
+        toastBody.textContent = message;
+        var toast = new bootstrap.Toast(toastEl);
+        toast.show();
+      }
+    });
+  </script>
+  <script>
+    // Client-side favourites using localStorage.
+    // WHY: quick UX without DB changes.
     (function () {
       const KEY = 'favTemplates';
       const table = document.getElementById('tplTable');
@@ -185,13 +272,11 @@ else
         ids.forEach(id => setFav(id, false));
         applyFavUI(); reorder();
       });
-
       // Select all checkbox
       if (chkAll) chkAll.addEventListener('change', () => {
         const checked = chkAll.checked;
         body.querySelectorAll('.fav-check').forEach(cb => cb.checked = checked);
       });
-
       // Init
       document.addEventListener('DOMContentLoaded', () => {
         applyFavUI();
