@@ -31,7 +31,8 @@
 
             <!-- 🔹 New Staff Login Button -->
             <div class="alt-option">
-                <a asp-area="JobSeeker" asp-controller="Account" asp-action="StaffLogin" class="alt-btn">Login as Staff</a>
+                <a asp-area="JobSeeker" asp-controller="Account" asp-action="StaffLogin" class="alt-btn">Login as
+                    Staff</a>
             </div>
 
             <p class="switch-text">
@@ -41,19 +42,20 @@
 
         <!-- ✅ Register Form -->
         <form id="registerForm" asp-area="JobSeeker" asp-controller="Account" asp-action="Register" method="post"
-            class="auth-form">
+            class="auth-form" onsubmit="return validateRegisterForm()">
             <label for="name">Full Name</label>
-            <input type="text" id="name" name="name" placeholder="Enter your full name" required>
+            <input type="text" id="name" name="name" maxlength="60" placeholder="Enter your full name" required>
 
             <label for="regEmail">Email</label>
-            <input type="email" id="regEmail" name="email" placeholder="Enter your email" required>
+            <input type="email" id="regEmail" name="email" maxlength="190" placeholder="Enter your email" required>
 
             <label for="regPassword">Password</label>
-            <input type="password" id="regPassword" name="password" placeholder="Enter your password" required>
+            <input type="password" id="regPassword" name="password" maxlength="20" minlength="6"
+                placeholder="Enter your password" required>
 
             <label for="confirmPassword">Confirm Password</label>
-            <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password"
-                required>
+            <input type="password" id="confirmPassword" name="confirmPassword" maxlength="20" minlength="6"
+                placeholder="Re-enter your password" required>
 
             <button type="submit" class="login-btn">Register</button>
 
@@ -104,7 +106,7 @@
             switchToRegister?.addEventListener("click", e => { e.preventDefault(); showRegister(); });
             switchToLogin?.addEventListener("click", e => { e.preventDefault(); showLogin(); });
 
-            
+
             // ===============================
             // 🔹 AUTO SWITCH TAB VIA URL PARAM
             // ===============================
@@ -180,15 +182,41 @@
                         form.method = "POST";
                         form.action = "/JobSeeker/Account/Login";
                         form.innerHTML = `
-                            <input type="hidden" name="email" value="${pendingEmail}">
-                            <input type="hidden" name="password" value="${pendingPassword}">
-                            <input type="hidden" name="twoFACode" value="${code}">
-                        `;
+                                    <input type="hidden" name="email" value="${pendingEmail}">
+                                    <input type="hidden" name="password" value="${pendingPassword}">
+                                    <input type="hidden" name="twoFACode" value="${code}">
+                                `;
                         document.body.appendChild(form);
                         form.submit();
                     }
                 });
             }
         });
+        function validateRegisterForm() {
+            const name = document.getElementById("name").value.trim();
+            const email = document.getElementById("regEmail").value.trim();
+            const password = document.getElementById("regPassword").value;
+            const confirmPassword = document.getElementById("confirmPassword").value;
+            if (name.length > 60) {
+                Swal.fire("Invalid Input", "Full name cannot exceed 60 characters.", "error");
+                return false;
+            }
+            if (password.length < 6 || password.length > 20) {
+                Swal.fire("Invalid Input", "Password must be between 6 and 20 characters.", "error");
+                return false;
+            }
+
+            const emailPattern = /^[^\s@@]+@@[^\s@@]+\.[a-zA-Z]{2,}$/;
+            if (!emailPattern.test(email)) {
+                Swal.fire("Invalid Input", "Please enter a valid email address.", "error");
+                return false;
+            }
+            if (password !== confirmPassword) {
+                Swal.fire("Password Mismatch", "Passwords do not match.", "error");
+                return false;
+            }
+            return true;
+        }
+
     </script>
 }

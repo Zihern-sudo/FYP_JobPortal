@@ -7,7 +7,7 @@
 <div class="resume-builder-container">
     <h1>Resume Builder</h1>
 
-    <form id="resumeForm">
+    <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResume">
         <h3>Personal Information</h3>
         <label>Full Name</label>
         <input type="text" id="fullName" name="fullName" placeholder="John Doe" required />
@@ -39,28 +39,30 @@
         <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" />
 
         <button type="button" id="previewBtn">Preview Resume</button>
+        <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>
+        <input type="hidden" id="education" name="education" />
+        <input type="hidden" id="experience" name="experience" />
     </form>
 
     <div id="resumePreview" style="border:1px solid #ccc; padding:20px; margin-top:20px;">
         <h2>Resume Preview</h2>
         <div id="resumeContent"></div>
-        <button id="downloadPDF" style="margin-top:15px;">Download as PDF</button>
     </div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script>
-document.getElementById("previewBtn").addEventListener("click", function () {
-    const name = document.getElementById("fullName").value;
-    const email = document.getElementById("email").value;
-    const school = document.getElementById("school").value;
-    const degree = document.getElementById("degree").value;
-    const eduYear = document.getElementById("eduYear").value;
-    const company = document.getElementById("company").value;
-    const position = document.getElementById("position").value;
-    const duration = document.getElementById("duration").value;
-    const skills = document.getElementById("skills").value;
 
-    const content = `
+<script>
+    document.getElementById("previewBtn").addEventListener("click", function () {
+        const name = document.getElementById("fullName").value;
+        const email = document.getElementById("email").value;
+        const school = document.getElementById("school").value;
+        const degree = document.getElementById("degree").value;
+        const eduYear = document.getElementById("eduYear").value;
+        const company = document.getElementById("company").value;
+        const position = document.getElementById("position").value;
+        const duration = document.getElementById("duration").value;
+        const skills = document.getElementById("skills").value;
+
+        const content = `
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>
@@ -68,15 +70,18 @@ document.getElementById("previewBtn").addEventListener("click", function () {
         <p><strong>Skills:</strong> ${skills}</p>
     `;
 
-    document.getElementById("resumeContent").innerHTML = content;
-});
-document.getElementById("downloadPDF").addEventListener("click", () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+        document.getElementById("resumeContent").innerHTML = content;
+    });
+    document.getElementById("resumeForm").addEventListener("submit", function () {
+        const school = document.getElementById("school").value;
+        const degree = document.getElementById("degree").value;
+        const eduYear = document.getElementById("eduYear").value;
+        const company = document.getElementById("company").value;
+        const position = document.getElementById("position").value;
+        const duration = document.getElementById("duration").value;
 
-    const content = document.getElementById("resumeContent").innerText;
-    doc.text(content, 10, 10);
-    doc.save("resume.pdf");
-});
+        document.getElementById("education").value = `${degree} at ${school} (${eduYear})`;
+        document.getElementById("experience").value = `${position} at ${company} (${duration})`;
+    });
 
 </script>

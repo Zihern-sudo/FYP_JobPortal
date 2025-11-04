@@ -29,7 +29,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         // POST: Handle login submission
-        // POST: Handle login submission
         [HttpPost]
         public async Task<IActionResult> Login(string email, string password, string? twoFACode)
         {
@@ -110,6 +109,42 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpPost]
         public async Task<IActionResult> Register(string name, string email, string password, string confirmPassword)
         {
+            // Basic required field check
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword))
+            {
+                TempData["Message"] = "All fields are required.";
+                return RedirectToAction("Login", new { tab = "register" });
+            }
+
+            // ✅ Full name max 60 chars
+            if (name.Length > 60)
+            {
+                TempData["Message"] = "Full Name cannot exceed 60 characters.";
+                return RedirectToAction("Login", new { tab = "register" });
+            }
+
+            // ✅ Password max 20 chars and min 6 chars (recommended)
+            if (password.Length > 20)
+            {
+                TempData["Message"] = "Password cannot exceed 20 characters.";
+                return RedirectToAction("Login", new { tab = "register" });
+            }
+
+            if (password.Length < 6)
+            {
+                TempData["Message"] = "Password must be at least 6 characters long.";
+                return RedirectToAction("Login", new { tab = "register" });
+            }
+
+            // ✅ Email format validation using System.ComponentModel.DataAnnotations
+            var emailRegex = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(email, emailRegex))
+            {
+                TempData["Message"] = "Please enter a valid email address.";
+                return RedirectToAction("Login", new { tab = "register" });
+            }
+
             if (password != confirmPassword)
             {
                 TempData["Message"] = "Passwords do not match.";

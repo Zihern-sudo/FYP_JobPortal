@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
 using JobPortal.Areas.Shared.Models.Extensions; // ⬅ AddAreaRoleGuards()
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +33,8 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
