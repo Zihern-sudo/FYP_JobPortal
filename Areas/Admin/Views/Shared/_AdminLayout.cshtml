@@ -1,3 +1,7 @@
+@* File: Areas/Admin/Views/Shared/_AdminLayout.cshtml *@
+@using Microsoft.AspNetCore.Http
+@using JobPortal.Areas.Shared.Extensions
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,7 +17,7 @@
   </style>
 </head>
 
-<!-- Toast container -->
+@* Toast container *@
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1080">
   <div id="appToast" class="toast align-items-center text-bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="d-flex">
@@ -29,26 +33,66 @@
     const toastEl = document.getElementById("appToast");
     const bodyEl  = document.getElementById("appToastBody");
     bodyEl.textContent = message;
-
-    // swap bootstrap colour class
-    toastEl.className = toastEl.className
-      .replace(/text-bg-\w+/g, "text-bg-" + variant);
-
+    toastEl.className = toastEl.className.replace(/text-bg-\w+/g, "text-bg-" + variant);
     const t = new bootstrap.Toast(toastEl, { delay: delayMs });
-    toastEl.addEventListener("hidden.bs.toast", () => {
-      if (redirectTo) window.location.href = redirectTo;
-    }, { once: true });
-
+    toastEl.addEventListener("hidden.bs.toast", () => { if (redirectTo) window.location.href = redirectTo; }, { once: true });
     t.show();
   }
 </script>
 
+@* Flash message slot (unchanged) *@
+@if (TempData["Flash.Message"] is string flashMsg && !string.IsNullOrWhiteSpace(flashMsg))
+{
+    var flashType = (TempData["Flash.Type"] as string ?? "info").ToLowerInvariant(); // success | danger | warning | info
+    <div class="container mt-3">
+        <div class="alert alert-@flashType alert-dismissible fade show shadow-sm" role="alert">
+            @flashMsg
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+    <script>
+        setTimeout(function () {
+            var el = document.querySelector('.alert');
+            if (el) bootstrap.Alert.getOrCreateInstance(el).close();
+        }, 3000);
+    </script>
+}
+
+@{
+    // --- Resolve logged-in user + role from session (view-safe; no Controller extensions here) ---
+    int currentUserId =
+        Context.Session.GetInt32("UserId")
+        ?? Context.Session.GetInt32("user_id")
+        ?? 0;
+
+    bool hasUser = currentUserId > 0;
+
+    // Name fallbacks (use whatever you set during login)
+    string? fullName =
+        Context.Session.GetString("FullName")
+        ?? Context.Session.GetString("UserName")
+        ?? $"{(Context.Session.GetString("FirstName") ?? "").Trim()} {(Context.Session.GetString("LastName") ?? "").Trim()}".Trim();
+
+    if (string.IsNullOrWhiteSpace(fullName))
+    {
+        fullName = hasUser ? $"User #{currentUserId}" : "Guest";
+    }
+
+    // Role fallbacks (same keys your guards use)
+    string? role =
+        Context.Session.GetString("UserRole")
+        ?? Context.Session.GetString("role")
+        ?? Context.Session.GetString("user_role")
+        ?? "Admin";
+}
+
+
 <body>
   <header class="border-bottom p-3 d-flex justify-content-between align-items-center">
     <div class="fw-bold">JobPortal • Admin</div>
-    <div>
-      <span class="me-3">🔔</span>
-      <span class="chip">Lee (Admin)</span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="me-2">🔔</span>
+      <span class="chip">@fullName (@role)</span>
     </div>
   </header>
 
@@ -57,7 +101,9 @@
       <div class="text-uppercase text-muted small mb-2">Navigation</div>
       <div class="list-group">
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">Dashboard</a>
+        <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Users" asp-action="Index">Users</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Approvals" asp-action="Index">Job Approvals</a>
+        <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Companies" asp-action="Index">Companies</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="AI" asp-action="Templates">AI Settings</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Messages" asp-action="Index">Conversation Monitor</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Audit" asp-action="Index">Audit Log</a>

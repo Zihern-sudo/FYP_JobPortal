@@ -1,19 +1,35 @@
+@model JobPortal.Areas.Admin.Models.AdminNotificationSettingsViewModel
+@{
+  ViewData["Title"] = "Notifications";
+}
+
 <div class="card shadow-sm">
   <div class="card-header bg-white fw-semibold">Notifications</div>
-  <div class="card-body">
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" id="n1" checked>
-      <label class="form-check-label" for="n1">New application received</label>
+  @* --- Modified to be a real form --- *@
+  <form asp-action="Notifications" method="post">
+    <div class="card-body">
+      @if (TempData["SuccessMessage"] != null)
+      {
+        <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+      }
+
+      @* --- Bind checkboxes to the Model using asp-for --- *@
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnNewApplication">
+        <label class="form-check-label" asp-for="NotifyOnNewApplication">New application received</label>
+      </div>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnLowConfidenceParse">
+        <label class="form-check-label" asp-for="NotifyOnLowConfidenceParse">Parsing low confidence</label>
+      </div>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnFlaggedMessage">
+        <label class="form-check-label" asp-for="NotifyOnFlaggedMessage">Message with flagged terms</label>
+      </div>
+      <hr />
+      @* --- Enable the save button --- *@
+      <button class="btn btn-primary" type="submit">Save Settings</button>
     </div>
-    <div class="form-check mt-2">
-      <input class="form-check-input" type="checkbox" id="n2" checked>
-      <label class="form-check-label" for="n2">Parsing low confidence</label>
-    </div>
-    <div class="form-check mt-2">
-      <input class="form-check-input" type="checkbox" id="n3">
-      <label class="form-check-label" for="n3">Message with flagged terms</label>
-    </div>
-    <hr />
-    <button class="btn btn-primary" disabled>Save (mock)</button>
-  </div>
+  </form>
+  @* --- End Modification --- *@
 </div>

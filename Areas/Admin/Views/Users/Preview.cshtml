@@ -1,0 +1,90 @@
+@* ==========================
+   File: Areas/Admin/Views/Users/Preview.cshtml  (NEW)
+   ========================== *@
+@model JobPortal.Areas.Admin.Models.RecruiterPreviewViewModel
+@{
+    ViewData["Title"] = "Recruiter";
+    string Chip(string s) => s switch
+    {
+        "Active" => "badge text-bg-success",
+        "Suspended" => "badge text-bg-danger",
+        "Inactive" => "badge text-bg-secondary",
+        _ => "badge text-bg-light"
+    };
+}
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Profile</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>@Model.FirstName @Model.LastName</strong>
+                    <span class="@Chip(Model.Status)">@Model.Status</span>
+                </div>
+                <div class="text-muted small mb-1">Email: @Model.Email</div>
+                <div class="text-muted small mb-1">Role: @Model.Role</div>
+                <div class="text-muted small mb-1">Joined: @Model.CreatedAt:g</div>
+                <hr />
+                <div class="mb-1"><strong>Company:</strong> @(string.IsNullOrWhiteSpace(Model.CompanyName) ? "-" :
+                                        Model.CompanyName)
+                    @if (!string.IsNullOrWhiteSpace(Model.CompanyStatus))
+                    {
+                        <span class="badge text-bg-secondary ms-1">@Model.CompanyStatus</span>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Model.Phone))
+                {
+                    <div class="text-muted small">Phone: @Model.Phone</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Address))
+                {
+                    <div class="text-muted small">Address: @Model.Address
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Actions</div>
+            <div class="card-body">
+                <form method="post" asp-action="Approve" class="d-grid gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-success">Approve (Activate)</button>
+                </form>
+
+                <form method="post" asp-action="Suspend" class="d-grid gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-outline-danger">Suspend</button>
+                </form>
+
+                <form method="post" asp-action="Reactivate" class="d-grid gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-warning">Reactivate</button>
+                </form>
+
+                <form method="post" asp-action="Reject" class="d-grid gap-2 mb-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-secondary">Reject Registration (Inactive)</button>
+                </form>
+
+                <form method="post" asp-action="ChangeRole" class="d-flex gap-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <select name="newRole" class="form-select">
+                        <option value="Recruiter" selected>Recruiter</option>
+                        <option value="Admin">Admin</option>
+                        <option value="JobSeeker">Job Seeker</option>
+                    </select>
+                    <button class="btn btn-outline-primary">Change Role</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

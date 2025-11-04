@@ -1,23 +1,26 @@
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
+using JobPortal.Areas.Shared.Models.Extensions; // ⬅ AddAreaRoleGuards()
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add DbContext
+// DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))));
 
-// MVC
-builder.Services.AddControllersWithViews();
+// MVC + area role guards (Admin + Recruiter)
+builder.Services
+    .AddControllersWithViews()
+    .AddAreaRoleGuards(); // ⬅ applies guards to Admin and Recruiter areas
+
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
 });
 
-// ✅ Add Email Service (IMPORTANT — before building)
 builder.Services.AddScoped<EmailService>();
 
 var app = builder.Build();
@@ -35,7 +38,6 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 
-// ✅ Add this BEFORE the default route
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Dashboard}/{action=Index}/{id?}");

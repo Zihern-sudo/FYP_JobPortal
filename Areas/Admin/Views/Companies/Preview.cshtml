@@ -1,0 +1,100 @@
+@model JobPortal.Areas.Admin.Models.CompanyPreviewViewModel
+@{
+    ViewData["Title"] = "Company Preview";
+    string Chip(string? s) => s switch
+    {
+        "Verified" => "badge text-bg-success",
+        "Incomplete" => "badge text-bg-warning",
+        "Rejected" => "badge text-bg-danger",
+        _ => "badge text-bg-secondary"
+    };
+}
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Company Profile</div>
+            <div class="card-body">
+                <div class="mb-2"><strong>@Model.Name</strong> <span
+                        class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status :
+                                                "Unverified")</span></div>
+                <div class="text-muted small mb-1">Industry: @Model.Industry</div>
+                <div class="text-muted small mb-3">Location: @Model.Location</div>
+                <div class="mb-2 fw-semibold">Description</div>
+                <div class="text-muted" style="white-space:pre-wrap">@Model.Description</div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+            <div class="card-header bg-white fw-semibold">Recent Job Listings</div>
+            <div class="card-body p-0">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:80px">ID</th>
+                            <th>Title</th>
+                            <th style="width:140px">Status</th>
+                            <th style="width:160px">Posted</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.RecentJobs.Any())
+                        {
+                            <tr>
+                                <td colspan="5" class="text-muted text-center py-4">No jobs yet</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var j in Model.RecentJobs)
+                            {
+                                var jb = j.Status switch
+                                {
+                                    "Open" => "badge text-bg-success",
+                                    "Paused" => "badge text-bg-warning",
+                                    "Closed" => "badge text-bg-secondary",
+                                    _ => "badge text-bg-light"
+                                };
+                                <tr>
+                                    <td>@j.Id</td>
+                                    <td>@j.JobTitle</td>
+                                    <td><span class="@jb">@j.Status</span></td>
+                                    <td>@j.Date?.ToString("g")</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Approvals"
+                                            asp-action="Preview" asp-route-id="@j.Id">Open Job</a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Actions</div>
+            <div class="card-body">
+                <form method="post" asp-action="Verify" class="d-grid gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-success" type="submit">Verify</button>
+                </form>
+                <form method="post" asp-action="MarkIncomplete" class="d-grid gap-2 mb-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <button class="btn btn-warning" type="submit">Mark Incomplete</button>
+                </form>
+                <form method="post" asp-action="Reject" class="d-grid gap-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <textarea name="comments" class="form-control" rows="3" placeholder="Reason (optional)"></textarea>
+                    <button class="btn btn-outline-danger" type="submit">Reject</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

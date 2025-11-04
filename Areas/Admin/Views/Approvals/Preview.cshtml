@@ -1,4 +1,6 @@
-@model ApprovalItem
+@* File: Areas/Admin/Views/Approvals/Preview.cshtml *@
+@model JobPortal.Areas.Admin.Models.ApprovalPreviewViewModel
+
 <div class="row g-3">
   <div class="col-lg-8">
     <div class="card shadow-sm">
@@ -7,28 +9,52 @@
         <dl class="row">
           <dt class="col-sm-3">Job Title</dt>
           <dd class="col-sm-9">@Model.JobTitle</dd>
-          <dt class="col-sm-3">Organisation</dt>
-          <dd class="col-sm-9">@Model.Organisation</dd>
+
+          <dt class="col-sm-3">Company</dt>
+          <dd class="col-sm-9">@Model.Company</dd>
+
           <dt class="col-sm-3">Submitted</dt>
-          <dd class="col-sm-9">@Model.SubmittedAt</dd>
+          <dd class="col-sm-9">@Model.Date?.ToString("g")</dd>
+
+          <dt class="col-sm-3">Status</dt>
+          <dd class="col-sm-9">
+            @{
+              string ChipClass(string status) => status switch
+              {
+                "Approved" => "badge text-bg-success",
+                "Rejected" => "badge text-bg-danger",
+                "ChangesRequested" => "badge text-bg-warning",
+                "Pending" => "badge text-bg-secondary",
+                _ => "badge text-bg-light"
+              };
+            }
+            <span class="@ChipClass(Model.Status)">@Model.Status</span>
+          </dd>
         </dl>
+
         <hr />
+
         <div class="mb-2 fw-semibold">Description</div>
-        <p class="text-muted">Placeholder job description. In the real app, this renders the full posting.</p>
-        <div class="mb-2 fw-semibold">Requirements</div>
-        <ul class="mb-0">
-          <li>ASP.NET Core basics</li>
-          <li>SQL familiarity</li>
-          <li>Team communication</li>
-        </ul>
+        <div class="text-muted" style="white-space: pre-wrap;">@Model.JobDescription</div>
+
+        <div class="mb-2 fw-semibold mt-3">Requirements</div>
+        <div class="text-muted" style="white-space: pre-wrap;">@Model.JobRequirements</div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.Comments))
+        {
+          <hr />
+          <div class="mb-2 fw-semibold">Latest Reviewer Comments</div>
+          <div class="text-muted" style="white-space: pre-wrap;">@Model.Comments</div>
+        }
       </div>
     </div>
   </div>
+
   <div class="col-lg-4">
     <div class="card shadow-sm mb-3">
       <div class="card-header bg-white fw-semibold">AI Policy Check</div>
       <div class="card-body">
-        <div class="mb-2">Risk: <span class="chip">@Model.Risk</span></div>
+        <div class="mb-2">Status: <span class="chip">@Model.Status</span></div>
         <ul class="small text-muted">
           <li>No discriminatory terms detected</li>
           <li>Clear must-haves provided</li>
@@ -36,18 +62,45 @@
         </ul>
       </div>
     </div>
-    <div class="d-grid gap-2">
-      <button class="btn btn-success" onclick='showToast("Job approved", "success", "/Admin/Approvals")'>
-        Approve
-      </button>
 
-      <button class="btn btn-warning" onclick='showToast("Request sent for changes", "warning", "/Admin/Approvals")'>
-        Request Changes
-      </button>
+    <div class="card shadow-sm">
+      <div class="card-header bg-white fw-semibold">Reviewer Action</div>
+      <div class="card-body">
+        @* APPROVE *@
+        <form asp-area="Admin" asp-controller="Approvals" asp-action="Approve" method="post" class="mb-2">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@Model.Id" />
+          <div class="mb-2">
+            <label class="form-label small">Comments (optional)</label>
+            <textarea name="comments" class="form-control" rows="2"
+              placeholder="Optional note for the recruiter"></textarea>
+          </div>
+          <button type="submit" class="btn btn-success w-100">Approve</button>
+        </form>
 
-      <button class="btn btn-outline-danger" onclick='showToast("Job rejected", "danger", "/Admin/Approvals")'>
-        Reject
-      </button>
+        @* REQUEST CHANGES *@
+        <form asp-area="Admin" asp-controller="Approvals" asp-action="RequestChanges" method="post" class="mb-2">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@Model.Id" />
+          <div class="mb-2">
+            <label class="form-label small">Comments (required)</label>
+            <textarea name="comments" class="form-control" rows="3" placeholder="Specify what to fix"
+              required></textarea>
+          </div>
+          <button type="submit" class="btn btn-warning w-100">Request Changes</button>
+        </form>
+
+        @* REJECT *@
+        <form asp-area="Admin" asp-controller="Approvals" asp-action="Reject" method="post">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@Model.Id" />
+          <div class="mb-2">
+            <label class="form-label small">Comments (required)</label>
+            <textarea name="comments" class="form-control" rows="3" placeholder="Provide a reason" required></textarea>
+          </div>
+          <button type="submit" class="btn btn-outline-danger w-100">Reject</button>
+        </form>
+      </div>
     </div>
 
   </div>

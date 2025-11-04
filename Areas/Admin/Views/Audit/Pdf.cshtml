@@ -1,0 +1,270 @@
+@* ================================
+   File: Areas/Admin/Views/Audit/Pdf.cshtml
+   ================================ *@
+@model IEnumerable<JobPortal.Areas.Admin.Models.AuditLogViewModel>
+@{
+    Layout = null;
+    var items = Model?.ToList() ?? new List<JobPortal.Areas.Admin.Models.AuditLogViewModel>();
+
+    DateTime? dateFrom = ViewBag.DateFrom as DateTime?;
+    DateTime? dateTo = ViewBag.DateTo as DateTime?;
+    string actor = ViewBag.Actor as string ?? "All";
+    string action = ViewBag.Action as string ?? "All";
+    string target = ViewBag.Target as string ?? "All";
+    DateTime generatedAt = (ViewBag.GeneratedAt as DateTime?) ?? DateTime.UtcNow;
+
+    var total = items.Count;
+    var uniqueActors = items.Where(x => !string.IsNullOrWhiteSpace(x.Actor)).Select(x => x.Actor).Distinct().Count();
+    var uniqueActions = items.Where(x => !string.IsNullOrWhiteSpace(x.Action)).Select(x => x.Action).Distinct().Count();
+
+    string RangeText()
+    {
+        if (dateFrom.HasValue && dateTo.HasValue) return $"{dateFrom:yyyy-MM-dd} → {dateTo:yyyy-MM-dd}";
+        if (dateFrom.HasValue) return $"{dateFrom:yyyy-MM-dd} → (open)";
+        if (dateTo.HasValue) return "(open) → " + $"{dateTo:yyyy-MM-dd}";
+        return "All dates";
+    }
+}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Audit Log Report</title>
+    <style>
+        :root {
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --soft: #f9fafb;
+            --brand: #111827;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: var(--text);
+            margin: 0;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 6px;
+            color: var(--brand);
+        }
+
+        h2 {
+            font-size: 14px;
+            margin: 0 0 8px;
+            color: var(--text);
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        .small {
+            font-size: 12px;
+        }
+
+        .tiny {
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            background: #fff;
+        }
+
+        .grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .filters {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .stats {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .chip {
+            display: inline-block;
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--soft);
+            font-size: 11px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid var(--border);
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        thead th {
+            background: var(--soft);
+            text-align: left;
+            font-size: 12px;
+        }
+
+        tbody td {
+            font-size: 12px;
+        }
+
+        .nowrap {
+            white-space: nowrap;
+        }
+
+        .notes {
+            white-space: pre-wrap;
+        }
+
+        .section {
+            margin-top: 20px;
+        }
+
+        .footer {
+            margin-top: 16px;
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+
+        /* print-specific: escape Razor directive with @@ */
+        @@page {
+            margin: 20mm;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+
+<body>
+    <header style="margin-bottom:14px;">
+        <h1>Audit Log Report</h1>
+        <div class="small muted">Generated @generatedAt.ToString("yyyy-MM-dd HH:mm 'UTC'")</div>
+    </header>
+
+    <section class="card section">
+        <h2>Filters</h2>
+        <div class="grid filters">
+            <div>
+                <div class="tiny muted">Date Range</div>
+                <div>@RangeText()</div>
+            </div>
+            <div>
+                <div class="tiny muted">Actor</div>
+                <div>@actor</div>
+            </div>
+            <div>
+                <div class="tiny muted">Action</div>
+                <div>@action</div>
+            </div>
+            <div>
+                <div class="tiny muted">Target</div>
+                <div>@target</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="grid stats">
+            <div class="card">
+                <div class="tiny muted">Total Entries</div>
+                <div style="font-size:18px;font-weight:600">@total</div>
+            </div>
+            <div class="card">
+                <div class="tiny muted">Unique Actors</div>
+                <div style="font-size:18px;font-weight:600">@uniqueActors</div>
+            </div>
+            <div class="card">
+                <div class="tiny muted">Unique Actions</div>
+                <div style="font-size:18px;font-weight:600">@uniqueActions</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="card section">
+        <h2>Entries</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:150px">When</th>
+                    <th style="width:160px">Actor</th>
+                    <th style="width:200px">Action</th>
+                    <th style="width:160px">Target</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!items.Any())
+                {
+                    <tr>
+                        <td colspan="5" class="muted">No log entries found for the selected filters.</td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var row in items)
+                    {
+                        <tr>
+                            <td class="nowrap">@row.When.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@row.Actor</td>
+                            <td><span class="chip">@row.Action</span></td>
+                            <td>@(string.IsNullOrWhiteSpace(row.Target) ? "—" : row.Target)</td>
+                            <td class="notes">@row.Notes</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </section>
+
+    @if (items.Any())
+    {
+        var grouped = items.GroupBy(x => x.Action ?? "Unknown").OrderByDescending(g => g.Count()).ToList();
+        <section class="section page-break">
+            <h2>Actions Breakdown</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th style="width:120px">Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var g in grouped)
+                    {
+                        <tr>
+                            <td>@g.Key</td>
+                            <td>@g.Count()</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    <footer class="footer tiny">
+        © @DateTime.UtcNow.Year JobPortal • Generated for internal audit purposes.
+    </footer>
+</body>
+
+</html>

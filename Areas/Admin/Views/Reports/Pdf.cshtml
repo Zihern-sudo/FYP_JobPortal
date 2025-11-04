@@ -1,0 +1,210 @@
+@* File: Areas/Admin/Views/Reports/Pdf.cshtml *@
+@model JobPortal.Areas.Admin.Models.PdfReportViewModel
+@{
+    Layout = null; // Render as standalone HTML for PDF conversion
+    string F(DateTime? d) => d.HasValue ? d.Value.ToString("yyyy-MM-dd") : "N/A";
+}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>JobPortal — Admin Report</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+
+        .wrap {
+            padding: 8px 4px;
+        }
+
+        .heading {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .sub {
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .filters {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 8px 0 14px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .card {
+            border: 1px solid #e6e6e6;
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .label {
+            color: #777;
+            font-size: 12px;
+        }
+
+        .value {
+            font-size: 22px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14px;
+        }
+
+        th,
+        td {
+            border: 1px solid #e6e6e6;
+            padding: 8px 10px;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #fafafa;
+            font-weight: 600;
+        }
+
+        .muted {
+            color: #666;
+        }
+
+        .footer-note {
+            margin-top: 16px;
+            font-size: 11px;
+            color: #777;
+        }
+
+        h3 {
+            margin: 18px 0 6px 0;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <div class="heading">JobPortal — Admin Report</div>
+        <div class="sub">Generated: @Model.ReportDate.ToString("yyyy-MM-dd HH:mm") UTC</div>
+
+        <div class="filters">
+            <div class="muted"><strong>Filters</strong></div>
+            <table>
+                <tr>
+                    <th style="width:35%">Date From</th>
+                    <td>@F(Model.Filters.DateFrom)</td>
+                </tr>
+                <tr>
+                    <th>Date To</th>
+                    <td>@F(Model.Filters.DateTo)</td>
+                </tr>
+                <tr>
+                    <th>Company</th>
+                    <td>@Model.CompanyName</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="grid">
+            @foreach (var c in Model.StatCards)
+            {
+                <div class="card">
+                    <div class="label">@c.Label</div>
+                    <div class="value">@c.Value</div>
+                    <div class="muted">as of @Model.ReportDate.ToString("yyyy-MM-dd")</div>
+                </div>
+            }
+        </div>
+
+        @* Daily breakdown *@
+        <h3>Daily Breakdown</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:30%">Date</th>
+                    <th style="width:35%">Job Listings</th>
+                    <th style="width:35%">Applications</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.DailyRows.Any())
+                {
+                    <tr>
+                        <td colspan="3" class="muted">No data for the selected period.</td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var r in Model.DailyRows)
+                    {
+                        <tr>
+                            <td>@r.Date.ToString("yyyy-MM-dd")</td>
+                            <td>@r.Jobs</td>
+                            <td>@r.Applications</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        @* Top companies by applications *@
+        <h3>Top Companies by Applications</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:55%">Company</th>
+                    <th style="width:20%">Applications</th>
+                    <th style="width:25%">Job Listings</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.TopCompanies.Any())
+                {
+                    <tr>
+                        <td colspan="3" class="muted">No data for the selected period.</td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var t in Model.TopCompanies)
+                    {
+                        <tr>
+                            <td>@t.CompanyName</td>
+                            <td>@t.Applications</td>
+                            <td>@t.JobListings</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        <div class="footer-note">
+            This report is confidential and intended solely for administrative use within JobPortal.
+        </div>
+    </div>
+</body>
+
+</html>

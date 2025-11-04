@@ -1,77 +1,236 @@
+@* File: Areas/Admin/Views/Dashboard/Index.cshtml *@
+@model JobPortal.Areas.Admin.Models.DashboardViewModel
+
 @{
-    var approvals = ViewBag.Approvals as List<ApprovalItem>;
-    var attention = ViewBag.Attention as List<AttentionItem>;
+  ViewData["Title"] = "Admin Dashboard";
+
+  string ChipClass(string status) => status switch
+  {
+    "Approved" => "badge text-bg-success",
+    "Rejected" => "badge text-bg-danger",
+    "ChangesRequested" => "badge text-bg-warning",
+    "Pending" => "badge text-bg-secondary",
+    _ => "badge text-bg-light"
+  };
+
+  /* --- Sparkline prep --- */
+  var data = Model.ApplicationsSparkline?.ToArray() ?? Array.Empty<int>();
+  int n = data.Length;
+  int max = n > 0 ? Math.Max(1, data.Max()) : 1;
+  int W = 320, H = 120, pad = 6;            // drawing area
+  Func<int, double> X = i => n <= 1 ? pad : pad + (i * (W - pad * 2) / (double)(n - 1));
+  Func<int, int, double> Y = (val, m) => H - pad - (m == 0 ? 0 : (val * (H - pad * 2) / (double)m));
+  string points = n <= 0 ? "" : string.Join(" ", Enumerable.Range(0, n).Select(i => $"{X(i):0.##},{Y(data[i], max):0.##}"));
+  var start = Model.SparkFromDate; // inclusive
 }
 
-<div class="row g-3 mb-4">
-  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
-    <div class="text-muted small">Active Jobs</div><div class="display-6">24</div>
-  </div></div></div>
-  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
-    <div class="text-muted small">Pending Approvals</div><div class="display-6">@approvals?.Count</div>
-  </div></div></div>
-  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
-    <div class="text-muted small">Candidates (7 days)</div><div class="display-6">138</div>
-  </div></div></div>
-  <div class="col-md-3"><div class="card shadow-sm"><div class="card-body">
-    <div class="text-muted small">AI Flags</div><div class="display-6">5</div>
-  </div></div></div>
+@* ===== Top KPI row ===== *@
+<div class="row g-3 mb-3">
+  <div class="col-sm-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Total Users</div>
+        <div class="display-6">@Model.TotalUsers</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Job Listings</div>
+        <div class="display-6">@Model.TotalJobs</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Audit Log Entries</div>
+        <div class="display-6">@Model.TotalLogs</div>
+      </div>
+    </div>
+  </div>
 </div>
 
+@* ===== Mini-metrics row ===== *@
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Active Jobs</div>
+        <div class="display-6">@Model.ActiveJobs</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Pending Approvals</div>
+        <div class="display-6">@Model.Approvals.Count</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Candidates (7 days)</div>
+        <div class="display-6">@Model.Candidates7d</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">AI Flags</div>
+        <div class="display-6">5</div> @* left as placeholder *@
+      </div>
+    </div>
+  </div>
+</div>
+
+@* ===== Needs attention (table) ===== *@
 <div class="card shadow-sm mb-4">
   <div class="card-header bg-white fw-semibold">Needs attention</div>
   <div class="card-body p-0">
     <table class="table mb-0">
-      <thead><tr><th>Type</th><th>Title</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th>Job</th>
+          <th>Candidate</th>
+          <th>Last Message</th>
+          <th></th>
+        </tr>
+      </thead>
       <tbody>
-        @foreach (var item in attention!)
+        @if (!Model.Attention.Any())
         {
           <tr>
-            <td>@item.Type</td>
-            <td>@item.Title</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Messages" asp-action="Index">@item.LinkText</a>
-            </td>
+            <td colspan="4" class="text-muted text-center py-4">No flagged conversations</td>
           </tr>
+        }
+        else
+        {
+          foreach (var item in Model.Attention)
+          {
+            <tr>
+              <td>@(string.IsNullOrWhiteSpace(item.JobTitle) ? $"Conversation #{item.ConversationId}" : item.JobTitle)</td>
+              <td>@item.Candidate</td>
+              <td>@item.LastMessageAt?.ToString("g")</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary"
+                   asp-area="Admin" asp-controller="Messages" asp-action="Thread"
+                   asp-route-id="@item.ConversationId">View</a>
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
   </div>
 </div>
 
+@* ===== Bottom row: Bulk approvals + Sparkline with tooltips ===== *@
 <div class="row g-3">
   <div class="col-md-7">
     <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Pending job approvals</div>
-      <div class="card-body p-0">
-        <table class="table mb-0">
-          <thead><tr><th>ID</th><th>Job</th><th>Organisation</th><th>Risk</th><th>Submitted</th><th></th></tr></thead>
-          <tbody>
-            @foreach (var a in approvals!)
-            {
+      <div class="card-header bg-white fw-semibold">Pending job approvals (Quick Bulk)</div>
+      <form method="post" asp-area="Admin" asp-controller="Approvals" asp-action="Bulk">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="returnStatus" value="Pending" />
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead>
               <tr>
-                <td>@a.Id</td>
-                <td>@a.JobTitle</td>
-                <td>@a.Organisation</td>
-                <td><span class="chip">@a.Risk</span></td>
-                <td>@a.SubmittedAt</td>
-                <td class="text-end">
-                  <a class="btn btn-sm btn-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview" asp-route-id="@a.Id">Open</a>
-                </td>
+                <th style="width:36px"><input type="checkbox" id="dashChkAll" /></th>
+                <th style="width:80px">#</th>
+                <th>Job</th>
+                <th>Company</th>
+                <th style="width:160px">Submitted</th>
+                <th style="width:120px">Status</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @if (!Model.Approvals.Any())
+              {
+                <tr>
+                  <td colspan="6" class="text-muted text-center py-4">Nothing pending</td>
+                </tr>
+              }
+              else
+              {
+                foreach (var a in Model.Approvals)
+                {
+                  <tr>
+                    <td><input type="checkbox" name="ids" value="@a.Id" class="dashRowChk" /></td>
+                    <td>@a.Id</td>
+                    <td>@a.JobTitle</td>
+                    <td>@a.Company</td>
+                    <td>@a.Date?.ToString("g")</td>
+                    <td><span class="@ChipClass(a.Status)">@a.Status</span></td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer d-flex flex-wrap gap-2">
+          <input type="text" name="comments" class="form-control" style="min-width:260px" placeholder="Optional comment" />
+          <button type="submit" class="btn btn-success" name="actionType" value="Approve">Approve Selected</button>
+          <button type="submit" class="btn btn-warning" name="actionType" value="Changes">Request Changes</button>
+          <button type="submit" class="btn btn-outline-danger" name="actionType" value="Reject">Reject Selected</button>
+          <a class="btn btn-link ms-auto" asp-area="Admin" asp-controller="Approvals" asp-action="Index" asp-route-status="Pending">Open Approvals</a>
+        </div>
+      </form>
     </div>
   </div>
+
   <div class="col-md-5">
     <div class="card shadow-sm">
-      <div class="card-header bg-white fw-semibold">Applications per day (placeholder)</div>
+      <div class="card-header bg-white fw-semibold">Applications per day (last 14 days)</div>
       <div class="card-body">
-        <div style="height:160px; background: repeating-linear-gradient(45deg,#f8f9fa,#f8f9fa 10px,#f1f3f5 10px,#f1f3f5 20px);"></div>
-        <small class="text-muted">Chart placeholder</small>
+        @if (n == 0)
+        {
+          <div class="text-muted">No data</div>
+        }
+        else
+        {
+          <style>
+            /* emphasize points on hover, pure CSS */
+            .spark-dot { transition: r .08s ease-in-out; }
+            .spark-dot:hover { r: 4.5; }
+          </style>
+          <svg viewBox="0 0 @W @H" width="100%" height="160" role="img" aria-label="Applications per day">
+            <polyline points="@points" fill="none" stroke="currentColor" stroke-width="2" />
+            <line x1="0" y1="@(H - 6)" x2="@W" y2="@(H - 6)" stroke="#e9ecef" stroke-width="1" />
+            @* Tooltip circles with <title> showing date + count (native SVG tooltip) *@
+            @for (var i = 0; i < n; i++)
+            {
+              var day = start.AddDays(i);
+              var cx = X(i);
+              var cy = Y(data[i], max);
+              <circle class="spark-dot" cx="@cx" cy="@cy" r="3" fill="currentColor">
+                <title>@day.ToString("dd MMM yyyy") — @data[i] application(s)</title>
+              </circle>
+            }
+          </svg>
+          <div class="text-muted small">
+            @start.ToString("dd MMM") — @start.AddDays(n - 1).ToString("dd MMM") · max/day: @max
+          </div>
+        }
       </div>
     </div>
   </div>
 </div>
+
+@section Scripts {
+<script>
+  // dashboard select all
+  const dAll = document.getElementById('dashChkAll');
+  const dRows = document.querySelectorAll('.dashRowChk');
+  if (dAll) {
+    dAll.addEventListener('change', function () {
+      dRows.forEach(c => c.checked = dAll.checked);
+    });
+  }
+</script>
+}

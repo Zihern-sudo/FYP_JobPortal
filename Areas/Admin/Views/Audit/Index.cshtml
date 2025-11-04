@@ -1,23 +1,181 @@
+@* ================================
+   File: Areas/Admin/Views/Audit/Index.cshtml
+   ================================ *@
+@model IEnumerable<JobPortal.Areas.Admin.Models.AuditLogViewModel>
 @{
-    var items = ViewBag.Items as List<AuditEvent>;
+  ViewData["Title"] = "Audit Log";
+
+  string vFrom = (ViewBag.DateFrom is DateTime df) ? df.ToString("yyyy-MM-dd") : "";
+  string vTo = (ViewBag.DateTo is DateTime dt) ? dt.ToString("yyyy-MM-dd") : "";
+  string vActor = (ViewBag.Actor as string) ?? "";
+  string vAction = (ViewBag.Action as string) ?? ""; // remains ViewBag.Action
+  string vTarget = (ViewBag.Target as string) ?? "";
+
+  int page = ViewBag.Page is int p ? p : 1;
+  int pageSize = ViewBag.PageSize is int ps ? ps : 20;
+  int total = ViewBag.Total is int t ? t : (Model?.Count() ?? 0);
+  int totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+
+  var topActions = ViewBag.TopActions as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+  var topActors = ViewBag.TopActors as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
 }
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-0 small">From</label>
+        <input class="form-control" type="date" name="from" value="@vFrom" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-0 small">To</label>
+        <input class="form-control" type="date" name="to" value="@vTo" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-0 small">Actor</label>
+        <input class="form-control" type="text" name="actor" value="@vActor" placeholder="Name or email" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-0 small">Action</label>
+        @* name is actionType to avoid route/action collision *@
+        <input class="form-control" type="text" name="actionType" value="@vAction" placeholder="Contains..." />
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-0 small">Target</label>
+        <input class="form-control" type="text" name="target" value="@vTarget" placeholder="(not tracked)" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-0 small">Page size</label>
+        <select class="form-select" name="pageSize">
+          <option value="10" selected="@(pageSize == 10)">10</option>
+          <option value="20" selected="@(pageSize == 20)">20</option>
+          <option value="50" selected="@(pageSize == 50)">50</option>
+          <option value="100" selected="@(pageSize == 100)">100</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary">Apply</button>
+      </div>
+      <div class="col-auto ms-auto">
+        <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Audit" asp-action="ExportCsv"
+          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction"
+          asp-route-target="@vTarget">Export CSV</a>
+
+        <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Audit" asp-action="ExportPdf"
+          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction"
+          asp-route-target="@vTarget">Export PDF</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Top Actions</div>
+      <div class="card-body">
+        @if (!(topActions?.Any() ?? false))
+        {
+          <div class="text-muted">No data</div>
+        }
+        else
+        {
+          <ul class="list-group list-group-flush">
+            @foreach (var a in topActions)
+            {
+              <li class="list-group-item d-flex justify-content-between">
+                <span>@a.Key</span>
+                <span class="badge text-bg-secondary">@a.Cnt</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-white fw-semibold">Top Actors</div>
+      <div class="card-body">
+        @if (!(topActors?.Any() ?? false))
+        {
+          <div class="text-muted">No data</div>
+        }
+        else
+        {
+          <ul class="list-group list-group-flush">
+            @foreach (var a in topActors)
+            {
+              <li class="list-group-item d-flex justify-content-between">
+                <span>@a.Key</span>
+                <span class="badge text-bg-secondary">@a.Cnt</span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="card shadow-sm">
-  <div class="card-header bg-white fw-semibold">Audit log</div>
-  <div class="card-body p-0">
-    <table class="table mb-0 align-middle">
-      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Notes</th></tr></thead>
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead>
+        <tr>
+          <th style="width:160px">When</th>
+          <th style="width:240px">Actor</th>
+          <th>Action</th>
+          <th style="width:200px">Target</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
       <tbody>
-        @foreach (var a in items!)
+        @if (Model == null || !Model.Any())
         {
           <tr>
-            <td>@a.When</td>
-            <td>@a.Actor</td>
-            <td>@a.Action</td>
-            <td>@a.Target</td>
-            <td class="text-muted">@a.Notes</td>
+            <td colspan="5" class="text-muted text-center py-4">No log entries</td>
           </tr>
+        }
+        else
+        {
+          foreach (var r in Model)
+          {
+            <tr>
+              <td>@r.When.ToString("yyyy-MM-dd HH:mm")</td>
+              <td>@r.Actor</td>
+              <td><span class="badge text-bg-light">@r.Action</span></td>
+              <td>@(string.IsNullOrWhiteSpace(r.Target) ? "—" : r.Target)</td>
+              <td class="text-muted">@r.Notes</td>
+            </tr>
+          }
         }
       </tbody>
     </table>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="text-muted small">
+      Page @(page) of @totalPages • @total total
+    </div>
+    <div class="d-flex gap-2">
+      @{
+        var prev = Math.Max(1, page - 1);
+        var next = Math.Min(totalPages, page + 1);
+      }
+      <a class="btn btn-sm btn-outline-secondary @(page == 1 ? "disabled" : "")" asp-area="Admin" asp-controller="Audit"
+        asp-action="Index" asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor"
+        asp-route-actionType="@vAction" asp-route-target="@vTarget" asp-route-page="@prev"
+        asp-route-pageSize="@pageSize">
+        Prev
+      </a>
+
+      <a class="btn btn-sm btn-outline-secondary @(page == totalPages ? "disabled" : "")" asp-area="Admin"
+        asp-controller="Audit" asp-action="Index" asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor"
+        asp-route-actionType="@vAction" asp-route-target="@vTarget" asp-route-page="@next"
+        asp-route-pageSize="@pageSize">
+        Next
+      </a>
+    </div>
   </div>
 </div>

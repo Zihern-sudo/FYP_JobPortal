@@ -1,0 +1,163 @@
+@model JobPortal.Areas.Admin.Models.CompaniesIndexViewModel
+@{
+    ViewData["Title"] = "Companies";
+    string Active(string s) => string.Equals(Model.Status, s, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+    string Badge(string? s) => s switch
+    {
+        "Verified" => "badge text-bg-success",
+        "Incomplete" => "badge text-bg-warning",
+        "Rejected" => "badge text-bg-danger",
+        _ => "badge text-bg-secondary"
+    };
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-12">
+                <div class="btn-group mb-2">
+                    <a class="btn btn-outline-secondary @Active("All")" asp-action="Index" asp-route-status="All"
+                        asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
+                        asp-route-to="@((string?)ViewBag.To)">All (@Model.AllCount)</a>
+
+                    <a class="btn btn-outline-success @Active("Verified")" asp-action="Index"
+                        asp-route-status="Verified" asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
+                        asp-route-to="@((string?)ViewBag.To)">Verified (@Model.VerifiedCount)</a>
+
+                    <a class="btn btn-outline-secondary @Active("Unverified")" asp-action="Index"
+                        asp-route-status="Unverified" asp-route-q="@Model.Query"
+                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)">Unverified
+                        (@Model.UnverifiedCount)</a>
+
+                    <a class="btn btn-outline-warning @Active("Incomplete")" asp-action="Index"
+                        asp-route-status="Incomplete" asp-route-q="@Model.Query"
+                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)">Incomplete
+                        (@Model.IncompleteCount)</a>
+
+                    <a class="btn btn-outline-danger @Active("Rejected")" asp-action="Index" asp-route-status="Rejected"
+                        asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
+                        asp-route-to="@((string?)ViewBag.To)">Rejected (@Model.RejectedCount)</a>
+                </div>
+            </div>
+
+            <div class="col-auto">
+                <input class="form-control" type="search" name="q" value="@Model.Query"
+                    placeholder="Search name/industry/location" />
+                <input type="hidden" name="status" value="@Model.Status" />
+            </div>
+
+            <div class="col-auto">
+                <label class="form-label mb-0 small">From</label>
+                <input class="form-control" type="date" name="from" value="@((string?)ViewBag.From)" />
+            </div>
+
+            <div class="col-auto">
+                <label class="form-label mb-0 small">To</label>
+                <input class="form-control" type="date" name="to" value="@((string?)ViewBag.To)" />
+            </div>
+
+            <div class="col-auto">
+                <button class="btn btn-primary" type="submit">Apply</button>
+            </div>
+
+            <div class="col-auto ms-auto">
+                <a class="btn btn-outline-secondary" asp-action="ExportCsv" asp-route-status="@Model.Status"
+                    asp-route-q="@Model.Query" asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To">Export CSV</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <form method="post" asp-action="Bulk">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="status" value="@Model.Status" />
+        <input type="hidden" name="q" value="@Model.Query" />
+        <input type="hidden" name="from" value="@ViewBag.From" />
+        <input type="hidden" name="to" value="@ViewBag.To" />
+        <input type="hidden" name="page" value="@Model.Items.Page" />
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:36px"><input type="checkbox" id="chkAll" /></th>
+                            <th style="width:72px">ID</th>
+                            <th>Company</th>
+                            <th>Industry</th>
+                            <th>Location</th>
+                            <th style="width:120px">Status</th>
+                            <th style="width:120px">Jobs</th>
+                            <th style="width:120px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Items.Items.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-muted text-center py-4">No companies found</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            foreach (var c in Model.Items.Items)
+                            {
+                                <tr>
+                                    <td><input type="checkbox" name="ids" value="@c.Id" class="rowChk" /></td>
+                                    <td>@c.Id</td>
+                                    <td>@c.Name</td>
+                                    <td>@c.Industry</td>
+                                    <td>@c.Location</td>
+                                    <td><span class="@Badge(c.Status)">@(!string.IsNullOrWhiteSpace(c.Status) ? c.Status :
+                                                                                "Unverified")</span></td>
+                                    <td>@c.Jobs</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-sm btn-outline-primary" asp-action="Preview"
+                                            asp-route-id="@c.Id">Open</a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex flex-wrap gap-2 align-items-center">
+            <input type="text" name="comments" class="form-control" style="min-width:260px"
+                placeholder="Optional comment for rejection" />
+            <button type="submit" class="btn btn-success" name="actionType" value="Verify">Verify Selected</button>
+            <button type="submit" class="btn btn-outline-danger" name="actionType" value="Reject">Reject
+                Selected</button>
+
+            <div class="ms-auto text-muted small">
+                Page @Model.Items.Page of @Model.Items.TotalPages • @Model.Items.TotalItems total
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="mt-2 d-flex justify-content-end gap-2">
+    @{
+        var prev = Math.Max(1, Model.Items.Page - 1);
+        var next = Math.Min(Model.Items.TotalPages, Model.Items.Page + 1);
+    }
+    <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == 1 ? "disabled" : "")" asp-action="Index"
+        asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-from="@ViewBag.From"
+        asp-route-to="@ViewBag.To" asp-route-page="@prev">Prev</a>
+
+    <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == Model.Items.TotalPages ? "disabled" : "")"
+        asp-action="Index" asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-from="@ViewBag.From"
+        asp-route-to="@ViewBag.To" asp-route-page="@next">Next</a>
+</div>
+
+@section Scripts {
+    <script>
+        const all = document.getElementById('chkAll');
+        const rows = document.querySelectorAll('.rowChk');
+        if (all) {
+            all.addEventListener('change', () => rows.forEach(r => r.checked = all.checked));
+        }
+    </script>
+}

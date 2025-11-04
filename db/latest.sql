@@ -34,6 +34,7 @@ ADD COLUMN notif_reminders BOOLEAN NOT NULL DEFAULT FALSE;
 
 
 /* 3:11pm 3/11/2025 updated job lisitng table with new expiry_date and job_requirements_nice col */
+/*Disable Safe Updates*/
 
 -- 1) Ensure new column exists (idempotent)
 SET @sql := IF(
@@ -277,5 +278,11 @@ LEFT JOIN `company` c ON c.company_id = jl.company_id
 WHERE c.company_id IS NULL;
 
 
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* 4.04pm 4/11/2025 updated Company Status Length */
+
+ALTER TABLE jobportal.company MODIFY company_status VARCHAR(20);
 
 /* ---------------------------------------------------------------------------------------------- */

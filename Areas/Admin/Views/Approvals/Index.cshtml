@@ -1,26 +1,157 @@
+@* File: Areas/Admin/Views/Approvals/Index.cshtml *@
+@model JobPortal.Areas.Admin.Models.ApprovalsIndexViewModel
+
 @{
-    var items = ViewBag.Items as List<ApprovalItem>;
+  string TabClass(string tab) => (Model.Status == tab ? "nav-link active" : "nav-link");
+  string ChipClass(string status) => status switch
+  {
+    "Approved" => "badge text-bg-success",
+    "Rejected" => "badge text-bg-danger",
+    "ChangesRequested" => "badge text-bg-warning",
+    "Pending" => "badge text-bg-secondary",
+    _ => "badge text-bg-light"
+  };
 }
-<div class="card shadow-sm">
-  <div class="card-header bg-white fw-semibold">Pending job approvals</div>
-  <div class="card-body p-0">
-    <table class="table mb-0 align-middle">
-      <thead><tr><th>ID</th><th>Job</th><th>Organisation</th><th>Risk</th><th>Submitted</th><th></th></tr></thead>
-      <tbody>
-        @foreach (var a in items!)
-        {
-          <tr>
-            <td>@a.Id</td>
-            <td>@a.JobTitle</td>
-            <td>@a.Organisation</td>
-            <td><span class="chip">@a.Risk</span></td>
-            <td>@a.SubmittedAt</td>
-            <td class="text-end">
-              <a class="btn btn-sm btn-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview" asp-route-id="@a.Id">Open</a>
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
+
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+  <ul class="nav nav-pills me-auto">
+    <li class="nav-item">
+      <a class="@TabClass("All")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+        asp-route-status="All">All</a>
+    </li>
+    <li class="nav-item">
+      <a class="@TabClass("Pending")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+        asp-route-status="Pending">
+        Pending <span class="badge bg-secondary ms-1">@Model.PendingCount</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="@TabClass("Approved")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+        asp-route-status="Approved">
+        Approved <span class="badge bg-success ms-1">@Model.ApprovedCount</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="@TabClass("ChangesRequested")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+        asp-route-status="ChangesRequested">
+        Changes <span class="badge bg-warning text-dark ms-1">@Model.ChangesRequestedCount</span>
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="@TabClass("Rejected")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+        asp-route-status="Rejected">
+        Rejected <span class="badge bg-danger ms-1">@Model.RejectedCount</span>
+      </a>
+    </li>
+  </ul>
+
+  <form class="d-flex gap-2" method="get" asp-area="Admin" asp-controller="Approvals" asp-action="Index">
+    <input type="hidden" name="status" value="@Model.Status" />
+    <input type="text" class="form-control" style="min-width:260px" name="q" value="@Model.Query"
+      placeholder="Search job/company…" />
+    <button class="btn btn-outline-primary">Search</button>
+  </form>
 </div>
+
+<form method="post" asp-area="Admin" asp-controller="Approvals" asp-action="Bulk" id="bulkForm">
+  @Html.AntiForgeryToken()
+  <input type="hidden" name="returnStatus" value="@Model.Status" />
+  <input type="hidden" name="q" value="@Model.Query" />
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead>
+          <tr>
+            <th style="width:36px">
+              <input type="checkbox" id="chkAll" />
+            </th>
+            <th style="width:80px">#</th>
+            <th>Job Title</th>
+            <th>Company</th>
+            <th style="width:160px">Submitted</th>
+            <th style="width:140px">Status</th>
+            <th style="width:120px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (!Model.Items.Items.Any())
+          {
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">No records</td>
+            </tr>
+          }
+          else
+          {
+            foreach (var it in Model.Items.Items)
+            {
+              <tr>
+                <td>
+                  <input type="checkbox" name="ids" value="@it.Id" class="rowChk" />
+                </td>
+                <td>@it.Id</td>
+                <td>@it.JobTitle</td>
+                <td>@it.Company</td>
+                <td>@it.Date?.ToString("g")</td>
+                <td><span class="@ChipClass(it.Status)">@it.Status</span></td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview"
+                    asp-route-id="@it.Id">
+                    Open
+                  </a>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <div class="d-flex gap-2">
+        <input type="text" name="comments" class="form-control" style="min-width:280px"
+          placeholder="Optional comment for bulk action" />
+        <button type="submit" class="btn btn-success" name="actionType" value="Approve">Approve Selected</button>
+        <button type="submit" class="btn btn-warning" name="actionType" value="Changes">Request Changes</button>
+        <button type="submit" class="btn btn-outline-danger" name="actionType" value="Reject">Reject Selected</button>
+      </div>
+
+      <div class="text-muted small">
+        Page @Model.Items.Page of @Model.Items.TotalPages · @Model.Items.TotalItems items
+      </div>
+
+      <nav>
+        <ul class="pagination mb-0">
+          @{
+            var prevDisabled = Model.Items.Page <= 1 ? " disabled" : "";
+            var nextDisabled = Model.Items.Page >= Model.Items.TotalPages ? " disabled" : "";
+            var prevPage = Math.Max(1, Model.Items.Page - 1);
+            var nextPage = Math.Min(Model.Items.TotalPages, Model.Items.Page + 1);
+          }
+          <li class="page-item@prevDisabled">
+            <a class="page-link" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+              asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-page="@prevPage"
+              asp-route-pageSize="@Model.Items.PageSize">Prev</a>
+          </li>
+          <li class="page-item@nextDisabled">
+            <a class="page-link" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
+              asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-page="@nextPage"
+              asp-route-pageSize="@Model.Items.PageSize">Next</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</form>
+
+@section Scripts {
+  <script>
+    // select all / none
+    const chkAll = document.getElementById('chkAll');
+    const rowChks = document.querySelectorAll('.rowChk');
+    if (chkAll) {
+      chkAll.addEventListener('change', function () {
+        rowChks.forEach(c => c.checked = chkAll.checked);
+      });
+    }
+  </script>
+}

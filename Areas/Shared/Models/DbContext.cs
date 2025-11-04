@@ -80,8 +80,6 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.company_id).HasName("PRIMARY");
 
-            entity.Property(e => e.company_status).HasDefaultValueSql("'Active'");
-
             entity.HasOne(d => d.user).WithOne(p => p.company).HasConstraintName("fk_company_user");
         });
 
