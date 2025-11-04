@@ -77,7 +77,16 @@
                         var company = job?.company;
 
                         <tr>
-                            <td>@job?.job_title</td>
+                            <td>
+                                @job?.job_title
+                                @if (app.application_status == "Offer")
+                                {
+                                    <form asp-controller="Dashboard" asp-action="AcceptOffer" method="post" style="display:inline;">
+                                        <input type="hidden" name="applicationId" value="@app.application_id" />
+                                        <button type="submit" class="btn btn-success btn-sm">Accept Offer</button>
+                                    </form>
+                                }
+                            </td>
                             <td>@company?.company_name</td>
                             <td>@company?.company_location</td>
                             <td>@company?.company_industry</td>
@@ -109,14 +118,14 @@
         @if (Model.TotalPages > 1)
         {
             <button disabled="@(Model.CurrentPage == 1)"
-                    onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage - 1 })'">
+                onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage - 1 })'">
                 ⬅ Previous
             </button>
 
             <span>Page @Model.CurrentPage of @Model.TotalPages</span>
 
             <button disabled="@(Model.CurrentPage == Model.TotalPages)"
-                    onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage + 1 })'">
+                onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage + 1 })'">
                 Next ➡
             </button>
         }

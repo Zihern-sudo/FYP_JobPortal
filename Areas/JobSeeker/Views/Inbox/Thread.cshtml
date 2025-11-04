@@ -1,0 +1,42 @@
+@model JobPortal.Areas.JobSeeker.Models.InboxThreadVM
+
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Conversation";
+
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>@Model.JobTitle</h3>
+</div>
+
+<a asp-area="JobSeeker" asp-controller="Inbox" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+    &leftarrow; Back to Inbox
+</a>
+
+<div class="card mb-3">
+    <div class="card-header">Conversation with @Model.RecruiterName</div>
+    <div class="card-body">
+        @foreach (var m in Model.Messages)
+        {
+            <div class="mb-3 @(m.FromRecruiter ? "text-start" : "text-end")">
+                <div class="d-inline-block border rounded p-2">
+                    <div class="small text-muted">@m.SenderName • @m.SentAt</div>
+                    <div>@m.MessageText</div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<form asp-action="SendMessage" asp-controller="Inbox" asp-area="JobSeeker" method="post" class="card">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ThreadId" value="@Model.ThreadId" />
+    <div class="card-body">
+        <textarea name="MessageText" class="form-control" rows="3"
+            placeholder="Write your reply...">@Model.ReplyText</textarea>
+    </div>
+    <div class="card-footer d-flex justify-content-end">
+        <button class="btn btn-primary" type="submit">Send</button>
+    </div>
+</form>
