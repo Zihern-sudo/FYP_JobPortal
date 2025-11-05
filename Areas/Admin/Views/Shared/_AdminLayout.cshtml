@@ -1,6 +1,5 @@
 @* File: Areas/Admin/Views/Shared/_AdminLayout.cshtml *@
 @using Microsoft.AspNetCore.Http
-@using JobPortal.Areas.Shared.Extensions
 
 <!DOCTYPE html>
 <html lang="en">
@@ -14,6 +13,10 @@
     .app { display: grid; grid-template-columns: 260px 1fr; }
     .sidebar { border-right: 1px solid #eee; }
     .chip { display:inline-block; padding:.15rem .45rem; border-radius:.5rem; background:#f6f6f6; font-size:.8rem; }
+    .list-group-nested .list-group-item { padding-left: 1.75rem; font-size:.95rem; }
+    .caret { transition: transform .2s ease; }
+    .collapse.show + .caret-keeper .caret,
+    .show .caret { transform: rotate(90deg); }
   </style>
 </head>
 
@@ -40,7 +43,7 @@
   }
 </script>
 
-@* Flash message slot (unchanged) *@
+@* Flash message slot *@
 @if (TempData["Flash.Message"] is string flashMsg && !string.IsNullOrWhiteSpace(flashMsg))
 {
     var flashType = (TempData["Flash.Type"] as string ?? "info").ToLowerInvariant(); // success | danger | warning | info
@@ -59,7 +62,7 @@
 }
 
 @{
-    // --- Resolve logged-in user + role from session (view-safe; no Controller extensions here) ---
+    // Resolve logged-in user + role from session (view-safe)
     int currentUserId =
         Context.Session.GetInt32("UserId")
         ?? Context.Session.GetInt32("user_id")
@@ -67,7 +70,6 @@
 
     bool hasUser = currentUserId > 0;
 
-    // Name fallbacks (use whatever you set during login)
     string? fullName =
         Context.Session.GetString("FullName")
         ?? Context.Session.GetString("UserName")
@@ -78,14 +80,19 @@
         fullName = hasUser ? $"User #{currentUserId}" : "Guest";
     }
 
-    // Role fallbacks (same keys your guards use)
     string? role =
         Context.Session.GetString("UserRole")
         ?? Context.Session.GetString("role")
         ?? Context.Session.GetString("user_role")
         ?? "Admin";
-}
 
+    string currentController = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "");
+    string currentAction = (ViewContext.RouteData.Values["action"]?.ToString() ?? "");
+    bool inSettings = string.Equals(currentController, "Settings", StringComparison.OrdinalIgnoreCase);
+
+    Func<string, string> ActiveAction = (string action) =>
+        (inSettings && string.Equals(currentAction, action, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
+}
 
 <body>
   <header class="border-bottom p-3 d-flex justify-content-between align-items-center">
@@ -108,7 +115,26 @@
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Messages" asp-action="Index">Conversation Monitor</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Audit" asp-action="Index">Audit Log</a>
         <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Reports" asp-action="Index">Reports</a>
-        <a class="list-group-item list-group-item-action" asp-area="Admin" asp-controller="Settings" asp-action="Branding">Settings</a>
+
+        @* Settings collapsible group *@
+        @{
+            var showClass = inSettings ? "show" : "";
+        }
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+           data-bs-toggle="collapse" href="#settingsMenu" role="button" aria-expanded="@(inSettings.ToString().ToLower())" aria-controls="settingsMenu">
+            Settings
+            <span class="caret ms-2">▸</span>
+        </a>
+        <div class="collapse @showClass" id="settingsMenu">
+          <div class="list-group list-group-flush list-group-nested">
+            <a class="list-group-item list-group-item-action @ActiveAction("Branding")"
+               asp-area="Admin" asp-controller="Settings" asp-action="Branding">Branding</a>
+            <a class="list-group-item list-group-item-action @ActiveAction("Legal")"
+               asp-area="Admin" asp-controller="Settings" asp-action="Legal">Legal</a>
+            <a class="list-group-item list-group-item-action @ActiveAction("Notifications")"
+               asp-area="Admin" asp-controller="Settings" asp-action="Notifications">Notifications</a>
+          </div>
+        </div>
       </div>
     </aside>
 

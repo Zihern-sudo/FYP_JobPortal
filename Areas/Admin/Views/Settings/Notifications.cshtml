@@ -1,3 +1,4 @@
+@* File: Areas/Admin/Views/Settings/Notifications.cshtml *@
 @model JobPortal.Areas.Admin.Models.AdminNotificationSettingsViewModel
 @{
   ViewData["Title"] = "Notifications";
@@ -5,31 +6,24 @@
 
 <div class="card shadow-sm">
   <div class="card-header bg-white fw-semibold">Notifications</div>
-  @* --- Modified to be a real form --- *@
-  <form asp-action="Notifications" method="post">
+  <form method="post" asp-area="Admin" asp-controller="Settings" asp-action="Notifications">
+    @Html.AntiForgeryToken()
     <div class="card-body">
-      @if (TempData["SuccessMessage"] != null)
-      {
-        <div class="alert alert-success">@TempData["SuccessMessage"]</div>
-      }
-
-      @* --- Bind checkboxes to the Model using asp-for --- *@
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" asp-for="NotifyOnNewApplication">
-        <label class="form-check-label" asp-for="NotifyOnNewApplication">New application received</label>
+      <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnNewApplication" />
+        <label class="form-check-label" asp-for="NotifyOnNewApplication"></label>
       </div>
-      <div class="form-check mt-2">
-        <input class="form-check-input" type="checkbox" asp-for="NotifyOnLowConfidenceParse">
-        <label class="form-check-label" asp-for="NotifyOnLowConfidenceParse">Parsing low confidence</label>
+      <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnLowConfidenceParse" />
+        <label class="form-check-label" asp-for="NotifyOnLowConfidenceParse"></label>
       </div>
-      <div class="form-check mt-2">
-        <input class="form-check-input" type="checkbox" asp-for="NotifyOnFlaggedMessage">
-        <label class="form-check-label" asp-for="NotifyOnFlaggedMessage">Message with flagged terms</label>
+      <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" asp-for="NotifyOnFlaggedMessage" />
+        <label class="form-check-label" asp-for="NotifyOnFlaggedMessage"></label>
       </div>
-      <hr />
-      @* --- Enable the save button --- *@
-      <button class="btn btn-primary" type="submit">Save Settings</button>
+    </div>
+    <div class="card-footer">
+      <button class="btn btn-primary">Save</button>
     </div>
   </form>
-  @* --- End Modification --- *@
 </div>

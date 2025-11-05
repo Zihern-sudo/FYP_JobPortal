@@ -1,0 +1,5 @@
+{
+  "notifyOnNewApplication": false,
+  "notifyOnLowConfidenceParse": false,
+  "notifyOnFlaggedMessage": false
+}

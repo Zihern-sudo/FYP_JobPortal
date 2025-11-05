@@ -287,3 +287,23 @@ public sealed class RecruiterPreviewViewModel
     public string? Phone { get; init; }
     public string? Address { get; init; }
 }
+
+
+// ---- Admin Settings VMs (NEW) ----
+public sealed class BrandingSettingsViewModel
+{
+    [Display(Name = "Primary colour")]
+    public string PrimaryColor { get; set; } = "#2563eb";
+
+    [Display(Name = "Logo URL")]
+    public string? LogoUrl { get; set; }
+}
+
+public sealed class LegalSettingsViewModel
+{
+    [Display(Name = "Terms & Conditions")]
+    public string Terms { get; set; } = string.Empty;
+
+    [Display(Name = "Privacy Policy")]
+    public string Privacy { get; set; } = string.Empty;
+}

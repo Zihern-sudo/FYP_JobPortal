@@ -10,6 +10,10 @@
   };
 }
 
+<a asp-area="Admin" asp-controller="Messages" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+    &leftarrow; Back to Conversation Monitor
+</a>
+
 <div class="d-flex align-items-center gap-2 mb-3">
   <form method="post" asp-action="ToggleFlag" class="me-2">
     @Html.AntiForgeryToken()

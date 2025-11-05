@@ -1,10 +1,25 @@
+@* File: Areas/Admin/Views/Settings/Legal.cshtml *@
+@model JobPortal.Areas.Admin.Models.LegalSettingsViewModel
+@{
+  ViewData["Title"] = "Legal";
+}
+
 <div class="card shadow-sm">
-  <div class="card-header bg-white fw-semibold">Legal & Consent</div>
-  <div class="card-body">
-    <p class="text-muted">
-      Display your Privacy Policy and Terms of Use here. Add a note that admin message
-      monitoring is for quality and safety, and users consent at signup.
-    </p>
-    <pre class="p-3 bg-light rounded border">[ Your policy text goes here… ]</pre>
-  </div>
+  <div class="card-header bg-white fw-semibold">Legal</div>
+  <form method="post" asp-area="Admin" asp-controller="Settings" asp-action="Legal">
+    @Html.AntiForgeryToken()
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">Terms & Conditions</label>
+        <textarea name="Terms" class="form-control" rows="8">@Model.Terms</textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Privacy Policy</label>
+        <textarea name="Privacy" class="form-control" rows="8">@Model.Privacy</textarea>
+      </div>
+    </div>
+    <div class="card-footer">
+      <button class="btn btn-primary">Save</button>
+    </div>
+  </form>
 </div>
