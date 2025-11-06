@@ -98,7 +98,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
         // GET: /JobSeeker/Inbox/Thread/{id}
         [HttpGet]
-        public async Task<IActionResult> Thread(int id)
+        public async Task<IActionResult> Thread(int id, string? prefill = null)
         {
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
@@ -142,6 +142,9 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 RecruiterName = $"Recruiter #{convo.recruiter_id}",
                 Messages = messageList
             };
+
+            // 👇 Pass the prefilled message to the View
+            ViewBag.PrefillMessage = prefill;
 
             return View(vm);
         }

@@ -34,7 +34,7 @@
     <input type="hidden" name="ThreadId" value="@Model.ThreadId" />
     <div class="card-body">
         <textarea name="MessageText" class="form-control" rows="3"
-            placeholder="Write your reply...">@Model.ReplyText</textarea>
+            placeholder="Write your reply...">@(!string.IsNullOrEmpty(ViewBag.PrefillMessage) ? ViewBag.PrefillMessage : Model.ReplyText)</textarea>
     </div>
     <div class="card-footer d-flex justify-content-end">
         <button class="btn btn-primary" type="submit">Send</button>

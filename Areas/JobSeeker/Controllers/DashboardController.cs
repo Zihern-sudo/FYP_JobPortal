@@ -494,7 +494,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             _db.SaveChanges();
 
             // Redirect to the chat view (InboxController)
-            return RedirectToAction("Thread", "Inbox", new { id = convo.conversation_id });
+            return RedirectToAction("Thread", "Inbox", new { id = convo.conversation_id, prefill = "Hi, I have accepted the offer. Thank you for the opportunity!"  });
         }
 
         // ✅ Dynamic Job Listings with Pagination
