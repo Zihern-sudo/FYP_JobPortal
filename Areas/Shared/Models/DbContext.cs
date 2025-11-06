@@ -197,9 +197,6 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.preference_id).HasName("PRIMARY");
 
-            entity.Property(e => e.allow_email).HasDefaultValueSql("'1'");
-            entity.Property(e => e.allow_inApp).HasDefaultValueSql("'1'");
-
             entity.HasOne(d => d.user).WithMany(p => p.notification_preferences).HasConstraintName("fk_pref_user");
         });
 

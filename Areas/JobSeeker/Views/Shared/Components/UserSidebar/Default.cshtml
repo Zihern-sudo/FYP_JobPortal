@@ -1,0 +1,11 @@
+@model JobPortal.Areas.JobSeeker.ViewComponents.UserSidebarViewModel
+
+<div class="profile-section text-center">
+    <img src="@(string.IsNullOrEmpty(Model.ProfilePicturePath)
+    ? Url.Content("~/images/profile.png")
+    : Url.Content($"{Model.ProfilePicturePath}?v={Guid.NewGuid()}"))"
+     alt="Profile" class="profile-img" 
+         style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #ccc;" />
+    <p class="username">@Model.FullName</p>
+    <a asp-area="JobSeeker" asp-controller="Account" asp-action="Logout" class="logout-link">Logout</a>
+</div>

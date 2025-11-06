@@ -286,3 +286,29 @@ WHERE c.company_id IS NULL;
 ALTER TABLE jobportal.company MODIFY company_status VARCHAR(20);
 
 /* ---------------------------------------------------------------------------------------------- */
+
+/* 5:16pm 6/11/2025 change user and notifpref tables */
+ALTER TABLE user
+DROP COLUMN notif_inapp,
+DROP COLUMN notif_email,
+DROP COLUMN notif_sms,
+DROP COLUMN notif_job_updates,
+DROP COLUMN notif_feedback,
+DROP COLUMN notif_messages,
+DROP COLUMN notif_system,
+DROP COLUMN notif_reminders;
+
+ALTER TABLE notification_preference
+DROP COLUMN allow_SMS,
+ADD COLUMN notif_job_updates BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN notif_messages BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN notif_reminders BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE notification_preference 
+CHANGE COLUMN `allow_inApp` `allow_inApp` TINYINT(1) NOT NULL DEFAULT '0' ;
+CHANGE COLUMN `allow_email` `allow_email` TINYINT(1) NOT NULL DEFAULT '0' ;
+
+ALTER TABLE user
+ADD COLUMN profile_picture VARCHAR(255) NULL;
+/* 5:16pm */
+

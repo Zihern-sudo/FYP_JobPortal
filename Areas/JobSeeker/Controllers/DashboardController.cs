@@ -81,26 +81,44 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (user == null)
                 return NotFound("User not found.");
 
+
+            var pref = await _db.notification_preferences.FirstOrDefaultAsync(p => p.user_id == userId);
+            if (pref == null)
+            {
+                // if missing, create a default entry
+                pref = new notification_preference
+                {
+                    user_id = userId,
+                    allow_email = false,
+                    allow_inApp = false
+                };
+                _db.notification_preferences.Add(pref);
+                await _db.SaveChangesAsync();
+            }
+
             var vm = new ProfileViewModel
             {
                 UserId = user.user_id,
                 FirstName = user.first_name,
                 LastName = user.last_name,
                 Email = user.email,
-                TwoFAEnabled = user.user_2FA, // assuming 1 = enabled
+                TwoFAEnabled = user.user_2FA,
                 Phone = user.phone,
                 Address = user.address,
                 Skills = user.skills,
                 Education = user.education,
                 WorkExperience = user.work_experience,
-                notif_inapp = user.notif_inapp,
-                notif_email = user.notif_email,
-                notif_sms = user.notif_sms,
-                notif_job_updates = user.notif_job_updates,
-                notif_feedback = user.notif_feedback,
-                notif_messages = user.notif_messages,
-                notif_system = user.notif_system,
-                notif_reminders = user.notif_reminders
+
+                // now load from notification_preference table
+                notif_email = pref.allow_email,
+                notif_inapp = pref.allow_inApp,
+                notif_job_updates = pref.notif_job_updates,
+                notif_messages = pref.notif_messages,
+                notif_reminders = pref.notif_reminders,
+
+                ProfilePicturePath = string.IsNullOrEmpty(user.profile_picture)
+        ? "/wwwroot/uploads/profile_pictures/test.png"
+        : user.profile_picture
             };
 
             return View(vm);
@@ -114,6 +132,45 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (user == null)
                 return NotFound("User not found.");
 
+            // --- Handle profile picture upload ---
+            if (vm.ProfileImage != null && vm.ProfileImage.Length > 0)
+            {
+                // Create folder if not exists
+                var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "profile_pictures");
+                if (!Directory.Exists(uploadDir))
+                    Directory.CreateDirectory(uploadDir);
+
+                // Validate size (2MB max)
+                if (vm.ProfileImage.Length > 2 * 1024 * 1024)
+                {
+                    ModelState.AddModelError("ProfileImage", "File too large (max 2MB).");
+                    return View(vm);
+                }
+
+                // Define standard file name
+                var fileName = $"{user.first_name}_{user.last_name}_Icon.png";
+                var filePath = Path.Combine(uploadDir, fileName);
+
+                // Delete old profile image(s) for the user
+                var oldFiles = Directory.GetFiles(uploadDir, $"{user.first_name}_{user.last_name}_Icon.*");
+                foreach (var old in oldFiles)
+                {
+                    System.IO.File.Delete(old);
+                }
+
+                // Convert uploaded file to PNG and save
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    using (var image = System.Drawing.Image.FromStream(vm.ProfileImage.OpenReadStream()))
+                    {
+                        image.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                }
+
+                // Save standardized PNG path to DB
+                user.profile_picture = $"/uploads/profile_pictures/{fileName}";
+            }
+
             user.first_name = vm.FirstName;
             user.last_name = vm.LastName;
             user.email = vm.Email;
@@ -123,19 +180,32 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             user.skills = vm.Skills;
             user.education = vm.Education;
             user.work_experience = vm.WorkExperience;
-            user.notif_inapp = vm.notif_inapp;
-            user.notif_email = vm.notif_email;
-            user.notif_sms = vm.notif_sms;
-            user.notif_job_updates = vm.notif_job_updates;
-            user.notif_feedback = vm.notif_feedback;
-            user.notif_messages = vm.notif_messages;
-            user.notif_system = vm.notif_system;
-            user.notif_reminders = vm.notif_reminders;
+
+            // ✅ Fetch (or create) notification preference
+            var pref = await _db.notification_preferences.FirstOrDefaultAsync(p => p.user_id == vm.UserId);
+            if (pref == null)
+            {
+                pref = new notification_preference
+                {
+                    user_id = vm.UserId
+                };
+                _db.notification_preferences.Add(pref);
+            }
+
+            // ✅ Update preferences based on view model
+            pref.allow_email = vm.notif_email;
+            pref.allow_inApp = vm.notif_inapp;
+            pref.notif_job_updates = vm.notif_job_updates;
+            pref.notif_messages = vm.notif_messages;
+            pref.notif_reminders = vm.notif_reminders;
 
             await _db.SaveChangesAsync();
 
             ViewBag.Message = "Profile updated successfully!";
-            return RedirectToAction("Settings");
+            HttpContext.Session.SetString("FirstName", user.first_name ?? "");
+            HttpContext.Session.SetString("LastName", user.last_name ?? "");
+            HttpContext.Session.SetString("ProfilePicturePath", user.profile_picture ?? "");
+            return RedirectToAction("Settings", new { refresh = Guid.NewGuid().ToString() });
         }
 
         // ==============================
@@ -494,7 +564,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             _db.SaveChanges();
 
             // Redirect to the chat view (InboxController)
-            return RedirectToAction("Thread", "Inbox", new { id = convo.conversation_id, prefill = "Hi, I have accepted the offer. Thank you for the opportunity!"  });
+            return RedirectToAction("Thread", "Inbox", new { id = convo.conversation_id, prefill = "Hi, I have accepted the offer. Thank you for the opportunity!" });
         }
 
         // ✅ Dynamic Job Listings with Pagination
@@ -649,7 +719,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             return View("Feedback");
         }
-        // GET: /JobSeeker/Dashboard/ResumeBuilder
+
         // GET: /JobSeeker/Dashboard/ResumeBuilder
         [HttpGet]
         public IActionResult ResumeBuilder()

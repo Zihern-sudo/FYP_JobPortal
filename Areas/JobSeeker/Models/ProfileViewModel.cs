@@ -13,13 +13,12 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string? Skills { get; set; }
         public string? Education { get; set; }
         public string? WorkExperience { get; set; }
+        public IFormFile? ProfileImage { get; set; }
+        public string? ProfilePicturePath { get; set; }
         public bool notif_inapp { get; set; }
         public bool notif_email { get; set; }
-        public bool notif_sms { get; set; }
         public bool notif_job_updates { get; set; }
-        public bool notif_feedback { get; set; }
         public bool notif_messages { get; set; }
-        public bool notif_system { get; set; }
         public bool notif_reminders { get; set; }
     }
 }
