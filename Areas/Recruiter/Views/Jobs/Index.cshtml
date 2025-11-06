@@ -1,7 +1,17 @@
-@* File: Areas/Recruiter/Views/Jobs/Index.cshtml *@
 @using JobPortal.Areas.Shared.Models
 @using JobPortal.Areas.Recruiter.Models
 @model JobPortal.Areas.Recruiter.Models.JobsIndexVM
+
+@functions {
+  string ChipClass(string status) => status switch
+  {
+    "Approved" => "badge text-bg-success",
+    "Rejected" => "badge text-bg-danger",
+    "ChangesRequested" => "badge text-bg-warning",
+    "Pending" => "badge text-bg-secondary",
+    _ => "badge text-bg-light"
+  };
+}
 
 @{
   ViewData["Title"] = "Jobs";
@@ -16,6 +26,9 @@
     page = page,
     pageSize = Model.PageSize
   })!;
+
+  // Build pending IDs for auto-refresh polling
+  var pendingIds = new List<int>();
 }
 
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
@@ -78,13 +91,29 @@
             {
               var status = Enum.TryParse<JobStatus>(j.job_status ?? "", true, out var s) ? s : JobStatus.Open;
               string deadline = j.expiry_date.HasValue ? j.expiry_date.Value.ToString("yyyy-MM-dd") : "—";
+
+              string stText = "None";
+              if (Model.LatestApprovalStatuses != null &&
+              Model.LatestApprovalStatuses.TryGetValue(j.job_listing_id, out var approvalRawValue) &&
+              !string.IsNullOrWhiteSpace(approvalRawValue))
+              {
+                stText = approvalRawValue;
+              }
+              if (string.Equals(stText, "Pending", StringComparison.OrdinalIgnoreCase))
+              {
+                pendingIds.Add(j.job_listing_id);
+              }
+
+              bool isOpen = string.Equals(j.job_status, "Open", StringComparison.OrdinalIgnoreCase);
+
               <tr>
                 <td>@j.job_listing_id</td>
-                <td>@j.job_title</td>
+                <td>
+                  @j.job_title
+                  <span class="@ChipClass(stText) ms-2" title="Admin approval status">@stText</span>
+                </td>
                 <td>@deadline</td>
                 <td>@(j.company?.company_location ?? "")</td>
-
-                @* Status cell (close before adding new cells) *@
                 <td>
                   <span class="chip">@status</span>
                   @if (j.expiry_date.HasValue && j.expiry_date.Value.Date < DateTime.Today)
@@ -96,19 +125,21 @@
                     <span class="badge bg-success ms-2">Active</span>
                   }
                 </td>
-
-                @* NEW: Job Category & Work Mode *@
                 <td>@j.job_category</td>
                 <td>@j.work_mode</td>
-
                 <td>@(j.date_posted == default(DateTime) ? "-" : j.date_posted.ToString("yyyy-MM-dd HH:mm"))</td>
                 <td class="text-end">
                   <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
                     asp-route-id="@j.job_listing_id">Edit</a>
-                  <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview"
-                    asp-route-id="@j.job_listing_id">Preview</a>
-                  <a class="btn btn-sm btn-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Pipeline"
-                    asp-route-id="@j.job_listing_id">Pipeline</a>
+
+                  @* Hide unless Open *@
+                  @if (isOpen)
+                  {
+                    <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview"
+                      asp-route-id="@j.job_listing_id">Preview</a>
+                    <a class="btn btn-sm btn-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Pipeline"
+                      asp-route-id="@j.job_listing_id">Pipeline</a>
+                  }
                 </td>
               </tr>
             }
@@ -116,7 +147,6 @@
           else
           {
             <tr>
-              @* 9 visible columns including the empty actions column *@
               <td colspan="9" class="text-center text-muted">No jobs found.</td>
             </tr>
           }
@@ -124,6 +154,11 @@
       </table>
     </div>
   </div>
+</div>
+
+@* Safe bridge for auto-refresh polling *@
+<div id="js-index" data-approval-info-url="@Url.Action("ApprovalInfo", "Jobs", new { area = "Recruiter" })"
+  data-pending-ids="@string.Join(",", pendingIds)">
 </div>
 
 <nav aria-label="paging" class="mt-3">
@@ -160,15 +195,45 @@
 
 @section Scripts {
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
+    (function () {
+      const bridge = document.getElementById('js-index');
+      if (!bridge) return;
+      const baseUrl = bridge.dataset.approvalInfoUrl || '';
+      const raw = (bridge.dataset.pendingIds || '').trim();
+      if (!baseUrl || !raw) return;
+
+      const ids = raw.split(',').map(x => parseInt(x, 10)).filter(n => !isNaN(n));
+      if (!ids.length) return;
+
+      let tries = 0, maxTries = 60; // ~10 minutes at 10s
+      const tick = async () => {
+        tries++;
+        try {
+          for (const id of ids) {
+            const res = await fetch(`${baseUrl}/${id}`, { credentials: 'same-origin' });
+            if (!res.ok) continue;
+            const data = await res.json();
+            // When admin approves, their flow also sets job_status to Open; reload to reflect UI instantly.
+            if ((data && data.status) && String(data.status).trim() === 'Approved') {
+              window.location.reload();
+              return;
+            }
+          }
+        } catch { }
+        if (tries < maxTries) setTimeout(tick, 10000);
+      };
+      setTimeout(tick, 10000);
+    })();
+
+    // Existing toast from TempData (optional)
+    (function () {
+      var el = document.getElementById('toast-notify');
+      var body = document.getElementById('toast-message');
       var message = '@(TempData["Message"] as string)';
-      if (message) {
-        var toastEl = document.getElementById('toast-notify');
-        var toastBody = document.getElementById('toast-message');
-        toastBody.textContent = message;
-        var toast = new bootstrap.Toast(toastEl);
-        toast.show();
+      if (message && el && body) {
+        body.textContent = message;
+        new bootstrap.Toast(el).show();
       }
-    });
+    })();
   </script>
 }

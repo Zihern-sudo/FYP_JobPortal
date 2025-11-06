@@ -5,15 +5,23 @@
   string? desc = ViewBag.Desc as string;
   var company = ViewBag.Company as string;
 
-  decimal? smin = ViewBag.SalaryMin as decimal?;
-  decimal? smax = ViewBag.SalaryMax as decimal?;
-  string SalaryText() => (smin.HasValue || smax.HasValue)
-  ? $"{(smin.HasValue ? smin.Value.ToString("N0") : "—")} – {(smax.HasValue ? smax.Value.ToString("N0") : "—")}"
-  : "Not disclosed";
-
   // NEW: extra fields
   string? jobCategory = ViewBag.JobCategory as string;
   string? workMode = ViewBag.WorkMode as string;
+
+  // Pull value types from ViewBag safely
+  decimal? smin = ViewBag.SalaryMin != null ? (decimal)ViewBag.SalaryMin : (decimal?)null;
+  decimal? smax = ViewBag.SalaryMax != null ? (decimal)ViewBag.SalaryMax : (decimal?)null;
+  DateTime? expiry = ViewBag.ExpiryDate != null ? (DateTime)ViewBag.ExpiryDate : (DateTime?)null;
+
+  // Inline helper to render salary text
+  string? SalaryText()
+  {
+    if (smin.HasValue && smax.HasValue) return $"{smin.Value:N2} – {smax.Value:N2}";
+    if (smin.HasValue) return $"From {smin.Value:N2}";
+    if (smax.HasValue) return $"Up to {smax.Value:N2}";
+    return null;
+  }
 
   // small helpers: split bullets on newline or comma
   string[] Bullets(string? text)
@@ -33,6 +41,8 @@
     <div class="d-flex align-items-start justify-content-between">
       <div>
         <h4 class="mb-1">@job.Title</h4>
+
+        <!-- Meta row: keep everything inline and evenly spaced -->
         <div class="text-muted">
           <span class="me-3">
             <i class="bi bi-geo-alt"></i>
@@ -50,14 +60,32 @@
             <i class="bi bi-laptop"></i>
             @(string.IsNullOrWhiteSpace(workMode) ? "Work mode not specified" : workMode)
           </span>
-          <span class="me-3">
-            <i class="bi bi-cash-coin"></i> @SalaryText()
-          </span>
+
+          @* Salary (inline) *@
+          @if (!string.IsNullOrWhiteSpace(SalaryText()))
+          {
+            <span class="me-3">
+              <i class="bi bi-cash-coin"></i>
+              <strong>Salary:</strong> @SalaryText()
+            </span>
+          }
+
+          @* Expiry date (inline) *@
+          @if (expiry.HasValue)
+          {
+            <span class="me-3">
+              <i class="bi bi-calendar-event"></i>
+              <strong>Application closes:</strong> @expiry.Value.ToString("yyyy-MM-dd")
+            </span>
+          }
+
           <span>
-            <i class="bi bi-clock-history"></i> Posted @job.CreatedAt
+            <i class="bi bi-clock-history"></i>
+            <strong>Posted:</strong> @job.CreatedAt
           </span>
         </div>
       </div>
+
       <span
         class="badge rounded-pill bg-@(job.Status == JobPortal.Areas.Recruiter.Models.JobStatus.Open ? "success" : (job.Status == JobPortal.Areas.Recruiter.Models.JobStatus.Paused ? "warning text-dark" : "secondary"))"
         style="font-size:.9rem; padding:.5rem .75rem;">

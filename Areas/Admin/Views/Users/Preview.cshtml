@@ -78,16 +78,7 @@
                     <button class="btn btn-secondary">Reject Registration (Inactive)</button>
                 </form>
 
-                <form method="post" asp-action="ChangeRole" class="d-flex gap-2">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-                    <select name="newRole" class="form-select">
-                        <option value="Recruiter" selected>Recruiter</option>
-                        <option value="Admin">Admin</option>
-                        <option value="JobSeeker">Job Seeker</option>
-                    </select>
-                    <button class="btn btn-outline-primary">Change Role</button>
-                </form>
+
             </div>
         </div>
     </div>

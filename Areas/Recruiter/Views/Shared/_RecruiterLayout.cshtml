@@ -7,6 +7,7 @@
   var ctrl = (string?)ViewContext.RouteData.Values["controller"] ?? "";
   bool isHome = ctrl.Equals("Home", StringComparison.OrdinalIgnoreCase);
   bool isJobs = ctrl.Equals("Jobs", StringComparison.OrdinalIgnoreCase);
+   bool isCandidates = ctrl.Equals("Candidates", StringComparison.OrdinalIgnoreCase);
   bool isInbox = ctrl.Equals("Inbox", StringComparison.OrdinalIgnoreCase);
   bool isScreen = ctrl.Equals("Screening", StringComparison.OrdinalIgnoreCase)
   || ctrl.Equals("ScreeningQueue", StringComparison.OrdinalIgnoreCase);
@@ -66,6 +67,9 @@
 
         <a class="list-group-item list-group-item-action @(isJobs ? "active" : "")" asp-area="Recruiter"
           asp-controller="Jobs" asp-action="Index">Jobs</a>
+
+        <a class="list-group-item list-group-item-action @(isCandidates ? "active" : "")" asp-area="Recruiter"
+          asp-controller="Candidates" asp-action="Index">Candidates</a>
 
         <a class="list-group-item list-group-item-action @(isScreen ? "active" : "")" asp-area="Recruiter"
           asp-controller="Screening" asp-action="Queue">Screening Queue</a>

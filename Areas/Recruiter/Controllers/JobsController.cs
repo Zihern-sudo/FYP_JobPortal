@@ -60,6 +60,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return co.company_id;
         }
 
+        private async Task CreateApprovalForJobAsync(int jobId, int submittedByUserId)
+        {
+            // WHY: keep all approval inserts consistent.
+            var row = new job_post_approval
+            {
+                user_id = submittedByUserId,          // ensure this matches your schema
+                job_listing_id = jobId,
+                approval_status = "Pending",
+                comments = null,
+                date_approved = null
+            };
+            _db.job_post_approvals.Add(row);
+            await _db.SaveChangesAsync();
+        }
+
         // Payload passed from JobPostTemplatesController.Apply via TempData
         private sealed class TplDto
         {
@@ -92,34 +107,45 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             if (!string.IsNullOrWhiteSpace(status))
-            {
                 query = query.Where(j => j.job_status == status);
-            }
 
-            if (string.Equals(order, "asc", StringComparison.OrdinalIgnoreCase))
-                query = query.OrderBy(j => j.job_listing_id);
-            else if (string.Equals(order, "desc", StringComparison.OrdinalIgnoreCase))
-                query = query.OrderByDescending(j => j.job_listing_id);
-            else
-                query = query.OrderByDescending(j => j.date_posted);
+            query = order?.Equals("asc", StringComparison.OrdinalIgnoreCase) == true
+                ? query.OrderBy(j => j.job_listing_id)
+                : order?.Equals("desc", StringComparison.OrdinalIgnoreCase) == true
+                    ? query.OrderByDescending(j => j.job_listing_id)
+                    : query.OrderByDescending(j => j.date_posted);
 
             var totalCount = await query.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
 
-            var skip = (page - 1) * pageSize;
-            var jobs = await query.Skip(skip).Take(pageSize).ToListAsync();
+            var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+            // Latest approval per job (current page)
+            var jobIds = items.Select(j => j.job_listing_id).ToList();
+            var latestStatuses = await _db.job_post_approvals
+                .Where(a => jobIds.Contains(a.job_listing_id))
+                .GroupBy(a => a.job_listing_id)
+                .Select(g => g.OrderByDescending(x => x.approval_id)
+                              .Select(x => new { x.job_listing_id, x.approval_status })
+                              .FirstOrDefault()!)
+                .ToListAsync();
+
+            var statusMap = latestStatuses
+                .Where(x => x != null)
+                .ToDictionary(x => x.job_listing_id, x => x.approval_status);
 
             var vm = new JobsIndexVM
             {
-                Items = jobs,
+                Items = items,
                 Page = page,
                 PageSize = pageSize,
                 TotalCount = totalCount,
                 TotalPages = totalPages,
                 Query = q ?? string.Empty,
                 Status = status ?? string.Empty,
-                Order = order ?? string.Empty
+                Order = order ?? string.Empty,
+                LatestApprovalStatuses = statusMap
             };
 
             return View(vm);
@@ -177,13 +203,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            if (!ModelState.IsValid)
-            {
-                var firstError = ModelState.Values.SelectMany(v => v.Errors)
-                    .FirstOrDefault()?.ErrorMessage;
-                ViewBag.DebugError = firstError ?? "Validation failed.";
-                return View(vm);
-            }
+            if (!ModelState.IsValid) return View(vm);
 
             if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
             {
@@ -191,7 +211,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            // CHANGED: assign the recruiter's single company; create if missing.
             var companyId = await EnsureCompanyForRecruiterAsync(recruiterId);
 
             var entity = new job_listing
@@ -202,7 +221,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_requirements_nice = vm.job_requirements_nice,
                 salary_min = vm.salary_min,
                 salary_max = vm.salary_max,
-                job_status = vm.job_status.ToString(),
+                job_status = "Draft", // recruiter cannot open directly
                 job_category = vm.job_category,
                 work_mode = vm.work_mode,
                 user_id = recruiterId,
@@ -214,12 +233,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
             _db.job_listings.Add(entity);
             await _db.SaveChangesAsync();
 
-            TempData["Message"] = "New job added successfully!";
-            return RedirectToAction(nameof(Index));
+            TempData["Message"] = "Job saved as Draft. Use 'Submit for Approval' on the Edit page.";
+            return RedirectToAction(nameof(Edit), new { id = entity.job_listing_id });
         }
 
-        // --- EDIT (GET/POST) ---
-
+        // ===== Edit
         [HttpGet]
         public async Task<IActionResult> Edit(int id, string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool fromTemplate = false)
         {
@@ -278,6 +296,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     vm.job_status = parsed;
             }
 
+            // NEW: expose latest approval feedback to the view
+            var latestApproval = await _db.job_post_approvals
+                .Where(a => a.job_listing_id == id)
+                .OrderByDescending(a => a.approval_id)
+                .Select(a => new { a.approval_status, a.comments, a.date_approved })
+                .FirstOrDefaultAsync();
+
+            if (latestApproval != null)
+            {
+                ViewBag.ApprovalStatus = latestApproval.approval_status;
+                ViewBag.ApprovalComments = latestApproval.comments;
+                ViewBag.ApprovalUpdatedAt = latestApproval.date_approved;
+            }
+
             ViewBag.FromTemplate = fromTemplate;
             return View(vm);
         }
@@ -294,19 +326,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (job == null) return NotFound();
 
-            if (!string.IsNullOrWhiteSpace(setStatus) &&
-                Enum.TryParse<JobStatus>(setStatus, true, out var quick))
-            {
-                vm.job_status = quick;
-            }
-
             if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
             {
                 ModelState.AddModelError(nameof(vm.salary_min), "Minimum salary cannot exceed maximum salary.");
                 return View(vm);
             }
 
-            job.job_status = vm.job_status.ToString();
+            // Persist edits; keep Draft until admin approves
             job.job_title = vm.job_title;
             job.job_description = vm.job_description;
             job.job_requirements = vm.job_requirements;
@@ -316,13 +342,37 @@ namespace JobPortal.Areas.Recruiter.Controllers
             job.job_category = vm.job_category;
             job.work_mode = vm.work_mode;
             job.expiry_date = vm.expiry_date;
+            job.job_status = "Draft";
 
             await _db.SaveChangesAsync();
 
-            TempData["Message"] = $"Job #{job.job_listing_id} updated.";
-            return RedirectToAction(nameof(Index));
+            TempData["Message"] = $"Job #{job.job_listing_id} saved as Draft.";
+            return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
         }
 
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitForApproval(int id)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var job = await _db.job_listings
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .FirstOrDefaultAsync();
+
+            if (job == null) return NotFound();
+
+            job.job_status = "Draft"; // enforce Draft at submission
+            await _db.SaveChangesAsync();
+
+            await CreateApprovalForJobAsync(job.job_listing_id, recruiterId);
+
+            TempData["Message"] = $"Job #{job.job_listing_id} submitted for Admin approval.";
+            return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
+        }
+
+        // ===== Preview (guarded)
         [HttpGet]
         public async Task<IActionResult> Preview(int id)
         {
@@ -330,10 +380,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var job = await _db.job_listings
                 .Include(j => j.company)
-                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
 
             if (job == null) return NotFound();
+
+            if (!string.Equals(job.job_status, "Open", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["Message"] = "Preview is available only for Open jobs. Submit for approval and wait for Admin approval.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
 
             var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var s) ? s : JobStatus.Open;
 
@@ -358,10 +413,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.JobCategory = job.job_category;
             ViewBag.WorkMode = job.work_mode;
             ViewBag.Company = job.company?.company_name;
+            ViewBag.ExpiryDate = job.expiry_date;
 
             return View();
         }
 
+        // ===== Pipeline (guarded) — removed duplicate attribute
         [HttpGet]
         public async Task<IActionResult> Pipeline(int id)
         {
@@ -369,9 +426,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var job = await _db.job_listings
                 .Include(j => j.company)
-                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
+
             if (job == null) return NotFound();
+
+            if (!string.Equals(job.job_status, "Open", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["Message"] = "Pipeline is available only for Open jobs. Submit for approval and wait for Admin approval.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
 
             var statusEnum = Enum.TryParse<JobStatus>(job.job_status ?? "", true, out var s) ? s : JobStatus.Open;
 
@@ -478,5 +541,127 @@ namespace JobPortal.Areas.Recruiter.Controllers
             TempData["Message"] = "Saved job as template.";
             return RedirectToAction(nameof(Edit), new { id });
         }
+
+        // File: Areas/Recruiter/Controllers/JobsController.cs
+        // --- ADD BELOW inside the JobsController class ---
+
+        // Whitelist of valid forward transitions
+        private static readonly Dictionary<string, string> _nextStage = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AI-Screened"] = "Shortlisted",
+            ["Shortlisted"] = "Interview",
+            ["Interview"] = "Offer"
+        };
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MoveCandidate(int jobId, int applicationId, string toStage)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            if (string.IsNullOrWhiteSpace(toStage)) return BadRequest(new { ok = false, error = "Missing target stage." });
+
+            // Disallow moving to Offer here – must go through CreateOffer
+            if (toStage.Equals("Offer", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { ok = false, error = "Use CreateOffer endpoint for Offer stage." });
+
+            // Load job (must belong to recruiter)
+            var job = await _db.job_listings
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == jobId)
+                .FirstOrDefaultAsync();
+            if (job is null) return NotFound(new { ok = false, error = "Job not found." });
+
+            // Load application under this job
+            var app = await _db.job_applications
+                .Where(a => a.job_listing_id == jobId && a.application_id == applicationId)
+                .FirstOrDefaultAsync();
+            if (app is null) return NotFound(new { ok = false, error = "Application not found." });
+
+            var current = (app.application_status ?? "").Trim();
+            // Enforce forward-only, single-step transitions
+            if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals(toStage, StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
+
+            app.application_status = toStage;                // persists to job_application.application_status
+            app.date_updated = DateTime.Now;
+            await _db.SaveChangesAsync();
+
+            return Json(new { ok = true, applicationId, newStage = toStage });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            if (vm is null || vm.ApplicationId <= 0) return BadRequest(new { ok = false, error = "Invalid payload." });
+
+            // Load application + job, ensure recruiter owns the job
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .Where(a => a.application_id == vm.ApplicationId)
+                .FirstOrDefaultAsync();
+
+            if (app is null) return NotFound(new { ok = false, error = "Application not found." });
+            if (app.job_listing.user_id != recruiterId) return Forbid();
+
+            // Ensure we're moving from Interview -> Offer
+            var current = (app.application_status ?? "").Trim();
+            if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals("Offer", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { ok = false, error = $"Invalid transition: {current} → Offer." });
+
+            // Create a "Sent" job_offer row and link it
+            var offer = new Areas.Shared.Models.job_offer
+            {
+                application_id = app.application_id,
+                offer_status = "Sent",
+                salary_offer = vm.SalaryOffer,
+                start_date = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value.Date) : null,
+                contract_type = vm.ContractType,
+                notes = vm.Notes,
+                candidate_token = Guid.NewGuid(),
+                date_sent = DateTime.Now,
+                date_updated = DateTime.Now
+            };
+            _db.job_offers.Add(offer);
+
+            // Move application to Offer
+            app.application_status = "Offer";
+            app.date_updated = DateTime.Now;
+
+            await _db.SaveChangesAsync();
+
+            return Json(new
+            {
+                ok = true,
+                applicationId = app.application_id,
+                newStage = "Offer",
+                offerId = offer.offer_id
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ApprovalInfo(int id)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var owns = await _db.job_listings
+                .AnyAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
+            if (!owns) return NotFound();
+
+            var a = await _db.job_post_approvals
+                .Where(x => x.job_listing_id == id)
+                .OrderByDescending(x => x.approval_id)
+                .Select(x => new { status = x.approval_status, x.comments, x.date_approved })
+                .FirstOrDefaultAsync();
+
+            return Json(new
+            {
+                ok = true,
+                status = a?.status ?? "None",
+                comments = a?.comments,
+                updatedAt = a?.date_approved
+            });
+        }
+
     }
 }

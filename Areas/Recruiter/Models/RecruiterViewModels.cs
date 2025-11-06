@@ -322,7 +322,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public bool IsArchivedList { get; set; }
         public bool IsJobPost { get; set; }
         public int? ThreadId { get; set; }
-        
+
     }
 
     public class BulkIndexVM
@@ -346,5 +346,6 @@ namespace JobPortal.Areas.Recruiter.Models
         public string Query { get; set; } = "";
         public string Status { get; set; } = "";
         public string Order { get; set; } = "";
+        public Dictionary<int, string> LatestApprovalStatuses { get; set; } = new();
     }
 }

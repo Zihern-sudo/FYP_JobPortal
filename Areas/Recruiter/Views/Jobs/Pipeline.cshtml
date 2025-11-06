@@ -1,25 +1,16 @@
+@* File: Areas/Recruiter/Views/Jobs/Pipeline.cshtml *@
 @using JobPortal.Areas.Recruiter.Models
-
 @{
-  // Safe casts with sensible fallbacks so the view never crashes
   var job = ViewBag.Job as JobItemVM ?? new JobItemVM(0, "", "", JobStatus.Draft, "");
   var cands = ViewBag.Cands as List<CandidateItemVM> ?? new List<CandidateItemVM>();
-
-  // Board columns
   string[] cols = new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" };
-
-  // Group candidates by column; handle null Stage and compare case-insensitively
-  var by = cols.ToDictionary(
-  c => c,
-  c => cands.Where(x => string.Equals(x.Stage ?? "", c, StringComparison.OrdinalIgnoreCase)).ToList()
-  );
+  var by = cols.ToDictionary(c => c, c => cands.Where(x => string.Equals(x.Stage ?? "", c,
+  StringComparison.OrdinalIgnoreCase)).ToList());
 }
 
 @if (ViewBag.DebugAppsCount != null)
 {
-  <div class="text-muted small">
-    apps: @ViewBag.DebugAppsCount, cards: @ViewBag.DebugCandsCount
-  </div>
+  <div class="text-muted small">apps: @ViewBag.DebugAppsCount, cards: @ViewBag.DebugCandsCount</div>
 }
 
 <style>
@@ -37,6 +28,9 @@
   <span class="chip">@job.Title</span> • <span class="chip">@job.Location</span>
 </div>
 
+@* Needed by JS when posting *@
+<input type="hidden" id="jobId" value="@job.Id" />
+
 <div class="kanban" id="board">
   @foreach (var col in cols)
   {
@@ -44,7 +38,7 @@
       <div class="fw-semibold mb-2">@col (@by[col].Count)</div>
       @foreach (var x in by[col])
       {
-        <div class="candidate-card" draggable="true" data-id="@x.Id">
+        <div class="candidate-card" draggable="true" data-id="@x.Id" data-stage="@col">
           <div class="d-flex justify-content-between">
             <div>@x.Name</div>
             <div class="score">@x.Score</div>
@@ -55,7 +49,6 @@
             {
               <span class="badge text-bg-warning">Low confidence</span>
             }
-            @* UPDATED: show Former employee when Override flag is true *@
             @if (x.Override)
             {
               <span class="badge text-bg-info">Former employee</span>
@@ -73,21 +66,201 @@
   }
 </div>
 
+@* --- OFFER MODAL (unchanged UI) --- *@
+<style>
+  /* Position close button at top-right of the header */
+  #offer-modal .modal-header {
+    position: relative;
+  }
+
+  #offer-modal .modal-header .btn-close,
+  #offer-modal .modal-header .close {
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    margin: 0;
+  }
+</style>
+
+<div id="offer-modal" class="modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="offer-form" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ApplicationId" id="offer-ApplicationId" />
+
+        <div class="modal-header">
+          <h5 class="modal-title">Send Offer</h5>
+          <!-- Move the close button INTO the header and pin it top-right -->
+          <button type="button" class="btn-close" aria-label="Close" onclick="OfferUI.close()"></button>
+          <!-- If you prefer the × icon instead, use:
+          <button type="button" class="close" aria-label="Close" onclick="OfferUI.close()">&times;</button>
+          -->
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Salary Offer</label>
+            <input name="SalaryOffer" type="number" step="0.01" class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label>Start Date</label>
+            <input name="StartDate" type="date" class="form-control" />
+          </div>
+
+          <div class="form-group">
+            <label>Contract Type</label>
+            <select name="ContractType" class="form-control" required>
+              <option value="" selected disabled>Select contract type</option>
+              <option>Full Time</option>
+              <option>Part Time</option>
+              <option>Contract</option>
+              <option>Freelance</option>
+              <option>Internship</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Notes</label>
+            <textarea name="Notes" class="form-control"></textarea>
+          </div>
+
+          <small class="text-muted">
+            Submitting will send the offer and move the candidate to <strong>Offer</strong>.
+          </small>
+        </div>
+
+        <div class="modal-footer d-flex justify-content-end">
+          <button type="button" class="btn btn-light me-2" onclick="OfferUI.close()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Send Offer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
 @section Scripts {
   <script>
-    let dragged = null;
-    document.querySelectorAll('.candidate-card').forEach(card => {
-      card.addEventListener('dragstart', e => { dragged = card; card.classList.add('dragging'); });
-      card.addEventListener('dragend', e => {
-        card.classList.remove('dragging');
-        document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('drop-hover'));
-        if (typeof showToast === 'function') { showToast("Moved candidate", "primary"); }
+    (function () {
+      // IMPORTANT: only ONE Scripts section; removed the earlier basic DnD block to avoid conflicts.
+
+      function antiForgery() {
+        const input = document.querySelector('input[name="__RequestVerificationToken"]');
+        return input ? input.value : '';
+      }
+
+      const stages = ["AI-Screened", "Shortlisted", "Interview", "Offer"];
+      const nextStage = { "AI-Screened": "Shortlisted", "Shortlisted": "Interview", "Interview": "Offer" };
+
+      // Ensure drag works and cards carry a stage
+      document.querySelectorAll('.candidate-card').forEach(card => {
+        card.addEventListener('dragstart', e => {
+          // If missing, infer from its current column
+          if (!card.dataset.stage) {
+            const col = card.closest('.kanban-col');
+            if (col) card.dataset.stage = (col.dataset.stage || '').trim();
+          }
+          e.dataTransfer.setData('text/plain', card.dataset.id);
+          e.dataTransfer.effectAllowed = 'move';
+        });
       });
-    });
-    document.querySelectorAll('.kanban-col').forEach(col => {
-      col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
-      col.addEventListener('dragleave', e => { col.classList.remove('drop-hover'); });
-      col.addEventListener('drop', e => { e.preventDefault(); if (dragged) { col.appendChild(dragged); col.classList.remove('drop-hover'); } });
-    });
+
+      // Attach drop listeners to .kanban-col (not .kanban-column)
+      document.querySelectorAll('.kanban-col').forEach(col => {
+        col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
+        col.addEventListener('dragleave', () => col.classList.remove('drop-hover'));
+        col.addEventListener('drop', onDrop);
+      });
+
+      async function onDrop(e) {
+        e.preventDefault();
+        const column = e.currentTarget;
+        column.classList.remove('drop-hover');
+
+        const toStage = (column.dataset.stage || '').trim();
+        if (!stages.includes(toStage)) { return; } // ignore New/Hired-Rejected for now
+
+        const appId = e.dataTransfer.getData('text/plain');
+        const card = document.querySelector(`.candidate-card[data-id="${appId}"]`);
+        if (!card) return;
+
+        const fromStage = (card.dataset.stage || '').trim();
+
+        // Enforce single-step forward
+        if (!nextStage[fromStage] || nextStage[fromStage] !== toStage) {
+          toast(`Invalid move: ${fromStage || 'Unknown'} → ${toStage}`, true);
+          return;
+        }
+
+        const jobId = document.getElementById('jobId')?.value || '0';
+
+        if (toStage === "Offer") {
+          OfferUI.open(appId, async function (formData) {
+            const res = await fetch(`@Url.Action("CreateOffer", "Jobs", new { area = "Recruiter" })`, {
+              method: 'POST',
+              headers: { 'RequestVerificationToken': antiForgery() },
+              body: formData
+            });
+            const json = await res.json();
+            if (!json.ok) { toast(json.error || 'Failed to send offer', true); return; }
+            moveCard(card, column, toStage);
+            toast('Offer sent and candidate moved to Offer.');
+          });
+          return;
+        }
+
+        // AI-Screened -> Shortlisted, Shortlisted -> Interview
+        const payload = new URLSearchParams();
+        payload.append('jobId', jobId);
+        payload.append('applicationId', appId);
+        payload.append('toStage', toStage);
+
+        const res = await fetch(`@Url.Action("MoveCandidate", "Jobs", new { area = "Recruiter" })`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'RequestVerificationToken': antiForgery()
+          },
+          body: payload.toString()
+        });
+        const json = await res.json();
+        if (!json.ok) { toast(json.error || 'Failed to move candidate', true); return; }
+
+        moveCard(card, column, toStage);
+        toast(`Moved to ${toStage}.`);
+      }
+
+      function moveCard(card, column, toStage) {
+        column.appendChild(card);        // append directly; no .kanban-list exists
+        card.dataset.stage = toStage;    // keep card state in sync
+      }
+
+      // Simple Offer modal helper
+      window.OfferUI = {
+        open(appId, onSubmit) {
+          const modal = document.getElementById('offer-modal');
+          const form = document.getElementById('offer-form');
+          document.getElementById('offer-ApplicationId').value = appId;
+
+          const handler = async function (ev) {
+            ev.preventDefault();
+            const fd = new FormData(form);
+            await onSubmit(fd);          // server creates offer & moves status
+            form.removeEventListener('submit', handler);
+            OfferUI.close();
+          };
+          form.addEventListener('submit', handler);
+          modal.style.display = 'block';
+        },
+        close() { document.getElementById('offer-modal').style.display = 'none'; }
+      };
+
+      function toast(msg, isError) {
+        if (window.toastr) { isError ? toastr.error(msg) : toastr.success(msg); return; }
+        console[isError ? 'error' : 'log'](msg);
+      }
+    })();
   </script>
 }

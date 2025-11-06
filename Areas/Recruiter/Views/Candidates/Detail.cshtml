@@ -1,4 +1,6 @@
 @using JobPortal.Areas.Recruiter.Models
+@using Microsoft.AspNetCore.Mvc.Rendering
+
 @{
   ViewData["Title"] = ViewData["Title"] ?? "Candidate";
   var p = (CandidateVM)ViewBag.Profile;
@@ -23,6 +25,10 @@
   bool showHire = !(isHired || isRejected);
   bool showReject = !(isHired || isRejected);
 }
+
+<a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+  &leftarrow; Back to Candidates
+</a>
 
 <div class="d-flex align-items-start justify-content-between mb-3">
   <div>
@@ -143,6 +149,7 @@
           <h5 class="modal-title" id="offerModalLabel">Send Offer</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
+
         <div class="modal-body">
           <input type="hidden" asp-for="@offerVm.ApplicationId" name="ApplicationId" value="@offerVm.ApplicationId" />
 
@@ -156,10 +163,26 @@
             <input type="date" class="form-control" name="StartDate" />
           </div>
 
+          <!-- Contract Type: switched to dropdown -->
           <div class="mb-3">
             <label class="form-label">Contract Type</label>
-            <input type="text" class="form-control" name="ContractType" value="@offerVm.ContractType"
-              placeholder="Full-time, Contract, Internship..." />
+            @{
+              var selectedCt = offerVm?.ContractType ?? "";
+              var contractItems = new List<SelectListItem>
+                        {
+                        new("Full Time", "Full Time", selectedCt == "Full Time"),
+                        new("Part Time", "Part Time", selectedCt == "Part Time"),
+                        new("Contract", "Contract", selectedCt == "Contract"),
+                        new("Freelance", "Freelance", selectedCt == "Freelance"),
+                        new("Internship", "Internship", selectedCt == "Internship"),
+                        };
+            }
+            @Html.DropDownList(
+            "ContractType", // must match your VM property name
+                        contractItems,
+                        "Select contract type",
+                        new { @class = "form-select", required = "required" }
+                        )
           </div>
 
           <div class="mb-3">
@@ -167,8 +190,8 @@
             <textarea class="form-control" rows="3" name="Notes"
               placeholder="Add any special terms or instructions..."></textarea>
           </div>
-
         </div>
+
         <div class="modal-footer">
           <button type="button" class="btn btn-link" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Send Offer</button>

@@ -20,7 +20,18 @@
   </div>
 </div>
 
-<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit" method="post">
+@* Toast *@
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+  <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <strong class="me-auto">Notification</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="toast-message"></div>
+  </div>
+</div>
+
+<form id="editForm" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit" method="post">
   @Html.AntiForgeryToken()
   <input type="hidden" asp-for="job_listing_id" />
 
@@ -42,7 +53,6 @@
     <span asp-validation-for="job_description" class="text-danger"></span>
   </div>
 
-  @* --- ORDER STARTS HERE: Must-have → Nice-to-have → Deadline --- *@
   <div class="mb-3">
     <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
     <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
@@ -57,7 +67,6 @@
 
   <div class="mb-3">
     <div class="row g-3">
-      <!-- Salary Min / Max -->
       <div class="col-md-6">
         <label asp-for="salary_min" class="form-label"></label>
         <input asp-for="salary_min" class="form-control" />
@@ -69,7 +78,6 @@
         <span asp-validation-for="salary_max" class="text-danger"></span>
       </div>
 
-      <!-- Job Category -->
       <div class="col-md-6">
         <label asp-for="job_category" class="form-label"></label>
         <select asp-for="job_category" class="form-select"
@@ -78,7 +86,6 @@
         <span asp-validation-for="job_category" class="text-danger"></span>
       </div>
 
-      <!-- Work Mode -->
       <div class="col-md-6">
         <label asp-for="work_mode" class="form-label"></label>
         <select asp-for="work_mode" class="form-select"
@@ -89,18 +96,47 @@
     </div>
   </div>
 
-
   <div class="mb-3">
     <label asp-for="expiry_date" class="form-label">Application Deadline</label>
     <input asp-for="expiry_date" class="form-control" type="date" />
     <span asp-validation-for="expiry_date" class="text-danger"></span>
   </div>
-  @* --- ORDER ENDS --- *@
 
   <div class="text-end">
     <button class="btn btn-success" type="submit">Save</button>
   </div>
 </form>
+
+<div class="mt-4 flex gap-2">
+  <button type="submit" form="editForm" class="btn btn-primary">Save</button>
+  <form method="post" asp-area="Recruiter" asp-controller="Jobs" asp-action="SubmitForApproval" asp-antiforgery="true">
+    <input type="hidden" name="id" value="@Model.job_listing_id" />
+    @{
+      var latestStatus = (string)(ViewBag.ApprovalStatus ?? "");
+      var disableSubmit = string.Equals(latestStatus, "Pending", StringComparison.OrdinalIgnoreCase);
+    }
+    <button id="btnSubmitApproval" type="submit" class="btn btn-outline-primary" @(disableSubmit ? "disabled" : null)>
+      Submit for Approval
+    </button>
+  </form>
+</div>
+
+@if (ViewBag.ApprovalStatus != null)
+{
+  <div class="alert mt-3" id="approvalFeedback">
+    <div><strong>Approval:</strong> <span id="approvalStatusVal">@ViewBag.ApprovalStatus</span></div>
+    @if (!string.IsNullOrWhiteSpace((string)ViewBag.ApprovalComments))
+    {
+      <div><strong>Admin feedback:</strong> <span id="approvalCommentsVal">@ViewBag.ApprovalComments</span></div>
+    }
+    @if (ViewBag.ApprovalUpdatedAt != null)
+    {
+      <div class="small text-muted" id="approvalUpdatedVal">
+        Updated: @(((DateTime)ViewBag.ApprovalUpdatedAt).ToString("yyyy-MM-dd HH:mm"))
+      </div>
+    }
+  </div>
+}
 
 <!-- Apply Template Modal -->
 <div class="modal fade" id="applyTplModal" tabindex="-1" aria-hidden="true">
@@ -142,8 +178,75 @@
   </div>
 </div>
 
+@* SAFE bridge for JS *@
+<div id="js-data" data-job-id="@Model.job_listing_id"
+  data-approval-info-url="@Url.Action("ApprovalInfo", "Jobs", new { area = "Recruiter" })"
+  data-message="@TempData["Message"]">
+</div>
+
 @section Scripts {
   <script>
+    function showToast(msg) {
+      const el = document.getElementById('toast-notify');
+      const body = document.getElementById('toast-message');
+      if (!el || !body) return;
+      body.textContent = msg;
+      new bootstrap.Toast(el).show();
+    }
+
+    (function () {
+      const dataEl = document.getElementById('js-data');
+      if (!dataEl) return;
+
+      const message = dataEl.dataset.message || '';
+      if (message) showToast(message);
+
+      const jobId = dataEl.dataset.jobId;
+      const baseUrl = dataEl.dataset.approvalInfoUrl;
+      const statusEl = document.getElementById('approvalStatusVal');
+      const submitBtn = document.getElementById('btnSubmitApproval');
+      if (!statusEl || !jobId || !baseUrl) return;
+
+      // Disable while pending; enable on changes requested/rejected.
+      let current = (statusEl.textContent || '').trim();
+      if (submitBtn) submitBtn.disabled = (current === 'Pending' || current === 'Approved');
+      if (current !== 'Pending') return;
+
+      let tries = 0, maxTries = 45; // ~6 minutes at 8s
+      const interval = setInterval(async () => {
+        tries++;
+        try {
+          const res = await fetch(`${baseUrl}/${jobId}`, { credentials: 'same-origin' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const next = (data && data.status ? String(data.status) : 'None').trim();
+
+          if (next && next !== current) {
+            statusEl.textContent = next;
+            const cmtEl = document.getElementById('approvalCommentsVal');
+            if (cmtEl && typeof data.comments === 'string') cmtEl.textContent = data.comments ?? '';
+            const updEl = document.getElementById('approvalUpdatedVal');
+            if (updEl && data.updatedAt) {
+              const dt = new Date(data.updatedAt);
+              const pad = n => String(n).padStart(2, '0');
+              updEl.textContent = `Updated: ${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+            }
+            if (submitBtn) submitBtn.disabled = (next === 'Pending' || next === 'Approved'); // why: no re-submit while pending/approved
+            const msg = (next === 'Approved')
+              ? 'Your job was approved. Status is now Open.'
+              : (next === 'ChangesRequested')
+                ? 'Admin requested changes. See feedback.'
+                : (next === 'Rejected')
+                  ? 'Job was rejected. See feedback.'
+                  : `Approval status changed: ${next}`;
+            showToast(msg);
+            clearInterval(interval);
+          }
+        } catch { }
+        if (tries >= maxTries) clearInterval(interval);
+      }, 8000);
+    })();
+
     async function loadTplModal(jobId, q) {
       try {
         const box = document.getElementById('applyTplModalBody');
@@ -154,7 +257,7 @@
         if (q) url.searchParams.set('q', q);
         const res = await fetch(url, { credentials: 'same-origin' });
         box.innerHTML = await res.text();
-      } catch (e) {
+      } catch {
         document.getElementById('applyTplModalBody').innerHTML =
           '<div class="text-danger">Failed to load templates. Please refresh.</div>';
       }
