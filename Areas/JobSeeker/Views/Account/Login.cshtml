@@ -1,7 +1,7 @@
 ﻿@{
     ViewData["Title"] = "Login / Register";
 }
-
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 <div class="auth-container">
     <h1>Welcome to JobPortal</h1>
 
@@ -18,7 +18,11 @@
             <input type="email" id="email" name="email" placeholder="Enter your email" value="@ViewBag.Email" required>
 
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            <div class="password-wrapper">
+                <input type="password" id="password" name="password" placeholder="Enter password" required
+                    maxlength="20" />
+                <span class="toggle-password"><i class="bi bi-eye"></i></span>
+            </div>
 
             <div class="forgot-password">
                 <a asp-area="JobSeeker" asp-controller="Account" asp-action="ForgotPassword">Forgot Password?</a>
@@ -43,19 +47,35 @@
         <!-- ✅ Register Form -->
         <form id="registerForm" asp-area="JobSeeker" asp-controller="Account" asp-action="Register" method="post"
             class="auth-form" onsubmit="return validateRegisterForm()">
-            <label for="name">Full Name</label>
-            <input type="text" id="name" name="name" maxlength="60" placeholder="Enter your full name" required>
+            <!-- Full Name split into First Name & Last Name -->
+            <div class="name-row">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" id="firstName" name="firstName" maxlength="30" placeholder="First Name"
+                        required />
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" id="lastName" name="lastName" maxlength="30" placeholder="Last Name" required />
+                </div>
+            </div>
 
             <label for="regEmail">Email</label>
             <input type="email" id="regEmail" name="email" maxlength="190" placeholder="Enter your email" required>
 
             <label for="regPassword">Password</label>
-            <input type="password" id="regPassword" name="password" maxlength="20" minlength="6"
-                placeholder="Enter your password" required>
+            <div class="password-wrapper">
+                <input type="password" id="regPassword" name="password" placeholder="Enter your password" required
+                    maxlength="20" />
+                <span class="toggle-password"><i class="bi bi-eye"></i></span>
+            </div>
 
             <label for="confirmPassword">Confirm Password</label>
-            <input type="password" id="confirmPassword" name="confirmPassword" maxlength="20" minlength="6"
-                placeholder="Re-enter your password" required>
+            <div class="password-wrapper">
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Re-enter your password"
+                    required maxlength="20" />
+                <span class="toggle-password"><i class="bi bi-eye"></i></span>
+            </div>
 
             <button type="submit" class="login-btn">Register</button>
 
@@ -182,10 +202,10 @@
                         form.method = "POST";
                         form.action = "/JobSeeker/Account/Login";
                         form.innerHTML = `
-                                    <input type="hidden" name="email" value="${pendingEmail}">
-                                    <input type="hidden" name="password" value="${pendingPassword}">
-                                    <input type="hidden" name="twoFACode" value="${code}">
-                                `;
+                                                                                        <input type="hidden" name="email" value="${pendingEmail}">
+                                                                                        <input type="hidden" name="password" value="${pendingPassword}">
+                                                                                        <input type="hidden" name="twoFACode" value="${code}">
+                                                                                    `;
                         document.body.appendChild(form);
                         form.submit();
                     }
@@ -217,6 +237,24 @@
             }
             return true;
         }
+        // Show/hide password toggle
+        document.querySelectorAll(".toggle-password").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const input = btn.previousElementSibling;
+                const icon = btn.querySelector("i");
+                if (input.type === "password") {
+                    input.type = "text";
+                    icon.classList.remove("bi-eye");
+                    icon.classList.add("bi-eye-slash");
+                } else {
+                    input.type = "password";
+                    icon.classList.remove("bi-eye-slash");
+                    icon.classList.add("bi-eye");
+                }
+            });
+        });
+
+
 
     </script>
 }

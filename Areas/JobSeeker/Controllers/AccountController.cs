@@ -107,20 +107,20 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ✅ REGISTER (NEW)
         // ===============================
         [HttpPost]
-        public async Task<IActionResult> Register(string name, string email, string password, string confirmPassword)
+        public async Task<IActionResult> Register(string firstName, string lastName, string email, string password, string confirmPassword)
         {
             // Basic required field check
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) ||
+            if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(email) ||
                 string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword))
             {
                 TempData["Message"] = "All fields are required.";
                 return RedirectToAction("Login", new { tab = "register" });
             }
 
-            // ✅ Full name max 60 chars
-            if (name.Length > 60)
+            // ✅ First & Last name max length validation
+            if (firstName.Length > 40 || lastName.Length > 40)
             {
-                TempData["Message"] = "Full Name cannot exceed 60 characters.";
+                TempData["Message"] = "First and Last Name cannot exceed 40 characters.";
                 return RedirectToAction("Login", new { tab = "register" });
             }
 
@@ -164,8 +164,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             var user = new user
             {
-                first_name = name,
-                last_name = "",
+                first_name = firstName,
+                last_name = lastName,
                 email = email,
                 password_hash = hashedPassword, // store hash
                 user_role = "JobSeeker",

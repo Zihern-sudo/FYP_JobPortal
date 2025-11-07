@@ -50,19 +50,18 @@
 
 <form method="get" asp-controller="Dashboard" asp-action="Applications"
       class="d-flex align-items-center gap-3 mb-3">
-
     <!-- Filter by Status -->
     <div>
         <label for="status" class="me-1 fw-semibold">Status:</label>
         <select id="status" name="status" class="form-select w-auto">
-            <option value="" selected="@(ViewBag.SelectedStatus == "" ? "selected" : "")">All</option>
-            <option value="Submitted" selected="@(ViewBag.SelectedStatus == "Submitted" ? "selected" : "")">Submitted</option>
-            <option value="AI-Screened" selected="@(ViewBag.SelectedStatus == "AI-Screened" ? "selected" : "")">AI-Screened</option>
-            <option value="Shortlisted" selected="@(ViewBag.SelectedStatus == "Shortlisted" ? "selected" : "")">Shortlisted</option>
-            <option value="Interview" selected="@(ViewBag.SelectedStatus == "Interview" ? "selected" : "")">Interview</option>
-            <option value="Offer" selected="@(ViewBag.SelectedStatus == "Offer" ? "selected" : "")">Offer</option>
-            <option value="Hired" selected="@(ViewBag.SelectedStatus == "Hired" ? "selected" : "")">Hired</option>
-            <option value="Rejected" selected="@(ViewBag.SelectedStatus == "Rejected" ? "selected" : "")">Rejected</option>
+            <option value="" selected="@(string.IsNullOrEmpty(ViewBag.SelectedStatus) ? "selected" : null)"">All</option>
+            @{
+                string[] statuses = { "Submitted", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired", "Rejected" };
+                foreach (var s in statuses)
+                {
+                    <option value="@s" selected="@(ViewBag.SelectedStatus == s ? "selected" : null)">@s</option>
+                }
+            }
         </select>
     </div>
 
@@ -70,15 +69,26 @@
     <div>
         <label for="sortBy" class="me-1 fw-semibold">Sort:</label>
         <select id="sortBy" name="sortBy" class="form-select w-auto">
-            <<option value="" selected="@(ViewBag.SortBy == "" ? "selected" : "")">Newest First</option>
-            <option value="date_asc" selected="@(ViewBag.SortBy == "date_asc" ? "selected" : "")">Oldest First</option>
+            @{
+                var sortOptions = new Dictionary<string, string>
+                {
+                    { "", "Newest First" },
+                    { "date_asc", "Oldest First" }
+                };
+
+                foreach (var option in sortOptions)
+                {
+                    <option value="@option.Key" selected="@(ViewBag.SortBy == option.Key ? "selected" : null)">
+                        @option.Value
+                    </option>
+                }
+            }
         </select>
     </div>
 
+
     <button type="submit" class="btn btn-primary btn-sm">Apply</button>
 </form>
-
-
 
     <!-- Applications Table -->
     <div class="applications-table-container mb-4">
@@ -125,7 +135,7 @@
                             <td>
                                 @if (job?.salary_min != null && job?.salary_max != null)
                                 {
-                                    @:RM @job.salary_min - RM @job.salary_max
+                                    @($"RM {job.salary_min:N0} - RM {job.salary_max:N0}")
                                 }
                                 else
                                 {

@@ -1,8 +1,8 @@
 /* === General Layout === */
 body, html {
     font-family: "Inter", sans-serif;
-    background-color: #f9f7fc;
-    color: #110c1c;
+    background-color: #f8f9fa; /* light gray background */
+    color: #212529; /* dark text */
     margin: 0;
     padding: 0;
     height: 100%;
@@ -15,7 +15,7 @@ body, html {
     padding: 0;
 }
 
-/* Remove Bootstrap container spacing if dashboard is inside _LayoutDashboard */
+/* Remove Bootstrap container spacing */
 .container, .container-fluid {
     padding-left: 0 !important;
     padding-right: 0 !important;
@@ -26,8 +26,8 @@ body, html {
 /* === Sidebar === */
 .sidebar {
     width: 220px;
-    background-color: #fff;
-    border-right: 1px solid #e5e8ea;
+    background-color: #fff; /* white sidebar */
+    border-right: 1px solid #eee; /* light gray border */
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -36,7 +36,6 @@ body, html {
     overflow: hidden;
 }
 
-/* Collapsed Sidebar (default state) */
 .sidebar.collapsed {
     width: 60px;
 }
@@ -62,7 +61,7 @@ body, html {
 
 .username {
     font-weight: 600;
-    color: #2e2a47;
+    color: #212529; /* dark text */
 }
 
 /* === Navigation Links === */
@@ -71,15 +70,15 @@ body, html {
     padding: 10px 12px;
     margin-bottom: 10px;
     text-decoration: none;
-    color: #110c1c;
+    color: #212529; /* dark text */
     border-radius: 8px;
     transition: 0.3s;
 }
 
 .nav-menu a.active,
 .nav-menu a:hover {
-    background-color: #eae8f2;
-    color: #4f16ce;
+    background-color: #e7f1ff; /* very light blue hover */
+    color: #0d6efd; /* primary blue */
 }
 
 /* === Sidebar Toggle Button === */
@@ -87,7 +86,7 @@ body, html {
     position: fixed;
     top: 15px;
     left: 15px;
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* primary blue */
     color: white;
     border: none;
     border-radius: 6px;
@@ -99,10 +98,10 @@ body, html {
 }
 
 .sidebar-toggle:hover {
-    background-color: #3c0fa5;
+    background-color: #084298; /* darker blue */
 }
 
-/* === Main Content ====================================================================================================================== */
+/* === Main Content === */
 .main-content {
     flex: 1;
     padding: 40px 40px 60px 30px;
@@ -114,9 +113,9 @@ body, html {
 }
 
 .dashboard-header {
-  position: relative; /* keeps bell positioned relative to main-content */
+  position: relative;
   width: 100%;
-  height: 0; /* prevents header from pushing content down */
+  height: 0;
 }
 
 .notification-wrapper {
@@ -128,7 +127,7 @@ body, html {
 
 .notif-icon {
   font-size: 22px;
-  color: #4f16ce;
+  color: #0d6efd; /* blue icons */
   background: none;
   border: none;
   cursor: pointer;
@@ -155,33 +154,31 @@ body, html {
 
 .no-notif {
     text-align: center;
-    color: #777;
+    color: #6c757d; /* muted gray */
     padding: 10px;
     font-style: italic;
 }
 
-
 .icon-btn {
   font-size: 1.4rem;
-  color: #4f16ce;
+  color: #0d6efd; /* blue icons */
   text-decoration: none;
-  margin-right: 18px; /* spacing between mail and bell */
+  margin-right: 18px;
   transition: color 0.2s ease;
 }
 
 .icon-btn:hover {
-  color: #3d12a1;
+  color: #084298;
 }
 
 .notification-wrapper {
   position: absolute;
-  top: 8px; /* adjust if needed */
+  top: 8px;
   right: 40px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
 
 /* Dropdown styling */
 .notif-dropdown {
@@ -189,7 +186,7 @@ body, html {
   position: absolute;
   top: 35px;
   right: 0;
-  background: white;
+  background: #fff; /* white dropdown */
   border: 1px solid #ddd;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   border-radius: 10px;
@@ -203,21 +200,14 @@ body, html {
   font-weight: 600;
   padding: 0 15px 8px;
   border-bottom: 1px solid #eee;
-}
-
-.notif-dropdown ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 180px;
-  overflow-y: auto;
+  color: #212529;
 }
 
 .notif-dropdown ul li {
   padding: 10px 15px;
   border-bottom: 1px solid #f0f0f0;
   font-size: 14px;
-  color: #333;
+  color: #212529;
 }
 
 .notif-dropdown ul li:last-child {
@@ -227,7 +217,7 @@ body, html {
 .notif-center-btn {
   display: block;
   text-align: center;
-  background-color: #4f16ce;
+  background-color: #0d6efd; /* blue button */
   color: white;
   margin: 10px 15px 0;
   padding: 8px;
@@ -238,11 +228,10 @@ body, html {
 }
 
 .notif-center-btn:hover {
-  background-color: #3d12a1;
+  background-color: #084298;
 }
 
-
-/* === Summary Cards ==================================================================================================================================== */
+/* === Summary Cards === */
 .summary {
     display: flex;
     gap: 20px;
@@ -250,18 +239,18 @@ body, html {
 }
 
 .summary-card {
-    background-color: #fff;
+    background-color: #fff; /* white card */
     padding: 18px;
     border-radius: 10px;
     flex: 1;
     text-align: center;
-    box-shadow: 0 2px 10px rgba(79, 22, 206, 0.05);
-    max-width: 230px; /* smaller card width */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    max-width: 230px;
 }
 
 .summary-number {
     font-size: 26px;
-    color: #4f16ce;
+    color: #0d6efd; /* blue numbers */
     font-weight: bold;
 }
 
@@ -274,11 +263,11 @@ body, html {
     font-size: 18px;
     margin-bottom: 10px;
     font-weight: 600;
-    color: #2e2a47;
+    color: #0d6efd; /* primary blue headings */
 }
 
 .recent-activity li, .recent-notifications li {
-    background-color: #fff;
+    background-color: #fff; /* white cards */
     border-radius: 8px;
     padding: 12px 16px;
     margin-bottom: 8px;
@@ -289,22 +278,22 @@ body, html {
 }
 
 .recent-activity span, .recent-notifications span {
-    color: #634f96;
+    color: #4f16ce; /* blue text for secondary info */
     font-size: 14px;
 }
 
-/* === Footer ================================================================================================================================================== */
+/* === Footer === */
 .dashboard-footer {
     text-align: center;
-    color: #8e8aa3;
+    color: #6c757d; /* muted gray */
     font-size: 13px;
     margin-top: 50px;
-    padding-bottom: 20px; /* Adds spacing so footer doesn’t stick too low */
+    padding-bottom: 20px;
 }
 
-/* =============================================================================================================================================================
+/* =====================================================================
    JOB LISTINGS PAGE STYLES
-   ============================================= */
+====================================================================== */
 .job-listings-section {
     padding: 30px 40px;
 }
@@ -312,7 +301,7 @@ body, html {
 .job-listings-section .page-title {
     font-size: 22px;
     font-weight: 700;
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
     margin-bottom: 20px;
 }
 
@@ -325,8 +314,8 @@ body, html {
 }
 
 .favourite-btn {
-    background-color: #eae8f2;
-    color: #4f16ce;
+    background-color: #e7f1ff; /* light blue */
+    color: #0d6efd; /* blue text */
     border: none;
     border-radius: 8px;
     padding: 8px 16px;
@@ -336,7 +325,7 @@ body, html {
 }
 
 .favourite-btn:hover {
-    background-color: #dcd7f0;
+    background-color: #d0e4ff; /* darker light blue hover */
 }
 
 /* Search & Filter Bar */
@@ -365,9 +354,9 @@ body, html {
     padding: 8px 10px;
     border-radius: 8px;
     border: 1px solid #ccc;
-    background-color: #fff;
+    background-color: #fff; /* white select */
     font-size: 13px;
-    width: 140px; /* smaller filter width */
+    width: 140px;
 }
 
 /* Job Listings Display */
@@ -381,7 +370,7 @@ body, html {
     display: flex;
     align-items: flex-start;
     gap: 15px;
-    background: #fff;
+    background: #fff; /* white card */
     border-radius: 10px;
     transition: box-shadow 0.2s ease;
 }
@@ -411,15 +400,15 @@ body, html {
 }
 
 .tag-blue {
-    background-color: #0d6efd; /* Bootstrap blue */
+    background-color: #0d6efd;
 }
 
 .tag-orange {
-    background-color: #fd7e14; /* Bootstrap orange */
+    background-color: #fd7e14;
 }
 
 .tag-green {
-    background-color: #198754; /* Bootstrap green */
+    background-color: #198754;
 }
 
 .job-info {
@@ -429,12 +418,12 @@ body, html {
 .job-info h3 {
     margin: 0 0 5px;
     font-size: 18px;
-    color: #4f16ce;
+    color: #0d6efd; /* blue job title */
 }
 
 .job-info p {
     margin: 3px 0;
-    color: #555;
+    color: #212529; /* dark text */
     font-size: 14px;
 }
 
@@ -452,7 +441,7 @@ body, html {
 }
 
 .apply-btn {
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* blue apply button */
     color: white;
     border: none;
     padding: 8px 14px;
@@ -463,7 +452,7 @@ body, html {
 }
 
 .apply-btn:hover {
-    background-color: #3d0fad;
+    background-color: #084298; /* darker blue hover */
 }
 
 /* Pagination */
@@ -476,7 +465,7 @@ body, html {
 }
 
 .pagination button {
-    background-color: #eae8f2;
+    background-color: #e7f1ff; /* light blue */
     border: none;
     border-radius: 6px;
     padding: 6px 10px;
@@ -485,7 +474,7 @@ body, html {
 }
 
 .pagination button:hover {
-    background-color: #dcd7f0;
+    background-color: #d0e4ff;
 }
 
 /* ===============================================================================================================================
@@ -498,15 +487,15 @@ body, html {
 .my-applications-section .page-title {
     font-size: 22px;
     font-weight: 700;
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
     margin-bottom: 20px;
 }
 
 /* Table Styling */
 .applications-table-container {
-    background-color: #fff;
+    background-color: #fff; /* white card */
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(79, 22, 206, 0.05);
+    box-shadow: 0 2px 10px rgba(13, 110, 253, 0.05); /* subtle blue shadow */
     overflow-x: auto;
     padding: 20px;
 }
@@ -525,15 +514,15 @@ body, html {
 }
 
 .applications-table th {
-    background-color: #f4f1fb;
-    color: #4f16ce;
+    background-color: #e7f1ff; /* light blue header */
+    color: #0d6efd; /* blue text */
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .applications-table tr:hover {
-    background-color: #f9f7fc;
+    background-color: #f1f8ff; /* very light blue hover */
 }
 
 /* Application Status Colors */
@@ -542,29 +531,29 @@ body, html {
     border-radius: 6px;
     font-weight: 600;
     font-size: 13px;
-    color: green;
+    color: #fff;
 }
 
 .status-inreview {
-    background-color: #f39c12;
+    background-color: #ffc107; /* amber/orange */
 }
 
 .status-shortlisted {
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* primary blue */
 }
 
 .status-interview {
-    background-color: #27ae60;
+    background-color: #198754; /* green */
 }
 
 .status-rejected {
-    background-color: #e74c3c;
+    background-color: #dc3545; /* red */
 }
 
 .btn-accept-offer {
     margin-left: 10px;
     padding: 4px 10px;
-    background-color: #28a745;
+    background-color: #0d6efd; /* blue button */
     border: none;
     color: #fff;
     border-radius: 6px;
@@ -574,11 +563,10 @@ body, html {
 }
 
 .btn-accept-offer:hover {
-    background-color: #218838;
+    background-color: #084298; /* darker blue hover */
 }
 
-
-/* Pagination (same as Job Listings) */
+/* Pagination (same theme as Job Listings) */
 .pagination {
     display: flex;
     justify-content: center;
@@ -588,7 +576,7 @@ body, html {
 }
 
 .pagination button {
-    background-color: #eae8f2;
+    background-color: #e7f1ff; /* light blue */
     border: none;
     border-radius: 6px;
     padding: 6px 10px;
@@ -597,11 +585,10 @@ body, html {
 }
 
 .pagination button:hover {
-    background-color: #dcd7f0;
+    background-color: #d0e4ff; /* slightly darker hover */
 }
 
-
-/* === Resume Feedback Page =================================================================================================================================== */
+/* === Resume Feedback Page === */
 .resume-feedback-section {
     margin-top: 20px;
 }
@@ -609,12 +596,12 @@ body, html {
 .resume-feedback-section .page-title {
     font-size: 26px;
     font-weight: 700;
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
     margin-bottom: 10px;
 }
 
 .resume-feedback-section .subtitle {
-    color: #6a6482;
+    color: #6c757d; /* muted gray */
     margin-bottom: 30px;
 }
 
@@ -625,8 +612,8 @@ body, html {
 }
 
 .upload-area {
-    border: 2px dashed #bcb7d9;
-    background-color: #fff;
+    border: 2px dashed #b6d4fe; /* light blue dashed border */
+    background-color: #fff; /* white background */
     border-radius: 12px;
     width: 100%;
     max-width: 600px;
@@ -640,12 +627,12 @@ body, html {
 }
 
 .upload-area:hover {
-    background-color: #f4f2fb;
-    border-color: #7a5af5;
+    background-color: #e7f1ff; /* light blue hover */
+    border-color: #0d6efd; /* primary blue */
 }
 
 .upload-content {
-    color: #4f16ce;
+    color: #0d6efd; /* blue text */
 }
 
 .upload-icon {
@@ -660,21 +647,20 @@ body, html {
 }
 
 .upload-text span {
-    color: #7a5af5;
+    color: #084298; /* darker blue accent */
 }
 
 .upload-note {
-    color: #8e8aa3;
+    color: #6c757d; /* muted gray for note */
     font-size: 14px;
 }
 
-
 /* === Profile Page ============================================================================================================================================== */
 .profile-section {
-    background-color: #fff;
+    background-color: #fff; /* white card */
     border-radius: 12px;
     padding: 30px 40px;
-    box-shadow: 0 4px 12px rgba(79, 22, 206, 0.05);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.05); /* subtle blue shadow */
     max-width: 900px;
     margin: 30px auto;
 }
@@ -697,9 +683,9 @@ body, html {
 
 .form-control {
     padding: 10px;
-    border: 1px solid #d6d1e8;
+    border: 1px solid #cce0ff; /* light blue border */
     border-radius: 8px;
-    background-color: #f9f7fc;
+    background-color: #fff; /* white background */
     font-size: 15px;
     color: #2e2a47;
 }
@@ -711,9 +697,9 @@ textarea.form-control {
 .upload-btn,
 .toggle-btn,
 .change-btn {
-    background-color: #eae8f2;
+    background-color: #e7f1ff; /* light blue button */
     border: none;
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue text */
     font-weight: 600;
     padding: 10px 14px;
     border-radius: 8px;
@@ -724,7 +710,7 @@ textarea.form-control {
 .upload-btn:hover,
 .toggle-btn:hover,
 .change-btn:hover {
-    background-color: #dcd7f0;
+    background-color: #d0e4ff; /* hover blue */
 }
 
 /* Notification settings */
@@ -732,7 +718,7 @@ textarea.form-control {
     margin-top: 30px;
     font-size: 18px;
     font-weight: 600;
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
 }
 
 .notification-options label {
@@ -750,7 +736,7 @@ textarea.form-control {
     justify-content: space-between;
     align-items: center;
     padding: 10px 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid #e0eaff; /* light blue divider */
 }
 
 /* On/off switch */
@@ -790,7 +776,7 @@ textarea.form-control {
 }
 
 .switch input:checked + .slider {
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* primary blue for active */
 }
 
 .switch input:checked + .slider::before {
@@ -799,7 +785,7 @@ textarea.form-control {
 
 /* Save Button */
 .save-btn {
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* primary blue */
     color: white;
     border: none;
     border-radius: 8px;
@@ -811,7 +797,7 @@ textarea.form-control {
 }
 
 .save-btn:hover {
-    background-color: #3a10a0;
+    background-color: #084298; /* darker blue hover */
 }
 
 .form-actions {
@@ -839,10 +825,9 @@ textarea.form-control {
     background-color: #c82333;
 }
 
-
-/* === Job Details Page ===================================================================================================================================== */
+/* === Job Details Page === */
 .job-detail-container {
-    background-color: #f9f7fc;
+    background-color: #f8faff; /* very light blue background */
     padding: 20px 40px;
 }
 
@@ -851,19 +836,19 @@ textarea.form-control {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
-    border-bottom: 1px solid #e5e8ea;
+    border-bottom: 1px solid #d0e4ff; /* light blue border */
     padding-bottom: 15px;
 }
 
 .job-header h1 {
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
     font-size: 28px;
     font-weight: 700;
     margin: 0;
 }
 
 .company-name {
-    color: #634f96;
+    color: #0d6efd; /* blue company name */
     font-weight: 500;
     margin-top: 4px;
 }
@@ -886,12 +871,12 @@ textarea.form-control {
     background: #fff;
     padding: 24px;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(79, 22, 206, 0.05);
+    box-shadow: 0 2px 10px rgba(13, 110, 253, 0.05); /* blue shadow */
 }
 
 .job-description h2, 
 .job-description h3 {
-    color: #4f16ce;
+    color: #0d6efd; /* primary blue */
     margin-bottom: 10px;
 }
 
@@ -912,11 +897,11 @@ textarea.form-control {
     background: #fff;
     padding: 24px;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(79, 22, 206, 0.05);
+    box-shadow: 0 2px 10px rgba(13, 110, 253, 0.05);
 }
 
 .job-sidebar h2 {
-    color: #4f16ce;
+    color: #0d6efd;
     margin-bottom: 15px;
 }
 
@@ -935,7 +920,7 @@ textarea.form-control {
 /* Apply Button */
 .apply-btn-large {
     width: 100%;
-    background-color: #4f16ce;
+    background-color: #0d6efd;
     color: white;
     border: none;
     padding: 12px 0;
@@ -947,7 +932,7 @@ textarea.form-control {
 }
 
 .apply-btn-large:hover {
-    background-color: #3d10a9;
+    background-color: #084298; /* darker blue hover */
 }
 
 .logout-link {
@@ -955,16 +940,17 @@ textarea.form-control {
     font-size: 0.9rem;
     text-decoration: none;
 }
+
 .logout-link:hover {
     text-decoration: underline;
 }
 
-
 /* ANALYZE FEEDBACK AI ========================================================================================================================== */
+/* === Analyze Button === */
 .analyze-btn {
     margin-top: 20px;
     padding: 10px 20px;
-    background-color: #4f16ce;
+    background-color: #0d6efd; /* primary blue */
     color: white;
     border: none;
     border-radius: 8px;
@@ -972,40 +958,42 @@ textarea.form-control {
     transition: 0.3s;
 }
 .analyze-btn:hover {
-    background-color: #6b3cff;
+    background-color: #084298; /* darker blue */
 }
 
+/* === Analysis Results Box === */
 .analysis-results {
     background: #fff;
     margin-top: 30px;
     padding: 20px;
     border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.05); /* subtle blue shadow */
 }
 .analysis-results ul {
     list-style: none;
     padding: 0;
 }
 .analysis-results li {
-    background: #f4f2fb;
+    background: #e7f1ff; /* very light blue */
     margin-bottom: 6px;
     padding: 8px 10px;
     border-radius: 6px;
     display: inline-block;
+    color: #0d6efd; /* blue text */
 }
 
-/* === Resume Builder Page ============================================================================================================================ */
+/* === Resume Builder Container === */
 .resume-builder-container {
     background-color: #fff;
     border-radius: 12px;
     padding: 40px 50px;
     max-width: 900px;
     margin: 30px auto;
-    box-shadow: 0 4px 15px rgba(79, 22, 206, 0.08);
+    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.08); /* subtle blue shadow */
 }
 
 .resume-builder-container h1 {
-    color: #4f16ce;
+    color: #0d6efd;
     font-size: 26px;
     font-weight: 700;
     margin-bottom: 25px;
@@ -1017,7 +1005,7 @@ textarea.form-control {
     font-size: 18px;
     margin-top: 25px;
     margin-bottom: 10px;
-    border-left: 4px solid #4f16ce;
+    border-left: 4px solid #0d6efd;
     padding-left: 10px;
     font-weight: 600;
 }
@@ -1031,7 +1019,7 @@ textarea.form-control {
 
 #resumeForm label {
     font-weight: 600;
-    color: #4f16ce;
+    color: #0d6efd;
     margin-bottom: 5px;
 }
 
@@ -1039,24 +1027,24 @@ textarea.form-control {
 #resumeForm input[type="email"],
 #resumeForm textarea {
     padding: 10px 12px;
-    border: 1px solid #d6d1e8;
+    border: 1px solid #cce0ff; /* light blue border */
     border-radius: 8px;
-    background-color: #f9f7fc;
+    background-color: #fff; /* white input */
     font-size: 15px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 #resumeForm input:focus,
 #resumeForm textarea:focus {
-    border-color: #7a5af5;
-    box-shadow: 0 0 0 3px rgba(122, 90, 245, 0.15);
+    border-color: #0d6efd; /* primary blue focus */
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
     outline: none;
 }
 
 /* === Buttons === */
 #previewBtn,
 #downloadPDF {
-    background-color: #4f16ce;
+    background-color: #0d6efd;
     color: white;
     border: none;
     border-radius: 8px;
@@ -1070,29 +1058,29 @@ textarea.form-control {
 
 #previewBtn:hover,
 #downloadPDF:hover {
-    background-color: #3d10a9;
+    background-color: #084298;
     transform: translateY(-1px);
 }
 
 #downloadPDF {
-    background-color: #6b3cff;
+    background-color: #6b3cff; /* secondary blue */
 }
 
 /* === Resume Preview Box === */
 #resumePreview {
-    background-color: #f9f7fc;
-    border: 2px dashed #bcb7d9;
+    background-color: #fff;
+    border: 2px dashed #cce0ff; /* light blue dashed */
     border-radius: 10px;
     padding: 25px;
     margin-top: 35px;
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.05);
+    box-shadow: inset 0 2px 6px rgba(13, 110, 253, 0.05); /* subtle inner blue shadow */
 }
 
 #resumePreview h2 {
-    color: #4f16ce;
+    color: #0d6efd;
     font-size: 20px;
     margin-bottom: 15px;
-    border-bottom: 1px solid #e5e5f0;
+    border-bottom: 1px solid #d0e4ff; /* light blue bottom border */
     padding-bottom: 5px;
 }
 
@@ -1104,7 +1092,7 @@ textarea.form-control {
 }
 
 #resumeContent strong {
-    color: #4f16ce;
+    color: #0d6efd;
 }
 
 /* === Responsive Design === */
@@ -1123,11 +1111,12 @@ textarea.form-control {
     }
 }
 
-/* notification center buttons ======================================================================================================================*/
+/* === Notification Center Buttons === */
 #markSelectedBtn {
     padding: 6px 12px;
 }
 
 #selectAll {
     cursor: pointer;
+    color: #0d6efd; /* blue clickable text */
 }
