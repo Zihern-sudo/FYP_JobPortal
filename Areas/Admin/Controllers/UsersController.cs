@@ -228,18 +228,24 @@ namespace JobPortal.Areas.Admin.Controllers
                         email = email,
                         password_hash = "AQAAAAIAAYagAAAAEDCZu4pS5gczGSWwSIstyH0K91mopa2ahDjX186ZkIsPB4to1cH5eFdgvXLHg0AMRA==",
                         user_role = roleCsv,
-                        user_status = stat,
-                        notif_inapp = true,
-                        notif_email = true,
-                        notif_sms = false,
-                        notif_job_updates = true,
-                        notif_feedback = true,
-                        notif_messages = true,
-                        notif_system = true,
-                        notif_reminders = true
+                        user_status = stat
+                        // Notification flags are no longer on the user entity.
                     };
                     _db.users.Add(u);
                     usersCreated++;
+                    await _db.SaveChangesAsync(); // ensure u.user_id is available
+
+                    // Create default notification preferences for new users
+                    var pref = new notification_preference
+                    {
+                        user_id = u.user_id,
+                        allow_inApp = true,
+                        allow_email = true,
+                        notif_job_updates = true,
+                        notif_messages = true,
+                        notif_reminders = true
+                    };
+                    _db.notification_preferences.Add(pref);
                     await _db.SaveChangesAsync();
                 }
                 else
@@ -250,6 +256,25 @@ namespace JobPortal.Areas.Admin.Controllers
                     u.user_status = stat;
                     usersUpdated++;
                     await _db.SaveChangesAsync();
+
+                    // Ensure an existing preference row exists (create if missing)
+                    var pref = await _db.notification_preferences
+                        .FirstOrDefaultAsync(p => p.user_id == u.user_id);
+
+                    if (pref == null)
+                    {
+                        pref = new notification_preference
+                        {
+                            user_id = u.user_id,
+                            allow_inApp = true,
+                            allow_email = true,
+                            notif_job_updates = true,
+                            notif_messages = true,
+                            notif_reminders = true
+                        };
+                        _db.notification_preferences.Add(pref);
+                        await _db.SaveChangesAsync();
+                    }
                 }
 
                 if (roleCsv.Equals("Recruiter", StringComparison.OrdinalIgnoreCase))
@@ -284,6 +309,7 @@ namespace JobPortal.Areas.Admin.Controllers
             Flash("success", $"Import complete. Users: +{usersCreated}/~{usersUpdated}. Companies: +{companiesCreated}/~{companiesUpdated}.");
             return RedirectToAction(nameof(Index), new { status, q, page, role });
         }
+
 
         // CSV export (respects role + filters)
         [HttpGet]
