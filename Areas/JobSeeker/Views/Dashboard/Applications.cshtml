@@ -55,10 +55,10 @@
     <div>
         <label for="status" class="me-1 fw-semibold">Status:</label>
         <select id="status" name="status" class="form-select w-auto">
-            <option value="">All</option>
+            <option value="" selected="@(ViewBag.SelectedStatus == "" ? "selected" : "")">All</option>
             <option value="Submitted" selected="@(ViewBag.SelectedStatus == "Submitted" ? "selected" : "")">Submitted</option>
             <option value="AI-Screened" selected="@(ViewBag.SelectedStatus == "AI-Screened" ? "selected" : "")">AI-Screened</option>
-            <option value="Shortlisted" seleceted="@(ViewBag.SelectedStatus == "Shortlisted" ? "selected" : "")">Shortlisted</option>
+            <option value="Shortlisted" selected="@(ViewBag.SelectedStatus == "Shortlisted" ? "selected" : "")">Shortlisted</option>
             <option value="Interview" selected="@(ViewBag.SelectedStatus == "Interview" ? "selected" : "")">Interview</option>
             <option value="Offer" selected="@(ViewBag.SelectedStatus == "Offer" ? "selected" : "")">Offer</option>
             <option value="Hired" selected="@(ViewBag.SelectedStatus == "Hired" ? "selected" : "")">Hired</option>
@@ -70,7 +70,7 @@
     <div>
         <label for="sortBy" class="me-1 fw-semibold">Sort:</label>
         <select id="sortBy" name="sortBy" class="form-select w-auto">
-            <option value="">Newest First</option>
+            <<option value="" selected="@(ViewBag.SortBy == "" ? "selected" : "")">Newest First</option>
             <option value="date_asc" selected="@(ViewBag.SortBy == "date_asc" ? "selected" : "")">Oldest First</option>
         </select>
     </div>

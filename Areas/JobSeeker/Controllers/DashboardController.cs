@@ -497,21 +497,19 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
             // ✅ Sorting
-            switch (sortBy)
+            if (sortBy == "date_asc")
             {
-                case "Newest":
-                    query = query.OrderByDescending(a => a.date_updated);
-                    break;
-                case "Oldest":
-                    query = query.OrderBy(a => a.date_updated);
-                    break;
-                default:
-                    query = query.OrderByDescending(a => a.date_updated);
-                    sortBy = "Newest";
-                    break;
+                query = query.OrderBy(a => a.date_updated);
+            }
+            else
+            {
+                // Default newest first
+                query = query.OrderByDescending(a => a.date_updated);
+                sortBy = ""; // default (Newest)
             }
 
-            ViewBag.SelectedSort = sortBy; // ✅ remember sorting choice
+            ViewBag.SortBy = sortBy; // ✅ match the View's reference exactly
+
 
 
             int totalApplications = await query.CountAsync();
