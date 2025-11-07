@@ -11,5 +11,7 @@ namespace JobPortal.Areas.JobSeeker.Models
         // Pagination
         public int CurrentPage { get; set; }
         public int TotalPages { get; set; }
+        public string? SelectedStatus { get; set; }
+        public string? SortBy { get; set; }
     }
 }

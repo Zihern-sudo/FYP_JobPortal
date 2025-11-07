@@ -48,6 +48,38 @@
         </ul>
     </section>
 
+<form method="get" asp-controller="Dashboard" asp-action="Applications"
+      class="d-flex align-items-center gap-3 mb-3">
+
+    <!-- Filter by Status -->
+    <div>
+        <label for="status" class="me-1 fw-semibold">Status:</label>
+        <select id="status" name="status" class="form-select w-auto">
+            <option value="">All</option>
+            <option value="Submitted" selected="@(ViewBag.SelectedStatus == "Submitted" ? "selected" : "")">Submitted</option>
+            <option value="AI-Screened" selected="@(ViewBag.SelectedStatus == "AI-Screened" ? "selected" : "")">AI-Screened</option>
+            <option value="Shortlisted" seleceted="@(ViewBag.SelectedStatus == "Shortlisted" ? "selected" : "")">Shortlisted</option>
+            <option value="Interview" selected="@(ViewBag.SelectedStatus == "Interview" ? "selected" : "")">Interview</option>
+            <option value="Offer" selected="@(ViewBag.SelectedStatus == "Offer" ? "selected" : "")">Offer</option>
+            <option value="Hired" selected="@(ViewBag.SelectedStatus == "Hired" ? "selected" : "")">Hired</option>
+            <option value="Rejected" selected="@(ViewBag.SelectedStatus == "Rejected" ? "selected" : "")">Rejected</option>
+        </select>
+    </div>
+
+    <!-- Sort -->
+    <div>
+        <label for="sortBy" class="me-1 fw-semibold">Sort:</label>
+        <select id="sortBy" name="sortBy" class="form-select w-auto">
+            <option value="">Newest First</option>
+            <option value="date_asc" selected="@(ViewBag.SortBy == "date_asc" ? "selected" : "")">Oldest First</option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+</form>
+
+
+
     <!-- Applications Table -->
     <div class="applications-table-container mb-4">
         <table class="applications-table">
@@ -113,25 +145,34 @@
         </table>
     </div>
 
-    <!-- Pagination -->
-    <div class="pagination">
-        @if (Model.TotalPages > 1)
-        {
-            <button disabled="@(Model.CurrentPage == 1)"
-                onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage - 1 })'">
-                ⬅ Previous
-            </button>
+<!-- Pagination -->
+<div class="pagination">
+    @if (Model.TotalPages > 1)
+    {
+        <button disabled="@(Model.CurrentPage == 1)"
+            onclick="location.href='@Url.Action("Applications", new { 
+                page = Model.CurrentPage - 1, 
+                status = Model.SelectedStatus, 
+                sortBy = Model.SortBy 
+            })'">
+            ⬅ Previous
+        </button>
 
-            <span>Page @Model.CurrentPage of @Model.TotalPages</span>
+        <span>Page @Model.CurrentPage of @Model.TotalPages</span>
 
-            <button disabled="@(Model.CurrentPage == Model.TotalPages)"
-                onclick="location.href='@Url.Action("Applications", new { page = Model.CurrentPage + 1 })'">
-                Next ➡
-            </button>
-        }
-        else
-        {
-            <span>Showing all @Model.Applications.Count() applications</span>
-        }
-    </div>
+        <button disabled="@(Model.CurrentPage == Model.TotalPages)"
+            onclick="location.href='@Url.Action("Applications", new { 
+                page = Model.CurrentPage + 1, 
+                status = Model.SelectedStatus, 
+                sortBy = Model.SortBy 
+            })'">
+            Next ➡
+        </button>
+    }
+    else
+    {
+        <span>Showing all @Model.Applications.Count() applications</span>
+    }
+</div>
+
 </section>

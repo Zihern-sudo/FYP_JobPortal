@@ -470,7 +470,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
         }
 
-        public async Task<IActionResult> Applications(int page = 1)
+        public async Task<IActionResult> Applications(string? status, string? sortBy, int page = 1)
         {
             var userId = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userId))
@@ -482,8 +482,37 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             var query = _db.job_applications
                 .Include(a => a.job_listing)
                     .ThenInclude(j => j.company)
-                .Where(a => a.user_id == id)
-                .OrderByDescending(a => a.date_updated);
+                .Where(a => a.user_id == id);
+
+
+            // ✅ Filter by status
+            if (!string.IsNullOrEmpty(status))
+            {
+                query = query.Where(a => a.application_status == status);
+                ViewBag.SelectedStatus = status;
+            }
+            else
+            {
+                ViewBag.SelectedStatus = "";
+            }
+
+            // ✅ Sorting
+            switch (sortBy)
+            {
+                case "Newest":
+                    query = query.OrderByDescending(a => a.date_updated);
+                    break;
+                case "Oldest":
+                    query = query.OrderBy(a => a.date_updated);
+                    break;
+                default:
+                    query = query.OrderByDescending(a => a.date_updated);
+                    sortBy = "Newest";
+                    break;
+            }
+
+            ViewBag.SelectedSort = sortBy; // ✅ remember sorting choice
+
 
             int totalApplications = await query.CountAsync();
             var applications = await query
@@ -568,7 +597,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         // ✅ Dynamic Job Listings with Pagination
-        public async Task<IActionResult> JobListings(string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1)
+        public async Task<IActionResult> JobListings(int? minSalary, int? maxSalary, string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1)
         {
             int pageSize = 10;
 
@@ -592,18 +621,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 jobsQuery = jobsQuery.Where(j => j.company.company_location == location);
             }
 
-            // 💰 Filter by Salary Range
-            if (!string.IsNullOrEmpty(salaryRange))
+            // 🧭 Filter by salary range
+            if (minSalary.HasValue && maxSalary.HasValue)
             {
-                var parts = salaryRange.Split('-');
-                if (parts.Length == 2)
-                {
-                    int min = int.Parse(parts[0]);
-                    int max = int.Parse(parts[1]);
-
-                    // 🧭 Filter using only the minimum salary
-                    jobsQuery = jobsQuery.Where(j => j.salary_min >= min && j.salary_min <= max);
-                }
+                jobsQuery = jobsQuery.Where(j => j.salary_min >= minSalary.Value && j.salary_min <= maxSalary.Value);
             }
 
             // 🏠 Work Mode
@@ -611,6 +632,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             {
                 jobsQuery = jobsQuery.Where(j => j.work_mode == workMode);
             }
+            ViewBag.MinSalary = minSalary ?? 0;
+            ViewBag.MaxSalary = maxSalary ?? 5000;
 
             // 💼 Job Category
             if (!string.IsNullOrEmpty(jobCategory))

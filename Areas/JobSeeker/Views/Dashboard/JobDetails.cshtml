@@ -39,13 +39,22 @@
 
         <!-- Right column: Quick details box -->
         <div class="col-md-4">
-            <div class="card shadow-sm p-3">
+            <div class="card shadow-sm p-3 border rounded-3">
                 <h5 class="mb-3">Job Details</h5>
+
                 <p><strong>Requirements:</strong><br>@Model.job_requirements</p>
                 <hr>
-                <p><strong>Salary Range:</strong><br>RM @Model.salary_min - RM @Model.salary_max</p>
+
+                <div class="tags mb-3">
+                    <span class="tag tag-blue">@Model.job_category</span>
+                    <span class="tag tag-orange">@Model.work_mode</span>
+                    <span class="tag tag-green">
+                        RM @(Model.salary_min?.ToString("N0") ?? "0") - RM @(Model.salary_max?.ToString("N0") ?? "0")
+                    </span>
+                </div>
             </div>
         </div>
+
     </div>
 
     <div class="d-flex justify-content-between mt-4">

@@ -6,6 +6,7 @@
 }
 
 <link rel="stylesheet" href="~/css/dashboard.css" />
+<link href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css" rel="stylesheet">
 
 <section class="job-listings-section">
     <div class="header-bar">
@@ -30,27 +31,23 @@
         </select>
 
         <!-- 💰 Salary Range -->
-        <select name="salaryRange" class="form-select w-auto">
-            <option value="">All Salaries</option>
-            <option value="0-500" selected="@(ViewBag.SalaryRange == "0-500" ? "selected" : null)">Below RM500</option>
-            <option value="500-1000" selected="@(ViewBag.SalaryRange == "500-1000" ? "selected" : null)">RM500 - RM1000
-            </option>
-            <option value="1000-1500" selected="@(ViewBag.SalaryRange == "1000-1500" ? "selected" : null)">RM1000 -
-                RM1500</option>
-            <option value="1500-2000" selected="@(ViewBag.SalaryRange == "1500-2000" ? "selected" : null)">RM1500 -
-                RM2000</option>
-            <option value="2000-2500" selected="@(ViewBag.SalaryRange == "2000-2500" ? "selected" : null)">RM2000 -
-                RM2500</option>
-            <option value="2500-3000" selected="@(ViewBag.SalaryRange == "2500-3000" ? "selected" : null)">RM2500 -
-                RM3000</option>
-            <option value="3000-3500" selected="@(ViewBag.SalaryRange == "3000-3500" ? "selected" : null)">RM3000 -
-                RM3500</option>
-            <option value="3500-4000" selected="@(ViewBag.SalaryRange == "3500-4000" ? "selected" : null)">RM3500 -
-                RM4000</option>
-            <option value="4000-10000" selected="@(ViewBag.SalaryRange == "4000-10000" ? "selected" : null)">Above
-                RM4000</option>
+        <div class="mb-3">
+            <label class="form-label fw-bold">Salary Range</label>
 
-        </select>
+            <!-- noUiSlider -->
+            <div id="salarySlider" style="margin: 20px 0;"></div>
+
+            <!-- Linked Inputs -->
+            <div class="d-flex align-items-center justify-content-center mt-2 gap-2">
+                <input type="number" id="minSalary" name="minSalary" min="0" max="10000" step="500"
+                    value="@ViewBag.MinSalary" class="form-control w-auto text-center" style="width:100px;">
+                <span class="mx-2 fw-semibold">-</span>
+                <input type="number" id="maxSalary" name="maxSalary" min="0" max="10000" step="500"
+                    value="@ViewBag.MaxSalary" class="form-control w-auto text-center" style="width:100px;">
+            </div>
+        </div>
+
+
 
         <!-- 🎓 Internship Type (placeholder) -->
         <select name="jobCategory" class="form-select w-auto">
@@ -89,25 +86,40 @@
         {
             @foreach (var job in Model)
             {
-                <div class="job-item">
-                    <div class="job-info">
-                        <h3>@job.job_title</h3>
-                        <p class="company">
+                <div class="job-item d-flex align-items-center p-3 mb-3 shadow-sm rounded">
+                    <!-- 🏢 Company Logo -->
+                    <div class="job-logo">
+                        <img src="~/images/default-company.png" alt="Company Logo" class="company-logo" />
+                    </div>
+
+                    <!-- 📄 Job Info -->
+                    <div class="job-info flex-grow-1">
+                        <h3 class="fw-bold mb-1">@job.job_title</h3>
+                        <p class="company mb-1">
                             @job.company.company_name
-                            <span class="industry">· @job.company.company_industry</span>
+                            <span class="industry text-muted">· @job.company.company_industry</span>
                         </p>
-                        <p class="details">
+                        <p class="details text-muted mb-2">
                             @job.company.company_location · @job.date_posted.ToString("MMM dd, yyyy") · @job.job_status
                         </p>
-                        <p class="description">@job.job_description</p>
+
+                        <div class="tags mb-2">
+                            <span class="tag tag-blue">@job.job_category</span>
+                            <span class="tag tag-orange">@job.work_mode</span>
+                            <span class="tag tag-green">RM @(job.salary_min?.ToString("N0") ?? "0") - RM @(job.salary_max?.ToString("N0") ?? "0")</span>
+                        </div>
+
+                        <p class="description text-muted">@job.job_description</p>
                     </div>
-                    <div class="job-logo">
-                        <img src="~/images/company1.png" alt="Company Logo">
+
+                    <!-- 🔘 View Button -->
+                    <div class="text-end ms-3">
                         <a asp-controller="Dashboard" asp-action="JobDetails" asp-route-id="@job.job_listing_id"
-                            class="apply-btn">View Details</a>
+                            class="apply-btn btn btn-primary btn-sm">View Details</a>
                     </div>
                 </div>
             }
+
 
         }
     </div>
@@ -138,3 +150,42 @@
     }
 
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+
+<script>
+    const slider = document.getElementById('salarySlider');
+    const minInput = document.getElementById('minSalary');
+    const maxInput = document.getElementById('maxSalary');
+
+    const initialMin = parseInt(minInput.value) || 0;
+    const initialMax = parseInt(maxInput.value) || 5000;
+
+    noUiSlider.create(slider, {
+        start: [initialMin, initialMax],
+        connect: true,
+        step: 500,
+        range: {
+            'min': 0,
+            'max': 10000
+        },
+        tooltips: false
+    });
+
+    // Update inputs when slider changes
+    slider.noUiSlider.on('update', function (values, handle) {
+        const value = Math.round(values[handle]);
+        if (handle === 0) minInput.value = value;
+        else maxInput.value = value;
+    });
+
+    // Update slider when inputs change
+    function updateSliderFromInputs() {
+        const min = parseInt(minInput.value) || 0;
+        const max = parseInt(maxInput.value) || 0;
+        if (min <= max) slider.noUiSlider.set([min, max]);
+    }
+
+    minInput.addEventListener('change', updateSliderFromInputs);
+    maxInput.addEventListener('change', updateSliderFromInputs);
+</script>
