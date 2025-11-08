@@ -7,20 +7,39 @@
 <div class="resume-builder-container">
     <h1>Resume Builder</h1>
 
-    <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResume">
+    <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResume" enctype="multipart/form-data">
         <h3>Personal Information</h3>
+
+        <!-- Profile Picture Upload -->
+        <label>Profile Picture</label>
+        <input type="file" id="profilePic" name="profilePic" accept="image/*" />
+        <div id="profilePreview" style="margin-top:10px;">
+            <img id="previewImg" src="#" alt="Preview"
+                style="display:none; width:120px; height:120px; border-radius:50%; object-fit:cover;" />
+        </div>
+
         <label>Full Name</label>
         <input type="text" id="fullName" name="fullName" placeholder="John Doe" required />
 
         <label>Email</label>
         <input type="email" id="email" name="email" placeholder="john@example.com" required />
 
+        <label>Phone</label>
+        <input type="text" id="phone" name="phone" placeholder="+60 12-345 6789" />
+
+        <label>Address</label>
+        <input type="text" id="address" name="address" placeholder="Kuala Lumpur, Malaysia" />
+
+        <h3>Professional Summary</h3>
+        <textarea id="summary" name="summary"
+            placeholder="Briefly describe your background, goals, and key strengths..." rows="4"></textarea>
+
         <h3>Education</h3>
         <label>School / University</label>
         <input type="text" id="school" name="school" placeholder="University of XYZ" />
 
         <label>Degree</label>
-        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science" />
+        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science in Computer Science" />
 
         <label>Year</label>
         <input type="text" id="eduYear" name="eduYear" placeholder="2020 - 2024" />
@@ -35,11 +54,18 @@
         <label>Duration</label>
         <input type="text" id="duration" name="duration" placeholder="Jun 2023 - Aug 2023" />
 
-        <h3>Skills</h3>
+        <label>Responsibilities / Achievements</label>
+        <textarea id="achievements" name="achievements" placeholder="Describe your contributions..."
+            rows="3"></textarea>
+
+        <h3>Skills & Certifications</h3>
         <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" />
+        <input type="text" id="certifications" name="certifications"
+            placeholder="Microsoft Certified: Azure Fundamentals" />
 
         <button type="button" id="previewBtn">Preview Resume</button>
         <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>
+
         <input type="hidden" id="education" name="education" />
         <input type="hidden" id="experience" name="experience" />
     </form>
@@ -51,37 +77,82 @@
 </div>
 
 <script>
+    // 🖼️ Image preview
+    document.getElementById("profilePic").addEventListener("change", function (e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const img = document.getElementById("previewImg");
+                img.src = event.target.result;
+                img.style.display = "block";
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // 🧾 Preview Resume Content
     document.getElementById("previewBtn").addEventListener("click", function () {
         const name = document.getElementById("fullName").value;
         const email = document.getElementById("email").value;
+        const phone = document.getElementById("phone").value;
+        const address = document.getElementById("address").value;
+        const summary = document.getElementById("summary").value;
         const school = document.getElementById("school").value;
         const degree = document.getElementById("degree").value;
         const eduYear = document.getElementById("eduYear").value;
         const company = document.getElementById("company").value;
         const position = document.getElementById("position").value;
         const duration = document.getElementById("duration").value;
+        const achievements = document.getElementById("achievements").value;
         const skills = document.getElementById("skills").value;
+        const certifications = document.getElementById("certifications").value;
+        const profileImg = document.getElementById("previewImg").src;
 
         const content = `
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>
-        <p><strong>Experience:</strong> ${position} at ${company} (${duration})</p>
-        <p><strong>Skills:</strong> ${skills}</p>
-    `;
-
+            <div style="display:flex; align-items:center; gap:20px;">
+                ${profileImg && profileImg !== "#" ? `<img src="${profileImg}" style="width:100px; height:100px; border-radius:50%; object-fit:cover;">` : ""}
+                <div>
+                    <h3>${name}</h3>
+                    <p>${email}</p>
+                    <p>${phone}</p>
+                    <p>${address}</p>
+                </div>
+            </div>
+            <hr/>
+            <p><strong>Summary:</strong> ${summary}</p>
+            <p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>
+            <p><strong>Experience:</strong> ${position} at ${company} (${duration})</p>
+            <p><strong>Achievements:</strong> ${achievements}</p>
+            <p><strong>Skills:</strong> ${skills}</p>
+            <p><strong>Certifications:</strong> ${certifications}</p>
+        `;
         document.getElementById("resumeContent").innerHTML = content;
     });
-    document.getElementById("resumeForm").addEventListener("submit", function () {
-        const school = document.getElementById("school").value;
-        const degree = document.getElementById("degree").value;
-        const eduYear = document.getElementById("eduYear").value;
-        const company = document.getElementById("company").value;
-        const position = document.getElementById("position").value;
-        const duration = document.getElementById("duration").value;
 
-        document.getElementById("education").value = `${degree} at ${school} (${eduYear})`;
-        document.getElementById("experience").value = `${position} at ${company} (${duration})`;
+    // 🧩 Combine for submission
+    document.getElementById("resumeForm").addEventListener("submit", function () {
+        const school = document.getElementById("school").value.trim();
+        const degree = document.getElementById("degree").value.trim();
+        const eduYear = document.getElementById("eduYear").value.trim();
+        const company = document.getElementById("company").value.trim();
+        const position = document.getElementById("position").value.trim();
+        const duration = document.getElementById("duration").value.trim();
+        const achievements = document.getElementById("achievements").value.trim();
+
+        // Only fill education if at least one field has value
+        if (degree || school || eduYear) {
+            document.getElementById("education").value = `${degree} at ${school} (${eduYear})`;
+        } else {
+            document.getElementById("education").value = "";
+        }
+
+        // Only fill experience if at least one field has value
+        if (position || company || duration || achievements) {
+            document.getElementById("experience").value = `${position} at ${company} (${duration}) — ${achievements}`;
+        } else {
+            document.getElementById("experience").value = "";
+        }
     });
 
 </script>

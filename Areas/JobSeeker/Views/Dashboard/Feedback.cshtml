@@ -7,9 +7,10 @@
     <h1 class="page-title">Upload Your Resume</h1>
     <p class="subtitle">Upload your resume below to analyze and get AI-powered keyword insights.</p>
 
-    <!-- ✅ FIXED: added asp-area="JobSeeker" -->
-    <form asp-area="JobSeeker" asp-controller="Resume" asp-action="UploadResume" method="post" enctype="multipart/form-data">
-        <div class="upload-area" onclick="document.getElementById('resumeFile').click()">
+    <!-- ✅ Upload Form -->
+    <form asp-area="JobSeeker" asp-controller="Resume" asp-action="UploadResume" method="post"
+        enctype="multipart/form-data">
+        <div class="upload-area" id="uploadArea">
             <div class="upload-content">
                 <span class="upload-icon">📄</span>
                 <p class="upload-text">Drag and drop your resume here, or <span>click to browse</span></p>
@@ -18,51 +19,94 @@
             <input type="file" id="resumeFile" name="resumeFile" accept=".pdf" style="display:none;" />
         </div>
 
+        <!-- ✅ File selected display -->
+        <p id="fileNameDisplay" class="file-name-display" style="display:none;"></p>
+
         <div style="text-align:center; margin-top:20px;">
             <button type="submit" class="login-btn">Upload & Analyze</button>
         </div>
     </form>
 
-    <div id="resultContainer"></div> <!-- optional, cleaner placement for results -->
-
+    <div id="resultContainer"></div>
 </section>
 
 @section Scripts {
-<script>
-document.querySelector("form").addEventListener("submit", async function (e) {
-    e.preventDefault();
+    <script>
+        const form = document.querySelector("form");
+        const fileInput = document.getElementById("resumeFile");
+        const uploadArea = document.querySelector(".upload-area");
+        const uploadContent = document.querySelector(".upload-content");
 
-    const fileInput = document.getElementById("resumeFile");
-    if (fileInput.files.length === 0) {
-        alert("Please select a PDF resume file first!");
-        return;
-    }
+        uploadArea.addEventListener("click", () => fileInput.click());
 
-    const formData = new FormData();
-    formData.append("resumeFile", fileInput.files[0]);
+        uploadArea.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            uploadArea.classList.add("drag-over");
+        });
 
-    // ✅ FIXED: added /JobSeeker to match the area route
-    const response = await fetch("/JobSeeker/Resume/UploadResume", {
-        method: "POST",
-        body: formData
-    });
+        uploadArea.addEventListener("dragleave", () => {
+            uploadArea.classList.remove("drag-over");
+        });
 
-    const data = await response.json();
-    console.log("Response:", data); // helpful for debugging
+        uploadArea.addEventListener("drop", (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove("drag-over");
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                showSelectedFile(fileInput.files[0]);
+            }
+        });
 
-    const resultDiv = document.querySelector("#resultContainer");
-    resultDiv.classList.add("analysis-results");
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files.length > 0) {
+                showSelectedFile(fileInput.files[0]);
+            }
+        });
 
-    if (data.success) {
-        resultDiv.innerHTML = `
-            <h2>Matched Keywords</h2>
-            <ul>${data.matchedKeywords.map(k => `<li>${k}</li>`).join("")}</ul>
-            <h3>Match Score: ${data.matchScore}%</h3>
-            <p>Total Extracted Keywords: ${data.totalExtracted}</p>
-        `;
-    } else {
-        resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
-    }
-});
-</script>
+        function showSelectedFile(file) {
+            uploadContent.innerHTML = `<p class="file-selected">📄 Selected File: ${file.name}</p>`;
+        }
+
+        form.addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            if (fileInput.files.length === 0) {
+                alert("Please select a PDF resume file first!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("resumeFile", fileInput.files[0]);
+
+            const response = await fetch("/JobSeeker/Resume/UploadResume", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+            const resultDiv = document.querySelector("#resultContainer");
+            resultDiv.classList.add("analysis-results");
+
+            if (data.success) {
+                resultDiv.innerHTML = `
+                            <h2>📊 Resume Evaluation Results</h2>
+                            <div class="score-card">
+                                <p><strong>Education:</strong> ${data.education}</p>
+                                <p><strong>Experience:</strong> ${data.experience}</p>
+                                <p><strong>Skills:</strong> ${data.skills}</p>
+                                <p><strong>Certifications:</strong> ${data.certifications}</p>
+                                <hr>
+                                <h3>Overall Score: ${data.overallScore}/10</h3>
+                            </div>
+
+                            <h2>Skills Match Summary</h2>
+                            <p>Your resume contains <strong>${data.matchedSkills}</strong> key skills that align with our system’s requirements.</p>
+
+                            <p>Total Extracted Keywords: ${data.totalExtracted}</p>
+                        `;
+            } else {
+                resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
+            }
+        });
+    </script>
 }
