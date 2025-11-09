@@ -67,7 +67,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 // ✅ Define keyword lists
                 var educationKeywords = new List<string> { "SPM", "Diploma", "Degree", "Bachelor", "Masters", "PhD" };
                 var experienceKeywords = new List<string> { "year", "experience", "internship", "developer", "engineer", "manager" };
-                var skillKeywords = new List<string> { "C#", "ASP.NET", "SQL", "JavaScript", "Problem Solving", "Communication", "Teamwork", "Software Development", "HTML", "CSS", "Java", "Python", "Leadership" };
+                var skillKeywords = new List<string> { "C#", "ASP.NET", "SQL", "JavaScript", "Problem Solving", "Communication", "Teamwork", "Software Development", "HTML", "CSS", "Java", "Python", "Leadership", "Managing", "Manage", "Business", "Economy" };
                 var certKeywords = new List<string> { "certified", "certificate", "AWS", "Azure", "Google", "Microsoft", "Cisco", "Oracle" };
 
                 // ✅ Education Scoring (based on highest qualification)
@@ -95,10 +95,9 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     else if (years >= 2) expScore = 4;
                     else expScore = 2;
                 }
-                else if (extractedText.Contains("internship", StringComparison.OrdinalIgnoreCase))
-                {
+                else if (Regex.IsMatch(extractedText, @"\b(intern|internship)\b", RegexOptions.IgnoreCase))
                     expScore = 2;
-                }
+
 
                 // ✅ Skills Scoring (intersection of known list + text)
                 int skillMatchCount = skillKeywords.Count(k =>

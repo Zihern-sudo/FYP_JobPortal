@@ -1009,8 +1009,7 @@ textarea.form-control {
     text-decoration: underline;
 }
 
-/* ANALYZE FEEDBACK AI ========================================================================================================================== */
-/* === Analyze Button === */
+/* === Analyze Button ===================================================================================================================================== */
 .analyze-btn {
     margin-top: 20px;
     padding: 10px 20px;
@@ -1054,7 +1053,29 @@ textarea.form-control {
     color: #0d6efd;
 }
 
-/* === Resume Builder Container === */
+.upload-btn {
+    background-color: #3b82f6; /* blue tone for action */
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.upload-btn:hover {
+    background-color: #2563eb;
+    transform: translateY(-2px);
+}
+
+.upload-btn:active {
+    background-color: #1d4ed8;
+    transform: translateY(0);
+}
+
+
+/* === Resume Builder Container ====================================================================================================== */
 .resume-builder-container {
     background-color: #fff;
     border-radius: 12px;
@@ -1137,6 +1158,149 @@ textarea.form-control {
 #downloadPDF {
     background-color: #6b3cff; /* secondary blue */
 }
+
+/* === Work Experience Section (Dynamic Fields) === */
+#experienceContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* spacing between each experience block */
+    margin-top: 10px;
+}
+
+.experience-entry {
+    background-color: #f8f9fa;
+    border: 1px solid #cce0ff; /* light blue border */
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(13, 110, 253, 0.05); /* soft shadow for separation */
+}
+
+.experience-entry label {
+    display: block;
+    font-weight: 600;
+    color: #0d6efd;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+.experience-entry input[type="text"],
+.experience-entry textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cce0ff;
+    border-radius: 8px;
+    background-color: #fff;
+    font-size: 15px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.experience-entry input:focus,
+.experience-entry textarea:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
+    outline: none;
+}
+
+#addExperienceBtn {
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    margin-top: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+
+#addExperienceBtn:hover {
+    background-color: #084298;
+    transform: translateY(-1px);
+}
+
+/* === File Upload Styling === */
+input[type="file"] {
+    display: block;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #cce0ff;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    font-size: 15px;
+    cursor: pointer;
+    color: #0d6efd;
+    transition: all 0.3s ease;
+}
+
+input[type="file"]::file-selector-button {
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+input[type="file"]::file-selector-button:hover {
+    background-color: #084298;
+}
+
+/* === Add Another Experience Button === */
+#addExperienceBtn {
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+#addExperienceBtn:hover {
+    background-color: #084298;
+    transform: translateY(-1px);
+}
+
+/* === Remove Experience Button === */
+.removeExperienceBtn {
+    background-color: #dc3545; /* red */
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    display: inline-block;
+}
+
+.removeExperienceBtn:hover {
+    background-color: #b02a37;
+    transform: translateY(-1px);
+}
+
+/* === Generate PDF Button Override (optional for consistency) === */
+#downloadServerPDF {
+    background-color: #6b3cff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-top: 20px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+#downloadServerPDF:hover {
+    background-color: #4e2abf;
+    transform: translateY(-1px);
+}
+
 
 /* === Resume Preview Box === */
 #resumePreview {

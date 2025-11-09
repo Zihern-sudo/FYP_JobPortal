@@ -45,18 +45,27 @@
         <input type="text" id="eduYear" name="eduYear" placeholder="2020 - 2024" />
 
         <h3>Work Experience</h3>
-        <label>Company</label>
-        <input type="text" id="company" name="company" placeholder="ABC Corp" />
+        <div id="experienceContainer">
+            <div class="experience-entry">
+                <label>Company</label>
+                <input type="text" id="company" name="company" placeholder="ABC Corp" />
 
-        <label>Position</label>
-        <input type="text" id="position" name="position" placeholder="Software Intern" />
+                <label>Position</label>
+                <input type="text" id="position" name="position" placeholder="Software Intern" />
 
-        <label>Duration</label>
-        <input type="text" id="duration" name="duration" placeholder="Jun 2023 - Aug 2023" />
+                <label>Duration</label>
+                <input type="text" id="duration" name="duration" placeholder="2 years, 6 months" />
 
-        <label>Responsibilities / Achievements</label>
-        <textarea id="achievements" name="achievements" placeholder="Describe your contributions..."
-            rows="3"></textarea>
+                <label>Responsibilities / Achievements</label>
+                <textarea id="achievements" name="achievements" placeholder="Describe your contributions..."
+                    rows="3"></textarea>
+            </div>
+        </div>
+
+        <!-- Add new experience button -->
+        <button type="button" id="addExperienceBtn" style="margin-top:10px;">+ Add Another Experience</button>
+
+
 
         <h3>Skills & Certifications</h3>
         <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" />
@@ -101,58 +110,110 @@
         const school = document.getElementById("school").value;
         const degree = document.getElementById("degree").value;
         const eduYear = document.getElementById("eduYear").value;
-        const company = document.getElementById("company").value;
-        const position = document.getElementById("position").value;
-        const duration = document.getElementById("duration").value;
-        const achievements = document.getElementById("achievements").value;
         const skills = document.getElementById("skills").value;
         const certifications = document.getElementById("certifications").value;
         const profileImg = document.getElementById("previewImg").src;
 
-        const content = `
+        // Gather all experience sections
+        const experiences = [];
+        document.querySelectorAll(".experience-entry").forEach(entry => {
+            const company = entry.querySelector('[name="company"]').value.trim();
+            const position = entry.querySelector('[name="position"]').value.trim();
+            const duration = entry.querySelector('[name="duration"]').value.trim();
+            const achievements = entry.querySelector('[name="achievements"]').value.trim();
+
+            if (company || position || duration || achievements) {
+                experiences.push(`${position} at ${company} (${duration}) — ${achievements}`);
+            }
+        });
+
+        // Create preview content dynamically (hide empty sections)
+        let content = `
             <div style="display:flex; align-items:center; gap:20px;">
                 ${profileImg && profileImg !== "#" ? `<img src="${profileImg}" style="width:100px; height:100px; border-radius:50%; object-fit:cover;">` : ""}
                 <div>
                     <h3>${name}</h3>
-                    <p>${email}</p>
-                    <p>${phone}</p>
-                    <p>${address}</p>
+                    ${email ? `<p>${email}</p>` : ""}
+                    ${phone ? `<p>${phone}</p>` : ""}
+                    ${address ? `<p>${address}</p>` : ""}
                 </div>
             </div>
             <hr/>
-            <p><strong>Summary:</strong> ${summary}</p>
-            <p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>
-            <p><strong>Experience:</strong> ${position} at ${company} (${duration})</p>
-            <p><strong>Achievements:</strong> ${achievements}</p>
-            <p><strong>Skills:</strong> ${skills}</p>
-            <p><strong>Certifications:</strong> ${certifications}</p>
         `;
+
+        if (summary) content += `<p><strong>Summary:</strong> ${summary}</p>`;
+        if (degree || school || eduYear) content += `<p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>`;
+        if (experiences.length > 0) content += `<p><strong>Experience:</strong><br> ${experiences.join("<br>")}</p>`;
+        if (skills) content += `<p><strong>Skills:</strong> ${skills}</p>`;
+        if (certifications) content += `<p><strong>Certifications:</strong> ${certifications}</p>`;
+
         document.getElementById("resumeContent").innerHTML = content;
     });
 
-    // 🧩 Combine for submission
+    // ➕ Add new experience entry
+    document.getElementById("addExperienceBtn").addEventListener("click", function () {
+        const container = document.getElementById("experienceContainer");
+
+        const newEntry = document.createElement("div");
+        newEntry.classList.add("experience-entry");
+        newEntry.style.marginTop = "15px";
+        newEntry.innerHTML = `
+        <hr style="margin:10px 0;">
+        <button type="button" class="removeExperienceBtn" style="margin-bottom:10px;">Remove</button>
+        <label>Company</label>
+        <input type="text" name="company" placeholder="Company name" />
+
+        <label>Position</label>
+        <input type="text" name="position" placeholder="Job Title" />
+
+        <label>Duration</label>
+        <input type="text" name="duration" placeholder="1 year, 3 months" />
+
+        <label>Responsibilities / Achievements</label>
+        <textarea name="achievements" placeholder="Describe your contributions..." rows="3"></textarea>
+    `;
+        container.appendChild(newEntry);
+
+        // ✅ Attach remove event properly
+        newEntry.querySelector(".removeExperienceBtn").addEventListener("click", function () {
+            container.removeChild(newEntry);
+        });
+    }); // ✅ <- this closing brace was missing before
+
+
+    // 🧩 Combine for submission (for PDF generation)
     document.getElementById("resumeForm").addEventListener("submit", function () {
         const school = document.getElementById("school").value.trim();
         const degree = document.getElementById("degree").value.trim();
         const eduYear = document.getElementById("eduYear").value.trim();
-        const company = document.getElementById("company").value.trim();
-        const position = document.getElementById("position").value.trim();
-        const duration = document.getElementById("duration").value.trim();
-        const achievements = document.getElementById("achievements").value.trim();
 
-        // Only fill education if at least one field has value
+        // 🎓 Education
         if (degree || school || eduYear) {
             document.getElementById("education").value = `${degree} at ${school} (${eduYear})`;
         } else {
             document.getElementById("education").value = "";
         }
 
-        // Only fill experience if at least one field has value
-        if (position || company || duration || achievements) {
-            document.getElementById("experience").value = `${position} at ${company} (${duration}) — ${achievements}`;
-        } else {
-            document.getElementById("experience").value = "";
-        }
-    });
+        // 💼 Collect all experiences
+        const experiences = [];
+        document.querySelectorAll(".experience-entry").forEach(entry => {
+            const company = entry.querySelector('[name="company"]').value.trim();
+            const position = entry.querySelector('[name="position"]').value.trim();
+            const duration = entry.querySelector('[name="duration"]').value.trim();
+            const achievements = entry.querySelector('[name="achievements"]').value.trim();
 
+            if (company || position || duration || achievements) {
+                let durationText = duration;
+                if (/less than|<\s*1\s*year/i.test(duration)) {
+                    durationText = "<1 year";
+                } else if (/^\d+\s*(months?|mo)$/i.test(duration)) {
+                    durationText = "Less than 1 year";
+                }
+                experiences.push(`${position} at ${company} (${durationText}) — ${achievements}`);
+            }
+        });
+
+        // Combine all experiences into one hidden field
+        document.getElementById("experience").value = experiences.join("\n");
+    });
 </script>

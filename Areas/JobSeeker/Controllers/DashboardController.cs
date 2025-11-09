@@ -816,7 +816,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                         if (!string.IsNullOrWhiteSpace(experience))
                         {
                             column.Item().Text("Experience:").Bold();
-                            column.Item().Text(experience);
+
+                            // Split experiences by newline and add each as a separate item
+                            foreach (var exp in experience.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                column.Item().Text(exp.Trim());
+                            }
                         }
 
                         // 🧠 Skills
