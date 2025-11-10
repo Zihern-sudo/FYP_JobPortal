@@ -320,4 +320,20 @@ ALTER TABLE `company`
 
 /* ---------------------------------------------------------------------------------------------- */
 
+/* 9:19pm 10/11/2025 zihern */
+-- New table to track short-lived email verification links
+CREATE TABLE IF NOT EXISTS email_verification (
+  token_id       INT AUTO_INCREMENT PRIMARY KEY,
+  email          VARCHAR(190) NOT NULL,
+  token          CHAR(36)     NOT NULL,        -- GUID
+  purpose        ENUM('RecruiterRegister') NOT NULL DEFAULT 'RecruiterRegister',
+  expires_at     DATETIME     NOT NULL,
+  used           TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_email_latest UNIQUE (email, token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE INDEX idx_email_purpose ON email_verification (email, purpose);
+CREATE INDEX idx_exp_used      ON email_verification (expires_at, used);
+
+/* ------------------------------------ */
