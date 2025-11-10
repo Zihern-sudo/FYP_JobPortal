@@ -31,82 +31,90 @@
 </section>
 
 @section Scripts {
-    <script>
-        const form = document.querySelector("form");
-        const fileInput = document.getElementById("resumeFile");
-        const uploadArea = document.querySelector(".upload-area");
-        const uploadContent = document.querySelector(".upload-content");
+<script>
+    const form = document.querySelector("form");
+    const fileInput = document.getElementById("resumeFile");
+    const uploadArea = document.querySelector(".upload-area");
+    const uploadContent = document.querySelector(".upload-content");
 
-        uploadArea.addEventListener("click", () => fileInput.click());
+    uploadArea.addEventListener("click", () => fileInput.click());
+    uploadArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadArea.classList.add("drag-over");
+    });
+    uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("drag-over"));
+    uploadArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove("drag-over");
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            showSelectedFile(fileInput.files[0]);
+        }
+    });
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) showSelectedFile(fileInput.files[0]);
+    });
 
-        uploadArea.addEventListener("dragover", (e) => {
-            e.preventDefault();
-            uploadArea.classList.add("drag-over");
-        });
+    function showSelectedFile(file) {
+        uploadContent.innerHTML = `<p class="file-selected">📄 Selected File: ${file.name}</p>`;
+    }
 
-        uploadArea.addEventListener("dragleave", () => {
-            uploadArea.classList.remove("drag-over");
-        });
+    // ✅ Feedback function (no scanning explanation, human tone)
+    function getFeedback(score) {
+        if (score <= 2) {
+            return "Your resume seems to be missing key information. Try adding more details about your background, education, and any projects or internships you’ve completed. Make sure to highlight your main strengths and what makes you unique.";
+        } else if (score <= 4) {
+            return "There’s a good start here, but your resume could use more depth. Consider expanding your work or academic experiences and including specific examples that show your skills in action.";
+        } else if (score <= 6) {
+            return "You have a decent foundation, but there’s room for improvement. Try making your descriptions more impactful by focusing on achievements and results. Adding certifications or technical skills can also help.";
+        } else if (score <= 8) {
+            return "Your resume looks strong and well-structured. You could make it even better by tailoring it more closely to your target roles and ensuring your summary reflects your most relevant strengths.";
+        } else {
+            return "Great job! Your resume is well-crafted and professional. Continue keeping it updated with your latest experiences and maintain clear formatting for the best impression.";
+        }
+    }
 
-        uploadArea.addEventListener("drop", (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove("drag-over");
-            if (e.dataTransfer.files.length > 0) {
-                fileInput.files = e.dataTransfer.files;
-                showSelectedFile(fileInput.files[0]);
-            }
-        });
+    // ✅ Submit form + show results
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
 
-        fileInput.addEventListener("change", () => {
-            if (fileInput.files.length > 0) {
-                showSelectedFile(fileInput.files[0]);
-            }
-        });
-
-        function showSelectedFile(file) {
-            uploadContent.innerHTML = `<p class="file-selected">📄 Selected File: ${file.name}</p>`;
+        if (fileInput.files.length === 0) {
+            alert("Please select a PDF resume file first!");
+            return;
         }
 
-        form.addEventListener("submit", async function (e) {
-            e.preventDefault();
+        const formData = new FormData();
+        formData.append("resumeFile", fileInput.files[0]);
 
-            if (fileInput.files.length === 0) {
-                alert("Please select a PDF resume file first!");
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append("resumeFile", fileInput.files[0]);
-
-            const response = await fetch("/JobSeeker/Resume/UploadResume", {
-                method: "POST",
-                body: formData
-            });
-
-            const data = await response.json();
-            const resultDiv = document.querySelector("#resultContainer");
-            resultDiv.classList.add("analysis-results");
-
-            if (data.success) {
-                resultDiv.innerHTML = `
-                            <h2>📊 Resume Evaluation Results</h2>
-                            <div class="score-card">
-                                <p><strong>Education:</strong> ${data.education}</p>
-                                <p><strong>Experience:</strong> ${data.experience}</p>
-                                <p><strong>Skills:</strong> ${data.skills}</p>
-                                <p><strong>Certifications:</strong> ${data.certifications}</p>
-                                <hr>
-                                <h3>Overall Score: ${data.overallScore}/10</h3>
-                            </div>
-
-                            <h2>Skills Match Summary</h2>
-                            <p>Your resume contains <strong>${data.matchedSkills}</strong> key skills that align with our system’s requirements.</p>
-
-                            <p>Total Extracted Keywords: ${data.totalExtracted}</p>
-                        `;
-            } else {
-                resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
-            }
+        const response = await fetch("/JobSeeker/Resume/UploadResume", {
+            method: "POST",
+            body: formData
         });
-    </script>
+
+        const data = await response.json();
+        const resultDiv = document.querySelector("#resultContainer");
+        resultDiv.classList.add("analysis-results");
+
+        if (data.success) {
+            const feedback = getFeedback(data.overallScore);
+
+            resultDiv.innerHTML = `
+                <h2>📊 Resume Evaluation Results</h2>
+                <div class="score-card">
+                    <p><strong>Education:</strong> ${data.education}</p>
+                    <p><strong>Experience:</strong> ${data.experience}</p>
+                    <p><strong>Skills:</strong> ${data.skills}</p>
+                    <p><strong>Certifications:</strong> ${data.certifications}</p>
+                    <hr>
+                    <h3>Overall Score: ${data.overallScore}/10</h3>
+                </div>
+
+                <h2>Feedback</h2>
+                <p>${feedback}</p>
+            `;
+        } else {
+            resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
+        }
+    });
+</script>
 }

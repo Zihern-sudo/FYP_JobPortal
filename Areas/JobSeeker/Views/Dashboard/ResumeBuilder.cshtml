@@ -10,6 +10,12 @@
     <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResume" enctype="multipart/form-data">
         <h3>Personal Information</h3>
 
+        <label for="template">Choose Resume Template</label>
+        <select id="template" name="template" required>
+            <option value="classic">Classic (Simple, Clean)</option>
+            <option value="modern">Modern (Two-column layout)</option>
+        </select>
+
         <!-- Profile Picture Upload -->
         <label>Profile Picture</label>
         <input type="file" id="profilePic" name="profilePic" accept="image/*" />

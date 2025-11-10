@@ -753,7 +753,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(); // Looks for Views/Dashboard/ResumeBuilder.cshtml
         }
 
-        private byte[] GenerateResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
+        private byte[] GenerateClassicResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
             string summary, string education, string experience, string skills, string certifications)
         {
             var document = Document.Create(container =>
@@ -863,12 +863,89 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return document.GeneratePdf();
         }
 
+        private byte[] GenerateModernResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
+            string summary, string education, string experience, string skills, string certifications)
+        {
+            var document = Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(2f, Unit.Centimetre);
+                    page.Background(Colors.White);
+
+                    page.Content().Row(row =>
+                    {
+                        // Left Sidebar (Profile + Contact + Skills)
+                        row.ConstantItem(200).Column(left =>
+                        {
+                            // Profile Image
+                            if (profileImage != null && profileImage.Length > 0)
+                            {
+                                left.Item().Width(120).Height(120).AlignCenter().Element(e =>
+                        {
+            e.Image(profileImage, ImageScaling.FitArea);
+        });
+                                left.Item().PaddingVertical(5);
+                            }
+
+                            // Name & Contact Info
+                            left.Item().Text(fullName).Bold().FontSize(16).FontColor(Colors.Blue.Medium).AlignCenter();
+                            left.Item().PaddingTop(3).AlignCenter().Text(email).FontSize(9);
+                            left.Item().AlignCenter().Text(phone).FontSize(9);
+                            left.Item().AlignCenter().Text(address).FontSize(9).AlignCenter();
+
+                            // Divider Line
+                            left.Item().PaddingVertical(10).LineHorizontal(1);
+
+                            // Skills
+                            if (!string.IsNullOrEmpty(skills))
+                            {
+                                left.Item().Text("Skills").Bold().FontSize(12).Underline();
+                                foreach (var skill in skills.Split(new[] { ',', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                    left.Item().PaddingTop(2).Text("• " + skill.Trim()).FontSize(10);
+                            }
+
+                            // Certifications
+                            if (!string.IsNullOrEmpty(certifications))
+                            {
+                                left.Item().PaddingTop(10).Text("Certifications").Bold().FontSize(12).Underline();
+                                foreach (var cert in certifications.Split(new[] { ',', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                    left.Item().PaddingTop(2).Text("• " + cert.Trim()).FontSize(10);
+                            }
+                        });
+
+                        // Right Main Content (Summary, Education, Experience)
+                        row.RelativeItem().Column(right =>
+                        {
+                            // Section Styling Helper
+                            void AddSection(string title, string content)
+                            {
+                                if (!string.IsNullOrWhiteSpace(content))
+                                {
+                                    right.Item().PaddingTop(10).Text(title).Bold().FontSize(14).FontColor(Colors.Black);
+                                    right.Item().PaddingBottom(5).LineHorizontal(0.5f).LineColor(Colors.Grey.Medium);
+                                    foreach (var line in content.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                        right.Item().PaddingTop(2).Text(line.Trim()).FontSize(11);
+                                }
+                            }
+
+                            AddSection("Professional Summary", summary);
+                            AddSection("Education", education);
+                            AddSection("Experience", experience);
+                        });
+                    });
+                });
+            });
+
+            return document.GeneratePdf();
+        }
 
 
         // POST: /JobSeeker/Dashboard/SaveResume
         [HttpPost]
         public async Task<IActionResult> SaveResume(IFormFile? profilePic, string fullName, string email, string phone, string address,
-            string summary, string education, string experience, string skills, string certifications)
+            string summary, string education, string experience, string skills, string certifications, string template)
         {
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
@@ -886,8 +963,11 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
             // 1️⃣ Generate PDF with the image
-            var pdfBytes = GenerateResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications);
-
+            var pdfBytes = template switch
+            {
+                "modern" => GenerateModernResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
+                "classic" => GenerateClassicResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
+            };
             // 2️⃣ Save PDF to wwwroot/resumes
             var resumesDir = Path.Combine(_webHostEnvironment.WebRootPath, "resumes");
             if (!Directory.Exists(resumesDir))

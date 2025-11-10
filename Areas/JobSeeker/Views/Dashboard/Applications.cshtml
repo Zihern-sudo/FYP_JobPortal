@@ -54,7 +54,7 @@
     <div>
         <label for="status" class="me-1 fw-semibold">Status:</label>
         <select id="status" name="status" class="form-select w-auto">
-            <option value="" selected="@(string.IsNullOrEmpty(ViewBag.SelectedStatus) ? "selected" : null)"">All</option>
+            <option value="" selected="@(string.IsNullOrEmpty(ViewBag.SelectedStatus) ? "selected" : null)">All</option>
             @{
                 string[] statuses = { "Submitted", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired", "Rejected" };
                 foreach (var s in statuses)

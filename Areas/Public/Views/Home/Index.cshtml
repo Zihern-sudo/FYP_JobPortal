@@ -17,7 +17,7 @@
                                 goals.</p>
                             <a asp-area="Public" asp-controller="Jobs" asp-action="List"
                                 class="btn btn-primary py-md-3 px-md-5 me-3">Search A Job</a>
-                            <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Add"
+                            <a asp-area="Recruiter" asp-controller="Account" asp-action="Register"
                                 class="btn btn-secondary py-md-3 px-md-5">Find A Talent</a>
                         </div>
                     </div>
@@ -52,10 +52,10 @@
         <form asp-area="Public" asp-controller="Jobs" asp-action="List" method="get" class="row g-2">
             <div class="col-md-10">
                 <div class="row g-2">
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <input type="text" name="q" class="form-control border-0" placeholder="Keyword" />
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <select name="category" class="form-select border-0">
                             <option selected>Category</option>
                             <option>Engineering</option>
@@ -63,20 +63,15 @@
                             <option>Design</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <select name="location" class="form-select border-0">
-                            <option selected>Location</option>
-                            <option>Kuala Lumpur</option>
-                            <option>Penang</option>
-                            <option>Johor</option>
-                        </select>
-                    </div>
                 </div>
             </div>
-            <div class="col-md-2"><button class="btn btn-dark border-0 w-100">Search</button></div>
+            <div class="col-md-2">
+                <button class="btn btn-dark border-0 w-100">Search</button>
+            </div>
         </form>
     </div>
 </div>
+
 
 <!-- Explore By Category -->
 @await Html.PartialAsync("~/Areas/Public/Views/Home/Partials/_CategoryGrid.cshtml")
