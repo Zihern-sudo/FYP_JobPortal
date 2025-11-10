@@ -240,14 +240,24 @@ namespace JobPortal.Areas.Recruiter.Models
         [Required, Display(Name = "Last Name"), StringLength(60)]
         public string last_name { get; set; } = "";
 
+        [Required, Display(Name = "Phone Number"), StringLength(30)]
+        [Phone(ErrorMessage = "Enter a valid phone number.")]
+        public string phone { get; set; } = "";
+
         [Required, EmailAddress, Display(Name = "Email"), StringLength(190)]
         public string email { get; set; } = "";
 
-        [Required, DataType(DataType.Password), StringLength(100, MinimumLength = 6)]
+        [Required, DataType(DataType.Password), StringLength(20, MinimumLength = 6)]
+        [Display(Name = "Password")]
         public string password { get; set; } = "";
 
-        [Required, DataType(DataType.Password), Display(Name = "Confirm Password"), Compare(nameof(password))]
+        [Required, DataType(DataType.Password), Display(Name = "Confirm Password")]
+        [Compare(nameof(password), ErrorMessage = "Passwords do not match.")]
         public string confirm { get; set; } = "";
+
+        [FromForm(Name = "g-recaptcha-response")]
+        [Display(Name = "I'm not a robot")]
+        public string? RecaptchaToken { get; set; }
     }
 
     public class CompanyProfileVm

@@ -1,0 +1,82 @@
+@{
+    ViewData["Title"] = "Home";
+}
+
+<!-- Carousel -->
+<div class="container-fluid p-0">
+    <div class="owl-carousel header-carousel position-relative">
+        <div class="owl-carousel-item position-relative">
+            <img class="img-fluid" src="~/img/carousel-1.jpg" alt="Hero 1">
+            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
+                style="background: rgba(43,57,64,.5);">
+                <div class="container">
+                    <div class="row justify-content-start">
+                        <div class="col-10 col-lg-8">
+                            <h1 class="display-3 text-white mb-4">Find The Perfect Job That You Deserve</h1>
+                            <p class="fs-5 fw-medium text-white mb-4 pb-2">Discover roles that match your skills and
+                                goals.</p>
+                            <a asp-area="Public" asp-controller="Jobs" asp-action="List"
+                                class="btn btn-primary py-md-3 px-md-5 me-3">Search A Job</a>
+                            <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Add"
+                                class="btn btn-secondary py-md-3 px-md-5">Find A Talent</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="owl-carousel-item position-relative">
+            <img class="img-fluid" src="~/img/carousel-2.jpg" alt="Hero 2">
+            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center"
+                style="background: rgba(43,57,64,.5);">
+                <div class="container">
+                    <div class="row justify-content-start">
+                        <div class="col-10 col-lg-8">
+                            <h1 class="display-3 text-white mb-4">Find The Best Startup Job That Fits You</h1>
+                            <p class="fs-5 fw-medium text-white mb-4 pb-2">Fresh opportunities added daily.</p>
+                            <a asp-area="Public" asp-controller="Jobs" asp-action="List"
+                                class="btn btn-primary py-md-3 px-md-5 me-3">Search A Job</a>
+                            <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Add"
+                                class="btn btn-secondary py-md-3 px-md-5">Find A Talent</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="container-fluid bg-primary mb-5 wow fadeIn" data-wow-delay="0.1s" style="padding: 35px;">
+    <div class="container">
+        <form asp-area="Public" asp-controller="Jobs" asp-action="List" method="get" class="row g-2">
+            <div class="col-md-10">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <input type="text" name="q" class="form-control border-0" placeholder="Keyword" />
+                    </div>
+                    <div class="col-md-4">
+                        <select name="category" class="form-select border-0">
+                            <option selected>Category</option>
+                            <option>Engineering</option>
+                            <option>Marketing</option>
+                            <option>Design</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select name="location" class="form-select border-0">
+                            <option selected>Location</option>
+                            <option>Kuala Lumpur</option>
+                            <option>Penang</option>
+                            <option>Johor</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2"><button class="btn btn-dark border-0 w-100">Search</button></div>
+        </form>
+    </div>
+</div>
+
+<!-- Explore By Category -->
+@await Html.PartialAsync("~/Areas/Public/Views/Home/Partials/_CategoryGrid.cshtml")

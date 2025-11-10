@@ -1,5 +1,8 @@
+// ======================================================================
 // File: Areas/Shared/Models/Extensions/AreaRoleGuardFilter.cs
+// ======================================================================
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization; // <-- new: for IAllowAnonymous
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -8,15 +11,16 @@ using JobPortal.Areas.Shared.Extensions; // TryGetUserId()
 namespace JobPortal.Areas.Shared.Models.Extensions
 {
     /// <summary>
-    /// Generic session-based guard for an Area requiring a specific role.
-    /// If not logged in or wrong role, redirects to {loginArea}/Account/Login with returnUrl.
+    /// Session-based guard for an Area requiring a specific role.
+    /// Redirects to {loginArea}/Account/Login with returnUrl if unauthenticated or wrong role.
+    /// Respects [AllowAnonymous] on actions/endpoints.
     /// </summary>
     public sealed class AreaRoleGuardFilter : IAsyncActionFilter
     {
         private static readonly string[] RoleKeys = { "UserRole", "role", "user_role" };
 
         private readonly string _requiredRole;  // e.g., "Admin" or "Recruiter"
-        private readonly string _loginArea;     // e.g., always "JobSeeker" in this app
+        private readonly string _loginArea;     // e.g., "JobSeeker"
 
         public AreaRoleGuardFilter(string requiredRole, string loginArea)
         {
@@ -26,6 +30,15 @@ namespace JobPortal.Areas.Shared.Models.Extensions
 
         public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
         {
+            // --- Respect [AllowAnonymous] on the endpoint (prevents bouncing public pages like Recruiter/Register)
+            var endpoint = ctx.HttpContext.GetEndpoint();
+            var allowAnon = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null;
+            if (allowAnon)
+            {
+                await next();
+                return;
+            }
+
             var req = ctx.HttpContext.Request;
             var path = req?.Path.HasValue == true ? req.Path.Value : "/";
             var query = req?.QueryString.HasValue == true ? req.QueryString.Value : string.Empty;
@@ -37,7 +50,7 @@ namespace JobPortal.Areas.Shared.Models.Extensions
                 return;
             }
 
-            // must be logged in
+            // Must be logged in
             int userId;
             IActionResult? _ignored;
             if (!controller.TryGetUserId(out userId, out _ignored))
@@ -46,7 +59,7 @@ namespace JobPortal.Areas.Shared.Models.Extensions
                 return;
             }
 
-            // must match required role
+            // Must match required role
             var role = ResolveRole(ctx.HttpContext);
             if (!string.Equals(role, _requiredRole, System.StringComparison.OrdinalIgnoreCase))
             {

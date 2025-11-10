@@ -81,7 +81,9 @@
 
             <!-- 🔹 New Recruiter Registration Button -->
             <div class="alt-option">
-                <a href="/account/recruiterregister" class="alt-btn">Register as Recruiter</a>
+                <a asp-area="Recruiter" asp-controller="Account" asp-action="Register" class="alt-btn">
+                    Register as Recruiter
+                </a>
             </div>
 
             <p class="switch-text">
@@ -202,10 +204,10 @@
                         form.method = "POST";
                         form.action = "/JobSeeker/Account/Login";
                         form.innerHTML = `
-                                                                                        <input type="hidden" name="email" value="${pendingEmail}">
-                                                                                        <input type="hidden" name="password" value="${pendingPassword}">
-                                                                                        <input type="hidden" name="twoFACode" value="${code}">
-                                                                                    `;
+                                                                                            <input type="hidden" name="email" value="${pendingEmail}">
+                                                                                            <input type="hidden" name="password" value="${pendingPassword}">
+                                                                                            <input type="hidden" name="twoFACode" value="${code}">
+                                                                                        `;
                         document.body.appendChild(form);
                         form.submit();
                     }

@@ -23,6 +23,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<conversation_monitor> conversation_monitors { get; set; }
 
+    public virtual DbSet<email_verification> email_verifications { get; set; }
+
     public virtual DbSet<job_application> job_applications { get; set; }
 
     public virtual DbSet<job_listing> job_listings { get; set; }
@@ -99,6 +101,14 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.conversation).WithMany(p => p.conversation_monitors).HasConstraintName("fk_monitor_conv");
 
             entity.HasOne(d => d.user).WithMany(p => p.conversation_monitors).HasConstraintName("fk_monitor_user");
+        });
+
+        modelBuilder.Entity<email_verification>(entity =>
+        {
+            entity.HasKey(e => e.token_id).HasName("PRIMARY");
+
+            entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.purpose).HasDefaultValueSql("'RecruiterRegister'");
         });
 
         modelBuilder.Entity<job_application>(entity =>

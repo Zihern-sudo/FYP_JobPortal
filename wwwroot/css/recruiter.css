@@ -1,4 +1,6 @@
 /* File: wwwroot/css/recruiter.css */
+/* ==== existing content kept intact (do not remove) ==== */
+/* File: wwwroot/css/recruiter.css */
 
 /* Layout */
 body {
@@ -185,3 +187,22 @@ body {
 }
 
 /* long label, keep on one line */
+
+/* ==== additions for standalone auth/onboarding pages ==== */
+.auth-card .form-control {
+  height: 44px;
+}
+
+.auth-card .btn {
+  height: 44px;
+}
+
+/* Keep this noop if page uses no layout (safe globally) */
+.auth-hide-chrome .topbar,
+.auth-hide-chrome .sidebar {
+  display: none !important;
+}
+
+.auth-hide-chrome .app {
+  grid-template-columns: 1fr !important;
+}

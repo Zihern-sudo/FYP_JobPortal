@@ -1,0 +1,110 @@
+@model JobPortal.Areas.Public.Models.ContactFormVm
+@{
+    ViewData["Title"] = "Contact";
+}
+<div class="container-fluid py-5 bg-dark page-header mb-5">
+    <div class="container my-5 pt-5 pb-4">
+        <h1 class="display-3 text-white mb-3">Contact</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb text-uppercase">
+                <li class="breadcrumb-item"><a asp-area="Public" asp-controller="Home" asp-action="Index">Home</a></li>
+                <li class="breadcrumb-item"><a href="#">Pages</a></li>
+                <li class="breadcrumb-item text-white active" aria-current="page">Contact</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="container-fluid py-5">
+    <div class="container">
+        <h1 class="text-center mb-5">Contact For Any Query</h1>
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="row gy-4">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center bg-light rounded p-4">
+                            <div class="bg-white border rounded d-flex flex-shrink-0 align-items-center justify-content-center me-3"
+                                style="width:45px;height:45px;">
+                                <i class="fa fa-map-marker-alt text-primary"></i>
+                            </div>
+                            <span>123 Street, Kuala Lumpur, MY</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center bg-light rounded p-4">
+                            <div class="bg-white border rounded d-flex flex-shrink-0 align-items-center justify-content-center me-3"
+                                style="width:45px;height:45px;">
+                                <i class="fa fa-envelope-open text-primary"></i>
+                            </div>
+                            <span>info@example.com</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center bg-light rounded p-4">
+                            <div class="bg-white border rounded d-flex flex-shrink-0 align-items-center justify-content-center me-3"
+                                style="width:45px;height:45px;">
+                                <i class="fa fa-phone-alt text-primary"></i>
+                            </div>
+                            <span>+60 12-345 6789</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3983.5378121733747!2d101.72398217473061!3d3.2152551967599208!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31cc3843bfb6a031%3A0x2dc5e067aae3ab84!2sTunku%20Abdul%20Rahman%20University%20of%20Management%20and%20Technology%20(TAR%20UMT)!5e0!3m2!1sen!2smy!4v1762756993562!5m2!1sen!2smy"
+                    width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"></iframe>
+            </div>
+
+            <div class="col-md-6">
+                <div>
+                    <h4 class="mb-4">Send us a message</h4>
+                    <form asp-area="Public" asp-controller="Home" asp-action="Contact" method="post" novalidate>
+                        @Html.AntiForgeryToken()
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input asp-for="Name" class="form-control" placeholder="Your Name" />
+                                    <label asp-for="Name">Your Name</label>
+                                    <span class="text-danger" asp-validation-for="Name"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input asp-for="Email" class="form-control" placeholder="Your Email" />
+                                    <label asp-for="Email">Your Email</label>
+                                    <span class="text-danger" asp-validation-for="Email"></span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-floating">
+                                    <input asp-for="Subject" class="form-control" placeholder="Subject" />
+                                    <label asp-for="Subject">Subject</label>
+                                    <span class="text-danger" asp-validation-for="Subject"></span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-floating">
+                                    <textarea asp-for="Message" class="form-control" style="height: 150px"
+                                        placeholder="Message"></textarea>
+                                    <label asp-for="Message">Message</label>
+                                    <span class="text-danger" asp-validation-for="Message"></span>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-primary w-100 py-3" type="submit">Send Message</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

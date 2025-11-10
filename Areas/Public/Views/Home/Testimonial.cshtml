@@ -1,0 +1,37 @@
+@{
+    ViewData["Title"] = "Testimonial";
+}
+<div class="container-fluid py-5 bg-dark page-header mb-5">
+    <div class="container my-5 pt-5 pb-4">
+        <h1 class="display-3 text-white mb-3">Testimonial</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb text-uppercase">
+                <li class="breadcrumb-item"><a asp-area="Public" asp-controller="Home" asp-action="Index">Home</a></li>
+                <li class="breadcrumb-item"><a href="#">Pages</a></li>
+                <li class="breadcrumb-item text-white active" aria-current="page">Testimonial</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="container-fluid py-5">
+    <div class="container">
+        <h1 class="text-center mb-5">Our Clients Say</h1>
+        <div class="owl-carousel testimonial-carousel">
+            <!-- Repeatable testimonial item -->
+            <div class="testimonial-item bg-light rounded p-4">
+                <i class="fa fa-quote-left fa-2x text-primary mb-3"></i>
+                <p>Great experience finding my role through JobEntry.</p>
+                <div class="d-flex align-items-center">
+                    <img class="img-fluid flex-shrink-0 rounded" src="~/img/testimonial-1.jpg"
+                        style="width:50px;height:50px;">
+                    <div class="ps-3">
+                        <h5 class="mb-1">Client Name</h5>
+                        <small>Profession</small>
+                    </div>
+                </div>
+            </div>
+            <!-- Add remaining items as needed -->
+        </div>
+    </div>
+</div>

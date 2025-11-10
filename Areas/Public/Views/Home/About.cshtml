@@ -1,0 +1,41 @@
+@{
+    ViewData["Title"] = "About";
+}
+<div class="container-fluid py-5 bg-dark page-header mb-5">
+    <div class="container my-5 pt-5 pb-4">
+        <h1 class="display-3 text-white mb-3">About Us</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb text-uppercase">
+                <li class="breadcrumb-item"><a asp-area="Public" asp-controller="Home" asp-action="Index">Home</a></li>
+                <li class="breadcrumb-item"><a href="#">Pages</a></li>
+                <li class="breadcrumb-item text-white active" aria-current="page">About</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="container-fluid py-5">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <div class="row g-0 about-bg rounded overflow-hidden">
+                    <div class="col-6 text-start"><img class="img-fluid w-100" src="~/img/about-1.jpg" /></div>
+                    <div class="col-6 text-start"><img class="img-fluid" src="~/img/about-2.jpg"
+                            style="width:85%;margin-top:15%" /></div>
+                    <div class="col-6 text-end"><img class="img-fluid" src="~/img/about-3.jpg" style="width:85%" />
+                    </div>
+                    <div class="col-6 text-end"><img class="img-fluid w-100" src="~/img/about-4.jpg" /></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <h1 class="mb-4">We Help You Get The Best Job And Find Great Talent</h1>
+                <p class="mb-4">A short mission statement goes here.</p>
+                <p><i class="fa fa-check text-primary me-3"></i>Faster screening and matching</p>
+                <p><i class="fa fa-check text-primary me-3"></i>Human-in-the-loop decisions</p>
+                <p><i class="fa fa-check text-primary me-3"></i>Transparent, fair workflows</p>
+                <a class="btn btn-primary py-3 px-5 mt-3" asp-area="Public" asp-controller="Jobs" asp-action="List">Read
+                    More</a>
+            </div>
+        </div>
+    </div>
+</div>

@@ -312,3 +312,12 @@ ALTER TABLE user
 ADD COLUMN profile_picture VARCHAR(255) NULL;
 /* 5:16pm */
 
+/* 6.03pm 7/11/2025 add company photo to company table */
+
+ALTER TABLE `company`
+  ADD COLUMN `company_photo` VARCHAR(255) NULL
+  AFTER `company_description`;
+
+/* ---------------------------------------------------------------------------------------------- */
+
+

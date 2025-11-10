@@ -380,10 +380,14 @@ namespace JobPortal.Areas.Admin.Controllers
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
             return File(bytes, "text/csv; charset=utf-8", $"Users_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv");
         }
+
+
+
+
         // BULK: Approve / Reject / Suspend / Reactivate (respects role)
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Bulk(string actionType, int[] ids,
-            string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
+           string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
         {
             if (ids == null || ids.Length == 0)
             {
@@ -412,14 +416,44 @@ namespace JobPortal.Areas.Admin.Controllers
                 case "JobSeeker": usersQ = usersQ.Where(u => u.user_role == "JobSeeker"); break;
             }
 
-            var users = usersQ.ToList();
+            var users = usersQ
+                .Include(u => u.company) // needed to adjust company_status
+                .ToList();
             if (!users.Any())
             {
                 Flash("warning", "No matching users found for the selected role.");
                 return RedirectToAction(nameof(Index), new { status, q, role, from = ToStr(from), to = ToStr(to), page });
             }
 
-            foreach (var u in users) u.user_status = setTo;
+            foreach (var u in users)
+            {
+                u.user_status = setTo;
+
+                if (u.user_role == "Recruiter" && u.company != null)
+                {
+                    if (actionType.Equals("approve", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase))
+                        u.company.company_status = "Verified";
+
+                    if (actionType.Equals("reject", StringComparison.OrdinalIgnoreCase)
+                        && (string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(u.company.company_status, "Incomplete", StringComparison.OrdinalIgnoreCase)))
+                        u.company.company_status = "Rejected";
+                }
+
+                // Only touch company_status for recruiters on approve/reject
+                if (u.user_role == "Recruiter" && u.company != null)
+                {
+                    if (actionType.Equals("approve", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase))
+                        u.company.company_status = "Verified";
+
+                    if (actionType.Equals("reject", StringComparison.OrdinalIgnoreCase)
+                        && (string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(u.company.company_status, "Incomplete", StringComparison.OrdinalIgnoreCase)))
+                        u.company.company_status = "Rejected";
+                }
+            }
             _db.SaveChanges();
 
             if (this.TryGetUserId(out var adminId, out _))
@@ -433,6 +467,7 @@ namespace JobPortal.Areas.Admin.Controllers
             Flash("success", $"{users.Count} user{(users.Count == 1 ? "" : "s")} {actionType.ToLowerInvariant()}.");
             return RedirectToAction(nameof(Index), new { status, q, role, from = ToStr(from), to = ToStr(to), page });
         }
+
 
         // ---------- PREVIEW (supports both roles) ----------
         public IActionResult Preview(int id)
@@ -489,26 +524,56 @@ namespace JobPortal.Areas.Admin.Controllers
         public IActionResult Reactivate(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
             => SetUserStatus(id, "Active", "User reactivated.", status, q, from, to, page, role);
 
-        private IActionResult SetUserStatus(int id, string setTo, string msg,
+        // Single-item helpers (Approve/Reject/Suspend/Reactivate) call SetUserStatus(...)
+        // We extend SetUserStatus to also flip company_status.
+        private IActionResult SetUserStatus(int id, string newStatus, string okMessage,
             string status, string q, DateTime? from, DateTime? to, int page, string role)
         {
-            var u = _db.users.FirstOrDefault(x => x.user_id == id);
+            var u = _db.users.Include(x => x.company).FirstOrDefault(x => x.user_id == id);
             if (u == null)
             {
-                Flash("danger", "User not found.");
+                Flash("warning", "User not found.");
                 return RedirectToAction(nameof(Index), new { status, q, role, from = ToStr(from), to = ToStr(to), page });
             }
 
-            u.user_status = setTo;
+            u.user_status = newStatus;
+
+            if (u.user_role == "Recruiter" && u.company != null)
+            {
+                if (newStatus == "Active" &&
+                    string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase))
+                    u.company.company_status = "Verified";
+                else if (newStatus == "Inactive" &&
+                        (string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(u.company.company_status, "Incomplete", StringComparison.OrdinalIgnoreCase)))
+                    u.company.company_status = "Rejected";
+            }
+
+            // Only on recruiter + company exists
+            if (u.user_role == "Recruiter" && u.company != null)
+            {
+                if (newStatus == "Active" &&
+                    string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    u.company.company_status = "Verified"; // approved company
+                }
+                else if (newStatus == "Inactive" &&
+                         (string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(u.company.company_status, "Incomplete", StringComparison.OrdinalIgnoreCase)))
+                {
+                    u.company.company_status = "Rejected"; // rejected company
+                }
+            }
+
             _db.SaveChanges();
 
             if (this.TryGetUserId(out var adminId, out _))
             {
-                _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"User-{setTo}", timestamp = DateTime.UtcNow });
+                _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"User-{newStatus}", timestamp = DateTime.UtcNow });
                 _db.SaveChanges();
             }
 
-            Flash("success", msg);
+            Flash("success", okMessage);
             return RedirectToAction(nameof(Index), new { status, q, role, from = ToStr(from), to = ToStr(to), page });
         }
 

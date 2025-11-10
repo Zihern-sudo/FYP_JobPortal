@@ -1,43 +1,271 @@
 @model JobPortal.Areas.Recruiter.Models.CompanyProfileVm
 @{
     ViewData["Title"] = "Company Profile";
+
+    var rawStatus = (ViewBag.CompanyStatus as string ?? "").Trim();
+    var status = rawStatus.ToLowerInvariant();
+
+    // Two stages only:
+    // 1 = Under Admin Review
+    // 2 = Approved & Active
+    int currentStep = status switch
+    {
+        "approved" => 2,
+        "verified" => 2,
+        "rejected" => 1,
+        "pending" => 1,
+        "incomplete" => 1,
+        _ => 1
+    };
+
+    string StepClass(int step) =>
+    step < currentStep ? "node done"
+    : step == currentStep ? "node current"
+    : "node";
 }
-<h2 class="mb-3">@ViewData["Title"]</h2>
+
+<style>
+    .stepper {
+        position: relative;
+        margin: 8px 0 18px 0;
+    }
+
+    /* Two nodes in a row */
+    .stepper .nodes {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        align-items: start;
+    }
+
+    .stepper .node {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 10px;
+        align-items: center;
+        background: #f6f8fc;
+        border-radius: 12px;
+        padding: 10px 12px;
+    }
+
+    .stepper .dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: #cfd6e4;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-weight: 700;
+        box-shadow: inset 0 0 0 3px #fff;
+    }
+
+    .stepper .label {
+        font-weight: 600;
+    }
+
+    .stepper .hint {
+        font-size: .85rem;
+        color: #6b7280;
+    }
+
+    .stepper .node.done {
+        background: #e8f3ff;
+    }
+
+    .stepper .node.current {
+        background: #dbeafe;
+    }
+
+    .stepper .node.done .dot,
+    .stepper .node.current .dot {
+        background: #0d6efd;
+    }
+
+    .badge-soft {
+        display: inline-block;
+        padding: .25rem .5rem;
+        border-radius: .4rem;
+        background: #eef2ff;
+        color: #3730a3;
+        font-weight: 600;
+    }
+</style>
+
+<h2 class="mb-2">@ViewData["Title"]</h2>
+
+<div class="stepper">
+    <div class="nodes">
+        <div class="@StepClass(1)">
+            <div class="dot">1</div>
+            <div>
+                <div class="label">Under Admin Review</div>
+                <div class="hint">Admin is verifying your details.</div>
+            </div>
+        </div>
+        <div class="@StepClass(2)">
+            <div class="dot">2</div>
+            <div>
+                <div class="label">Approved &amp; Active</div>
+                <div class="hint">You can post jobs after approval.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(rawStatus))
+{
+    if (status == "rejected")
+    {
+        <div class="alert alert-warning py-2 mb-3">
+            Status: <strong>@rawStatus</strong>. Please update details and resubmit.
+        </div>
+    }
+    else
+    {
+        <div class="mb-3"><span class="badge-soft">Current status: @rawStatus</span></div>
+    }
+}
 
 @if (TempData["Message"] != null)
 {
     <div class="alert alert-success">@TempData["Message"]</div>
 }
 
-<form asp-action="Manage" method="post" class="row g-3">
+<form asp-action="Manage" method="post" enctype="multipart/form-data" class="row g-3" id="companyManageForm">
     @Html.AntiForgeryToken()
+
+    <!-- Company Photo -->
+    <div class="col-12 col-md-4">
+        <div class="mb-2 border rounded d-flex align-items-center justify-content-center" id="logoPreviewBox"
+            style="height: 180px; cursor: pointer; overflow: hidden;">
+            @if (ViewBag.CompanyPhotoUrl is string url && !string.IsNullOrWhiteSpace(url))
+            {
+                <img id="logoPreview" src="@url" alt="Company Logo" style="max-height:100%; max-width:100%;" />
+            }
+            else
+            {
+                <span class="text-muted">Drag & drop or click to upload</span>
+            }
+        </div>
+
+        <label for="companyPhoto" class="form-label fw-semibold">Upload Photo</label>
+        <input id="companyPhoto" name="companyPhoto" type="file" accept=".jpg,.jpeg,.png,.webp" class="form-control" />
+        <div class="form-text">Max 2 MB; jpg, jpeg, png, webp.</div>
+        <span class="text-danger" id="companyPhotoError"></span>
+        <button type="button" id="btnCancelPhoto" class="btn btn-outline-secondary mt-2">Cancel</button>
+    </div>
+
+    <!-- Fields -->
+    <div class="col-12 col-md-8">
+        <div class="mb-3">
+            <label asp-for="company_name" class="form-label"></label>
+            <input asp-for="company_name" class="form-control" />
+            <span asp-validation-for="company_name" class="text-danger"></span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="company_industry" class="form-label"></label>
+                <input asp-for="company_industry" class="form-control" />
+                <span asp-validation-for="company_industry" class="text-danger"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="company_location" class="form-label"></label>
+                <input asp-for="company_location" class="form-control" />
+                <span asp-validation-for="company_location" class="text-danger"></span>
+            </div>
+        </div>
+        <div class="mt-3">
+            <label asp-for="company_description" class="form-label"></label>
+            <textarea asp-for="company_description" class="form-control" rows="5"></textarea>
+            <span asp-validation-for="company_description" class="text-danger"></span>
+        </div>
+    </div>
+
     <div class="col-12">
-        <label asp-for="company_name" class="form-label"></label>
-        <input asp-for="company_name" class="form-control" />
-        <span asp-validation-for="company_name" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="company_industry" class="form-label"></label>
-        <input asp-for="company_industry" class="form-control" />
-        <span asp-validation-for="company_industry" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="company_location" class="form-label"></label>
-        <input asp-for="company_location" class="form-control" />
-        <span asp-validation-for="company_location" class="text-danger"></span>
-    </div>
-    <div class="col-12">
-        <label asp-for="company_description" class="form-label"></label>
-        <textarea asp-for="company_description" class="form-control" rows="5"></textarea>
-        <span asp-validation-for="company_description" class="text-danger"></span>
-    </div>
-    <div class="col-12">
-        <button type="submit" class="btn btn-primary">Save Profile</button>
-        <a asp-area="Recruiter" asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary">Back to
-            Dashboard</a>
+        <button type="submit" formaction="@(Url.Action("Submit", "Company", new { area = "Recruiter" }))"
+            class="btn btn-primary">
+            Submit Changes for Admin Approval
+        </button>
+        <a asp-area="Recruiter" asp-controller="Home" asp-action="Index" class="btn btn-outline-secondary">
+            Back to Dashboard
+        </a>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        // Drag & drop + preview + validation; dropped file is bound to the <input type="file">
+        (function () {
+            const input = document.getElementById('companyPhoto');
+            const box = document.getElementById('logoPreviewBox');
+            const err = document.getElementById('companyPhotoError');
+            const MAX = 2 * 1024 * 1024;
+            const OK_EXT = ['jpg', 'jpeg', 'png', 'webp'];
+            const OK_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+
+            function setFileInputFromDrop(file) {
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                } catch { }
+            }
+
+            box.addEventListener('click', () => input.click());
+            ['dragenter', 'dragover'].forEach(ev =>
+                box.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); box.classList.add('border-primary'); })
+            );
+            ['dragleave', 'dragend', 'drop'].forEach(ev =>
+                box.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); box.classList.remove('border-primary'); })
+            );
+
+            box.addEventListener('drop', e => {
+                const f = e.dataTransfer.files && e.dataTransfer.files[0];
+                if (f && handleFile(f)) setFileInputFromDrop(f);
+            });
+
+            input.addEventListener('change', () => {
+                const f = input.files && input.files[0];
+                if (f) handleFile(f);
+            });
+
+            function handleFile(f) {
+                err.textContent = '';
+                const ext = (f.name.split('.').pop() || '').toLowerCase();
+                if (!OK_EXT.includes(ext) || !OK_MIME.includes(f.type)) {
+                    err.textContent = 'Only JPG, JPEG, PNG, or WEBP are allowed.';
+                    input.value = '';
+                    return false;
+                }
+                if (f.size > MAX) {
+                    err.textContent = 'Image must be ≤ 2 MB.';
+                    input.value = '';
+                    return false;
+                }
+                const img = document.getElementById('logoPreview') || Object.assign(document.createElement('img'), { id: 'logoPreview' });
+                img.onload = () => URL.revokeObjectURL(img.src);
+                img.src = URL.createObjectURL(f);
+                img.style.maxHeight = '100%';
+                img.style.maxWidth = '100%';
+                img.alt = 'Company Logo';
+                box.innerHTML = '';
+                box.appendChild(img);
+                return true;
+            }
+
+            document.getElementById('btnCancelPhoto')?.addEventListener('click', () => {
+                err.textContent = '';
+                input.value = '';
+                const existing = "@(ViewBag.CompanyPhotoUrl ?? "")";
+                if (existing) {
+                    box.innerHTML = `<img id="logoPreview" src="${existing}" alt="Company Logo" style="max-height:100%; max-width:100%;" />`;
+                } else {
+                    box.innerHTML = '<span class="text-muted">Drag & drop or click to upload</span>';
+                }
+            });
+        })();
+    </script>
 }

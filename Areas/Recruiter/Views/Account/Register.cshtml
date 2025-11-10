@@ -1,43 +1,206 @@
 @model JobPortal.Areas.Recruiter.Models.RegisterVm
 @{
-    ViewData["Title"] = "Recruiter Registration";
+    Layout = "~/Areas/Recruiter/Views/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Create Recruiter Account";
+    var verifiedEmail = ViewBag.VerifiedEmail as string;
+    var isVerified = !string.IsNullOrEmpty(verifiedEmail);
 }
-<h2 class="mb-3">@ViewData["Title"]</h2>
+<div class="container mt-4">
+    <h2 class="mb-3">Create Recruiter Account</h2>
 
-<form asp-action="Register" method="post" class="row g-3">
-    @Html.AntiForgeryToken()
-    <div class="col-md-6">
-        <label asp-for="first_name" class="form-label"></label>
-        <input asp-for="first_name" class="form-control" />
-        <span asp-validation-for="first_name" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="last_name" class="form-label"></label>
-        <input asp-for="last_name" class="form-control" />
-        <span asp-validation-for="last_name" class="text-danger"></span>
-    </div>
-    <div class="col-12">
-        <label asp-for="email" class="form-label"></label>
-        <input asp-for="email" class="form-control" />
-        <span asp-validation-for="email" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="password" class="form-label"></label>
-        <input asp-for="password" class="form-control" />
-        <span asp-validation-for="password" class="text-danger"></span>
-    </div>
-    <div class="col-md-6">
-        <label asp-for="confirm" class="form-label"></label>
-        <input asp-for="confirm" class="form-control" />
-        <span asp-validation-for="confirm" class="text-danger"></span>
-    </div>
-    <div class="col-12">
-        <button type="submit" class="btn btn-primary">Create Account</button>
-        <a asp-area="Recruiter" asp-controller="Account" asp-action="Login" class="btn btn-link">Have an account?
-            Login</a>
-    </div>
-</form>
+    @if (TempData["VerifyError"] is string verr && !string.IsNullOrEmpty(verr))
+    {
+        <div class="alert alert-danger">@verr</div>
+    }
+
+    <form asp-action="Register" asp-antiforgery="true" method="post" id="registerForm" novalidate>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="first_name" class="form-label"></label>
+                <input asp-for="first_name" class="form-control" />
+                <span asp-validation-for="first_name" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="last_name" class="form-label"></label>
+                <input asp-for="last_name" class="form-control" />
+                <span asp-validation-for="last_name" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="phone" class="form-label"></label>
+                <input asp-for="phone" class="form-control" />
+                <span asp-validation-for="phone" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="email" class="form-label d-flex align-items-center justify-content-between">
+                    <span>Email</span>
+                    <span id="emailVerifiedBadge" class="badge bg-success @(isVerified ? "" : "d-none")">Verified</span>
+                </label>
+                <div class="input-group">
+                    <input asp-for="email" class="form-control" id="emailInput" />
+                    <button type="button" id="verifyBtn" class="btn btn-outline-secondary">Verify Email</button>
+                </div>
+                <div id="verifyMsg" class="form-text"></div>
+                <span asp-validation-for="email" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="password" class="form-label"></label>
+                <input asp-for="password" class="form-control" />
+                <span asp-validation-for="password" class="text-danger"></span>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="confirm" class="form-label"></label>
+                <input asp-for="confirm" class="form-control" />
+                <span asp-validation-for="confirm" class="text-danger"></span>
+            </div>
+
+            <div class="col-12">
+                <div class="g-recaptcha" data-sitekey="6LfO8AYsAAAAAPKvWtyUi2SrqBdbW70AZdaJ5vBV"
+                    data-callback="onCaptchaSolved" data-expired-callback="onCaptchaExpired"></div>
+                <span asp-validation-for="RecaptchaToken" class="text-danger"></span>
+            </div>
+
+            <div class="col-12 d-grid gap-2">
+                <button type="submit" id="createBtn" class="btn btn-primary btn-lg" disabled>Create Account</button>
+            </div>
+        </div>
+    </form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <script>
+        (function () {
+            const FORM_KEY = "recruiter_register_form";
+            const form = document.getElementById("registerForm");
+            const emailInput = document.getElementById("emailInput");
+            const verifyBtn = document.getElementById("verifyBtn");
+            const verifyMsg = document.getElementById("verifyMsg");
+            const createBtn = document.getElementById("createBtn");
+            const verifiedBadge = document.getElementById("emailVerifiedBadge");
+
+            let isVerified = @((isVerified).ToString().ToLowerInvariant());
+            const verifiedEmailFromServer = "@(verifiedEmail ?? "")".toLowerCase();
+
+            // Restore non-password fields
+            const saved = localStorage.getItem(FORM_KEY);
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    for (const [name, value] of Object.entries(data)) {
+                        const el = form.elements.namedItem(name);
+                        if (el && !el.value) el.value = value;
+                    }
+                } catch { }
+            }
+
+            // If server verified previously
+            if (verifiedEmailFromServer) {
+                verifiedBadge.classList.remove("d-none");
+                isVerified = true;
+                if (!emailInput.value) emailInput.value = verifiedEmailFromServer;
+                message("Verification successful. You can now create your account.", true);
+                verifyBtn.disabled = true; // lock to prevent spam
+            }
+
+            // Autosave + re-verify requirement if email changes
+            form.addEventListener("input", () => {
+                const data = {};
+                Array.from(form.elements).forEach(el => {
+                    if (!el.name) return;
+                    if (el.type === "password") return;
+                    data[el.name] = el.value;
+                });
+                localStorage.setItem(FORM_KEY, JSON.stringify(data));
+
+                if (isVerified && verifiedEmailFromServer &&
+                    emailInput.value.toLowerCase() !== verifiedEmailFromServer) {
+                    isVerified = false;
+                    verifiedBadge.classList.add("d-none");
+                    message("Email changed. Please verify again.", false);
+                    verifyBtn.disabled = false; // allow re-verify
+                    updateCreateState();
+                }
+            });
+
+            form.addEventListener("submit", () => localStorage.removeItem(FORM_KEY));
+
+            // Trigger verification email
+            verifyBtn.addEventListener("click", async () => {
+                const email = (emailInput.value || "").trim();
+                if (!email) {
+                    message("Please enter your email first.", false);
+                    return;
+                }
+
+                const tokenEl = document.querySelector("input[name='__RequestVerificationToken']");
+                const token = tokenEl ? tokenEl.value : "";
+
+                setLoading(true);
+                try {
+                    const res = await fetch("@Url.Action("SendVerificationEmail", "Account", new { area = "Recruiter" })", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: new URLSearchParams({ email, __RequestVerificationToken: token })
+                    });
+                    const json = await res.json();
+                    if (json.ok) {
+                        message("Verification email sent. Please check your inbox.", true);
+                        startCooldown(15);
+                    } else {
+                        message(json.message || "Email not found.", false);
+                    }
+                } catch {
+                    message("Email not found.", false);
+                } finally {
+                    setLoading(false);
+                }
+            });
+
+            // reCAPTCHA gating
+            function captchaSolved() {
+                return (typeof grecaptcha !== "undefined") && !!grecaptcha.getResponse();
+            }
+            function updateCreateState() {
+                createBtn.disabled = !(isVerified && captchaSolved());
+            }
+            window.onCaptchaSolved = updateCreateState;
+            window.onCaptchaExpired = updateCreateState;
+
+            // Fallback polling (covers captcha reset)
+            const poll = setInterval(updateCreateState, 400);
+            document.addEventListener("visibilitychange", () => { if (document.hidden) clearInterval(poll); });
+
+            function setLoading(b) {
+                verifyBtn.disabled = b;
+                verifyBtn.textContent = b ? "Sending..." : "Verify Email";
+            }
+            function message(text, ok) {
+                verifyMsg.textContent = text;
+                verifyMsg.className = "form-text " + (ok ? "text-success" : "text-danger");
+            }
+            function startCooldown(seconds) {
+                let left = seconds;
+                verifyBtn.disabled = true;
+                const original = "Verify Email";
+                const timer = setInterval(() => {
+                    if (left <= 0) {
+                        clearInterval(timer);
+                        verifyBtn.disabled = false;
+                        verifyBtn.textContent = original;
+                        return;
+                    }
+                    verifyBtn.textContent = `Verify Email (${left}s)`;
+                    left--;
+                }, 1000);
+            }
+
+            updateCreateState();
+        })();
+    </script>
 }

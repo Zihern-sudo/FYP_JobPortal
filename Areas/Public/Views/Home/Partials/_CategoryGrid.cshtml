@@ -1,0 +1,25 @@
+<div class="container-fluid py-5">
+    <div class="container">
+        <h1 class="text-center mb-5 wow fadeInUp" data-wow-delay="0.1s">Explore By Category</h1>
+        <div class="row g-4">
+            <!-- Repeatable category cards -->
+            <div class="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.1s">
+                <a class="cat-item rounded p-4" asp-area="Public" asp-controller="Jobs" asp-action="List"
+                    asp-route-category="Marketing">
+                    <i class="fa fa-3x fa-mail-bulk text-primary mb-4"></i>
+                    <h6 class="mb-3">Marketing</h6>
+                    <p class="mb-0">123 Vacancy</p>
+                </a>
+            </div>
+            <div class="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.3s">
+                <a class="cat-item rounded p-4" asp-area="Public" asp-controller="Jobs" asp-action="List"
+                    asp-route-category="Customer Service">
+                    <i class="fa fa-3x fa-headset text-primary mb-4"></i>
+                    <h6 class="mb-3">Customer Service</h6>
+                    <p class="mb-0">123 Vacancy</p>
+                </a>
+            </div>
+            <!-- Add the rest in the same pattern -->
+        </div>
+    </div>
+</div>

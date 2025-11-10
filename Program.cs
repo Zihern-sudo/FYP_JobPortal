@@ -41,6 +41,12 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 
+// Root "/" → Public landing page
+app.MapControllerRoute(
+    name: "public_root",
+    pattern: "",
+    defaults: new { area = "Public", controller = "Home", action = "Index" });
+
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Dashboard}/{action=Index}/{id?}");
