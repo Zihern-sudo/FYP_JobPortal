@@ -130,8 +130,9 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.job_listing_id).HasName("PRIMARY");
 
             entity.Property(e => e.date_posted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.job_type).HasDefaultValueSql("'Full Time'");
+            entity.Property(e => e.job_category).HasDefaultValueSql("'Other'");
             entity.Property(e => e.job_status).HasDefaultValueSql("'Draft'");
+            entity.Property(e => e.job_type).HasDefaultValueSql("'Full Time'");
             entity.Property(e => e.work_mode).HasDefaultValueSql("'On-site'");
 
             entity.HasOne(d => d.company).WithMany(p => p.job_listings)
@@ -239,7 +240,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.user_id).HasName("PRIMARY");
 
             entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.user_status).HasDefaultValueSql("'Active'");
+            entity.Property(e => e.user_status).HasDefaultValueSql("'Unverified'");
         });
 
         OnModelCreatingPartial(modelBuilder);

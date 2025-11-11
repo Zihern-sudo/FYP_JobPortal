@@ -354,3 +354,19 @@ ADD CONSTRAINT chk_job_type
 CHECK (job_type IN ('Contract','Freelance','Full Time','Internship','Part Time'));
 
 /* --------------------------------*/
+
+/*9:43pm 11/11/2025 */
+
+ALTER TABLE email_verification
+MODIFY COLUMN purpose ENUM('RecruiterRegister','SeekerRegister','PasswordReset') 
+COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'RecruiterRegister';
+
+ALTER TABLE `user`
+MODIFY COLUMN `user_status` ENUM('Active', 'Suspended', 'Inactive', 'Unverified') 
+COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Unverified';
+
+ALTER TABLE job_listing
+ADD COLUMN job_category VARCHAR(50) NOT NULL DEFAULT 'Other';
+
+
+/* ---- */

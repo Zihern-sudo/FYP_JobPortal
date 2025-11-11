@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using System.Security.Cryptography;
 using System.Text;
+using System.Net;
+using System.Net.Mail;
+using System.Net.Mime;
 using JobPortal.Services;
 using Microsoft.AspNetCore.Identity;
 
@@ -13,11 +16,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
     {
         private readonly AppDbContext _db;
         private readonly EmailService _emailService;
+        private readonly IConfiguration _config;
 
-        public AccountController(AppDbContext db, EmailService emailService)
+        public AccountController(AppDbContext db, EmailService emailService, IConfiguration config)
         {
             _db = db;
             _emailService = emailService;
+            _config = config;
         }
 
 
@@ -47,7 +52,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
             // ✅ Status checks first
-            if (user.user_status == "Suspended")
+            if (user.user_status == "Unverified")
             {
                 TempData["Message"] = "Please verify your email before logging in.";
                 return View("Login");
@@ -66,15 +71,36 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("StaffLogin");
             }
 
+            // Track failed attempts using session
+            string sessionKey = $"FailedLogin_{email}";
+            int failedAttempts = HttpContext.Session.GetInt32(sessionKey) ?? 0;
+
             // Existing password verification, 2FA, and session setup
             var hasher = new PasswordHasher<object>();
             var result = hasher.VerifyHashedPassword(null, user.password_hash, password);
             if (result == PasswordVerificationResult.Failed)
             {
-                TempData["Message"] = "Invalid email or password.";
+                failedAttempts++;
+                HttpContext.Session.SetInt32(sessionKey, failedAttempts);
+
+                if (failedAttempts >= 5)
+                {
+                    user.user_status = "Suspended"; // still suspend in DB
+                    await _db.SaveChangesAsync();
+
+                    TempData["Message"] = "Too many failed login attempts. Your account has been suspended.";
+                }
+                else
+                {
+                    TempData["Message"] = $"Invalid email or password. Attempt {failedAttempts}/5.";
+                }
+
                 ViewBag.Email = email;
                 return View("Login");
             }
+
+            // Successful login → reset session counter
+            HttpContext.Session.Remove(sessionKey);
 
             if (user.user_2FA)
             {
@@ -169,7 +195,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 email = email,
                 password_hash = hashedPassword, // store hash
                 user_role = "JobSeeker",
-                user_status = "Suspended", // unverified
+                user_status = "Unverified", // unverified
                 user_2FA = false,
                 created_at = DateTime.Now
             };
@@ -177,17 +203,40 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             _db.users.Add(user);
             await _db.SaveChangesAsync();
 
-            var verificationLink = Url.Action("VerifyEmail", "Account",
-                new { area = "JobSeeker", email = user.email },
-                Request.Scheme);
+            // ✅ Generate verification token (optional but recommended)
+            var token = Guid.NewGuid();
+            var now = DateTime.UtcNow;
 
-            string body = $@"
-        <h2>Welcome to JobPortal!</h2>
-        <p>Please verify your email by clicking the link below:</p>
-        <a href='{verificationLink}' style='color:#007bff;'>Verify Email</a>";
+            var ev = new email_verification
+            {
+                email = user.email,
+                token = token,
+                purpose = "SeekerRegister",
+                expires_at = now.AddMinutes(5),
+                used = false,
+                created_at = now
+            };
 
-            await _emailService.SendEmailAsync(user.email, "Verify Your JobPortal Account", body);
+            _db.email_verifications.Add(ev);
+            await _db.SaveChangesAsync();
 
+            // ✅ Properly build verification URL
+            var verificationLink = Url.Action(
+                "VerifyEmail",               // Action name
+                "Account",                   // Controller name
+                new { area = "JobSeeker", email = user.email, token = token.ToString() }, // Pass both email + token
+                Request.Scheme
+            );
+
+            // ✅ Build email body using your helper
+            // Your BuildVerifyEmailHtml expects (verifyUrl, logoCid)
+            var htmlBody = BuildVerifyEmailHtml(verificationLink, null);
+            var textBody = BuildVerifyEmailText(verificationLink);
+
+            // ✅ Send email via SMTP
+            await SendViaSmtpAsync(user.email, "Verify Your Joboria Account", htmlBody, textBody);
+
+            // ✅ Feedback for user
             TempData["Message"] = "Registration successful! Please check your email to verify your account.";
             return RedirectToAction("Login");
         }
@@ -250,21 +299,185 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
 
         [HttpGet]
-        public async Task<IActionResult> VerifyEmail(string email)
+        public async Task<IActionResult> VerifyEmail(string email, string token)
         {
-            var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
-            if (user == null)
+
+            if (!Guid.TryParse(token, out var guidToken))
             {
-                TempData["Message"] = "Invalid verification link.";
+                TempData["Error"] = "Invalid verification token format.";
                 return RedirectToAction("Login");
             }
 
-            user.user_status = "Active";
-            await _db.SaveChangesAsync();
+            var record = await _db.email_verifications
+                .FirstOrDefaultAsync(v => v.email == email && v.token == guidToken && v.purpose == "SeekerRegister");
 
-            TempData["Message"] = "Your email has been verified successfully!";
+            if (record == null || record.used || record.expires_at < DateTime.UtcNow)
+            {
+                TempData["Error"] = "Invalid or expired verification link.";
+                return RedirectToAction("Login");
+            }
+
+            // ✅ Mark as used
+            record.used = true;
+
+            // ✅ Activate the user
+            var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
+            if (user != null)
+            {
+                user.user_status = "Active";
+                await _db.SaveChangesAsync();
+            }
+
+            TempData["Message"] = "Your email has been verified. You can now log in.";
             return RedirectToAction("Login");
         }
+
+
+
+        // --- SMTP: sends HTML + plain text using appsettings.json -> "Email" section (Gmail) ---
+        // UPDATED: optional inline LinkedResource (logo) support + from display renamed to Joboria.
+        private async Task SendViaSmtpAsync(string toEmail, string subject, string htmlBody, string textBody, LinkedResource? inlineLogo = null)
+        {
+            var host = _config["Email:SmtpHost"];
+            var portStr = _config["Email:SmtpPort"];
+            var user = _config["Email:Username"];
+            var pass = _config["Email:Password"];
+
+            if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(pass))
+                throw new InvalidOperationException("SMTP 'Email' settings are missing in configuration.");
+
+            if (!int.TryParse(portStr, out var port)) port = 587;
+
+            var fromDisplay = "Joboria Verification"; // branding
+            var from = new MailAddress(user, fromDisplay, Encoding.UTF8);
+            var to = new MailAddress(toEmail);
+
+            using var msg = new MailMessage
+            {
+                From = from,
+                Subject = subject,
+                SubjectEncoding = Encoding.UTF8,
+                BodyEncoding = Encoding.UTF8,
+                HeadersEncoding = Encoding.UTF8
+            };
+            msg.To.Add(to);
+
+            // Plain text (fallback for old clients)
+            var plainView = AlternateView.CreateAlternateViewFromString(
+                textBody, Encoding.UTF8, MediaTypeNames.Text.Plain);
+
+            // HTML body (+ optional linked logo)
+            var htmlView = AlternateView.CreateAlternateViewFromString(
+                htmlBody, Encoding.UTF8, MediaTypeNames.Text.Html);
+
+            if (inlineLogo != null)
+            {
+                htmlView.LinkedResources.Add(inlineLogo);
+            }
+
+            msg.AlternateViews.Add(plainView);
+            msg.AlternateViews.Add(htmlView);
+            msg.IsBodyHtml = true;
+
+            using var client = new SmtpClient(host, port)
+            {
+                EnableSsl = true, // STARTTLS on 587
+                Credentials = new NetworkCredential(user, pass),
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                Timeout = 20000
+            };
+
+            await client.SendMailAsync(msg);
+        }
+
+        private string BuildVerifyEmailHtml(string verifyUrl, string? logoCid)
+        {
+            var year = DateTime.UtcNow.Year;
+            var safeUrl = System.Net.WebUtility.HtmlEncode(verifyUrl);
+            var logoImg = string.IsNullOrWhiteSpace(logoCid)
+                ? ""
+                : $@"<img src=""cid:{logoCid}"" alt=""Joboria Logo"" width=""36"" height=""36"" 
+              style=""display:block; border:0; outline:none; text-decoration:none; border-radius:6px;"" />";
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+  <meta charset=""utf-8"">
+  <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+  <title>Verify your Joboria Account</title>
+  <style>
+    body, table, td, a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
+    table, td {{ mso-table-lspace:0pt; mso-table-rspace:0pt; }}
+    img {{ -ms-interpolation-mode:bicubic; }}
+    body {{ margin:0; padding:0; width:100%!important; height:100%!important; background:#f6f8fb; }}
+    a {{ color:#0b5fff; text-decoration:none; }}
+    .btn {{ display:inline-block; padding:14px 22px; background:#0b5fff; color:#ffffff!important; border-radius:8px; font-weight:600; }}
+    .text-muted {{ color:#7b8694; }}
+  </style>
+</head>
+<body>
+  <table role=""presentation"" width=""100%"" cellspacing=""0"" cellpadding=""0"" bgcolor=""#f6f8fb"">
+    <tr>
+      <td align=""center"" style=""padding:24px;"">
+        <table role=""presentation"" width=""560"" cellspacing=""0"" cellpadding=""0"" bgcolor=""#ffffff""
+               style=""border-radius:12px; box-shadow:0 2px 8px rgba(16,24,40,.06);"">
+          <tr>
+            <td style=""padding:18px 28px; background:#0b5fff; color:#ffffff; font-family:Segoe UI, Roboto, Arial, sans-serif;"">
+              <table width=""100%"" cellspacing=""0"" cellpadding=""0"">
+                <tr>
+                  <td style=""width:44px;"">{logoImg}</td>
+                  <td>
+                    <div style=""font-size:18px; font-weight:700;"">Joboria</div>
+                    <div style=""font-size:12px; opacity:.9;"">Job Seeker Email Verification</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style=""padding:28px; font-family:Segoe UI, Roboto, Arial, sans-serif; color:#1f2937;"">
+              <h1>Verify your email</h1>
+              <p>Thanks for registering as a Job Seeker. Please confirm your email address by clicking the button below.</p>
+              <p><a href=""{safeUrl}"" class=""btn"">Verify Email</a></p>
+              <p class=""text-muted"">If the button doesn't work, paste this link into your browser:</p>
+              <p><a href=""{safeUrl}"">{safeUrl}</a></p>
+              <hr style=""border:none; border-top:1px solid #eceff3; margin:20px 0;""/>
+              <p class=""text-muted"">If you didn’t register for Joboria, you can safely ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style=""padding:18px 28px; background:#f8fafc; color:#6b7280; font-size:12px;"">
+              © {year} Joboria • This is an automated message, please do not reply.
+            </td>
+          </tr>
+        </table>
+        <div style=""font-family:Segoe UI, Roboto, Arial, sans-serif; font-size:11px; color:#8c96a5; padding-top:12px;"">
+          Sent by Joboria • Kuala Lumpur, MY
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+        }
+
+        private string BuildVerifyEmailText(string verifyUrl)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Joboria - Email Verification");
+            sb.AppendLine();
+            sb.AppendLine("Verify your email:");
+            sb.AppendLine("Thanks for registering as a Job Seeker. Click the link below to confirm your email.");
+            sb.AppendLine("This link expires in 5 minutes.");
+            sb.AppendLine();
+            sb.AppendLine(verifyUrl);
+            sb.AppendLine();
+            sb.AppendLine("If you didn’t request this, you can ignore this email.");
+            return sb.ToString();
+        }
+
+
 
         // ===============================
         // ✅ Forgot Password (GET)
@@ -281,7 +494,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpPost]
         public async Task<IActionResult> ForgotPassword(string email)
         {
-            if (string.IsNullOrEmpty(email))
+            if (string.IsNullOrWhiteSpace(email))
             {
                 TempData["Message"] = "Please enter your registered email.";
                 return View();
@@ -294,57 +507,118 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return View();
             }
 
-            // Generate temporary reset token
-            var token = Guid.NewGuid().ToString();
-            HttpContext.Session.SetString("ResetToken", token);
-            HttpContext.Session.SetString("ResetEmail", email);
+            // ✅ Generate GUID token and store in email_verifications table
+            var token = Guid.NewGuid();
+            var now = DateTime.UtcNow;
 
-            var resetLink = Url.Action("ResetPassword", "Account",
-                new { area = "JobSeeker", email, token }, Request.Scheme);
+            var record = new email_verification
+            {
+                email = user.email,
+                token = token,
+                purpose = "PasswordReset",
+                expires_at = now.AddMinutes(30), // reset link valid for 30 mins
+                used = false,
+                created_at = now
+            };
 
-            string body = $@"
-        <h2>Password Reset Request</h2>
-        <p>Click the link below to reset your password:</p>
-        <a href='{resetLink}' style='color:#007bff;'>Reset My Password</a>";
+            _db.email_verifications.Add(record);
+            await _db.SaveChangesAsync();
 
-            await _emailService.SendEmailAsync(email, "Reset Your JobPortal Password", body);
+            // ✅ Build password reset URL
+            var resetLink = Url.Action(
+                "ResetPassword",         // action to show reset form
+                "Account",                   // controller
+                new { area = "JobSeeker", email = user.email, token = token.ToString() },
+                Request.Scheme
+            );
 
-            TempData["Message"] = "A password reset link has been sent to your email.";
+            // ✅ Build email body (HTML + plain text)
+            var htmlBody = $@"
+<p>Hello,</p>
+<p>You requested to reset your Joboria password. Click the button below:</p>
+<p><a href='{resetLink}' style='padding:10px 16px; background:#0b5fff; color:#fff; border-radius:6px;'>Reset Password</a></p>
+<p>If the button doesn't work, paste this link into your browser: {resetLink}</p>
+<p>If you didn't request a password reset, ignore this email.</p>";
+
+            var textBody = $"Reset your Joboria password: {resetLink}\n\nIf you didn't request this, ignore this email.";
+
+            // ✅ Send via your existing SMTP helper
+            await SendViaSmtpAsync(user.email, "Reset Your Joboria Password", htmlBody, textBody);
+
+            TempData["Message"] = "Password reset link sent! Please check your email.";
             return RedirectToAction("Login");
         }
+
 
         // ===============================
         // ✅ Reset Password (GET)
         // ===============================
         [HttpGet]
-        public IActionResult ResetPassword(string email, string token)
+        public async Task<IActionResult> ResetPassword(string email, string token)
         {
-            var savedToken = HttpContext.Session.GetString("ResetToken");
-            var savedEmail = HttpContext.Session.GetString("ResetEmail");
+            if (!Guid.TryParse(token, out var guidToken))
+            {
+                TempData["Message"] = "Invalid password reset token format.";
+                return RedirectToAction("Login");
+            }
 
-            if (token != savedToken || email != savedEmail)
+            // ✅ Check DB for valid token
+            var record = await _db.email_verifications
+                .FirstOrDefaultAsync(v =>
+                    v.email == email &&
+                    v.token == guidToken &&
+                    v.purpose == "PasswordReset" &&
+                    !v.used &&
+                    v.expires_at > DateTime.UtcNow);
+
+            if (record == null)
             {
                 TempData["Message"] = "Invalid or expired password reset link.";
                 return RedirectToAction("Login");
             }
 
             ViewBag.Email = email;
-            return View();
+            ViewBag.Token = token;
+            return View(); // create ResetPasswordForm.cshtml with fields: newPassword + confirmPassword
         }
+
 
         // ===============================
         // ✅ Reset Password (POST)
         // ===============================
         [HttpPost]
-        public async Task<IActionResult> ResetPassword(string email, string newPassword, string confirmPassword)
+        public async Task<IActionResult> ResetPassword(string email, string token, string newPassword, string confirmPassword)
         {
             if (newPassword != confirmPassword)
             {
                 TempData["Message"] = "Passwords do not match.";
                 ViewBag.Email = email;
+                ViewBag.Token = token;
                 return View();
             }
 
+            if (!Guid.TryParse(token, out var guidToken))
+            {
+                TempData["Message"] = "Invalid password reset token format.";
+                return RedirectToAction("Login");
+            }
+
+            // ✅ Find token record in DB
+            var record = await _db.email_verifications
+                .FirstOrDefaultAsync(v =>
+                    v.email == email &&
+                    v.token == guidToken &&
+                    v.purpose == "PasswordReset" &&
+                    !v.used &&
+                    v.expires_at > DateTime.UtcNow);
+
+            if (record == null)
+            {
+                TempData["Message"] = "Invalid or expired password reset link.";
+                return RedirectToAction("Login");
+            }
+
+            // ✅ Find the user
             var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
             if (user == null)
             {
@@ -352,9 +626,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            // ✅ Hash the new password properly
+            // ✅ Hash new password
             var hasher = new PasswordHasher<object>();
             user.password_hash = hasher.HashPassword(null, newPassword);
+
+            // ✅ Mark token as used
+            record.used = true;
 
             await _db.SaveChangesAsync();
 
@@ -363,20 +640,27 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
 
+
         [HttpGet]
         public IActionResult RecoverAccount()
         {
-            return View("Recover");
+            return View("Recover"); // Make sure Recover.cshtml has a simple email input form
         }
 
         [HttpPost]
         public async Task<IActionResult> RecoverAccount(string email)
         {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                TempData["Message"] = "Please enter your registered email.";
+                return View("Recover");
+            }
+
             var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
             if (user == null)
             {
                 TempData["Message"] = "No account found with this email.";
-                return RedirectToAction("Login");
+                return View("Recover");
             }
 
             if (user.user_status == "Inactive")
@@ -385,6 +669,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
+            // Eligible for recovery if suspended or 2FA-enabled
             bool eligibleForRecovery =
                 user.user_status == "Suspended" ||
                 (user.user_status == "Active" && user.user_2FA);
@@ -395,19 +680,56 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            var token = Guid.NewGuid().ToString();
-            HttpContext.Session.SetString("RecoverToken", token);
-            HttpContext.Session.SetString("RecoverEmail", email);
+            // ✅ Create token in DB for recovery (same as password reset flow)
+            var token = Guid.NewGuid();
+            var expiry = DateTime.UtcNow.AddMinutes(30);
 
-            var link = Url.Action("UnlockAccount", "Account",
+            var record = new email_verification
+            {
+                email = email,
+                token = token,
+                purpose = "PasswordReset",
+                expires_at = expiry,
+                used = false,
+                created_at = DateTime.UtcNow
+            };
+
+            _db.email_verifications.Add(record);
+            await _db.SaveChangesAsync();
+
+            // ✅ Generate password reset link using ResetPasswordForm (GET)
+            var resetLink = Url.Action("ResetPassword", "Account",
                 new { area = "JobSeeker", email, token }, Request.Scheme);
 
-            await _emailService.SendEmailAsync(email, "Recover Your JobPortal Account",
-                $"Click here to recover your account: <a href='{link}'>Recover Account</a>");
+            // ✅ Build HTML + Text email using the same helper as ForgotPassword
+            var htmlBody = BuildPasswordResetHtml(resetLink, null);
+            var textBody = BuildPasswordResetText(resetLink);
 
-            TempData["Message"] = "Recovery email sent. Please check your inbox.";
+            await SendViaSmtpAsync(email, "Joboria Password Reset", htmlBody, textBody);
+
+            TempData["Message"] = "A password reset email has been sent. Please check your inbox.";
             return RedirectToAction("Login");
         }
+
+        private string BuildPasswordResetHtml(string resetUrl, string? logoCid)
+        {
+            var safeUrl = System.Net.WebUtility.HtmlEncode(resetUrl);
+            var logoImg = string.IsNullOrWhiteSpace(logoCid)
+                ? ""
+                : $@"<img src=""cid:{logoCid}"" alt=""Joboria Logo"" width=""36"" height=""36"" />";
+            return $@"
+<p>Hello,</p>
+<p>You requested to reset your Joboria password. Click the button below:</p>
+<p><a href='{safeUrl}' style='padding:10px 16px; background:#0b5fff; color:#fff; border-radius:6px;'>Reset Password</a></p>
+<p>If the button doesn't work, paste this link into your browser: {safeUrl}</p>
+<p>If you didn't request a password reset, ignore this email.</p>";
+        }
+
+        private string BuildPasswordResetText(string resetUrl)
+        {
+            return $"Reset your Joboria password: {resetUrl}\n\nIf you didn't request this, ignore this email.";
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> UnlockAccount(string email, string token)

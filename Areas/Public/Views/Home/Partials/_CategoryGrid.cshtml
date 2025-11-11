@@ -8,7 +8,7 @@
                     asp-route-category="Marketing">
                     <i class="fa fa-3x fa-mail-bulk text-primary mb-4"></i>
                     <h6 class="mb-3">Marketing</h6>
-                    <p class="mb-0">123 Vacancy</p>
+<p class="mb-0">@((ViewBag.CategoryCounts.ContainsKey("Marketing") ? ViewBag.CategoryCounts["Marketing"] : 0)) Vacancy</p>
                 </a>
             </div>
             <div class="col-lg-3 col-sm-6 wow fadeInUp" data-wow-delay="0.3s">
@@ -16,7 +16,7 @@
                     asp-route-category="Customer Service">
                     <i class="fa fa-3x fa-headset text-primary mb-4"></i>
                     <h6 class="mb-3">Customer Service</h6>
-                    <p class="mb-0">123 Vacancy</p>
+<p class="mb-0">@((ViewBag.CategoryCounts.ContainsKey("Customer Service") ? ViewBag.CategoryCounts["Customer Service"] : 0)) Vacancy</p>
                 </a>
             </div>
             <!-- Add the rest in the same pattern -->
@@ -26,7 +26,7 @@
                     asp-route-category="IT">
                     <i class="fa fa-3x fa-laptop-code text-primary mb-4"></i>
                     <h6 class="mb-3">Information Technology</h6>
-                    <p class="mb-0">87 Vacancy</p>
+<p class="mb-0">@((ViewBag.CategoryCounts.ContainsKey("IT") ? ViewBag.CategoryCounts["IT"] : 0)) Vacancy</p>
                 </a>
             </div>
 
@@ -36,7 +36,7 @@
                     asp-route-category="Accounting">
                     <i class="fa fa-3x fa-calculator text-primary mb-4"></i>
                     <h6 class="mb-3">Accounting</h6>
-                    <p class="mb-0">95 Vacancy</p>
+<p class="mb-0">@((ViewBag.CategoryCounts.ContainsKey("Accounting") ? ViewBag.CategoryCounts["Accounting"] : 0)) Vacancy</p>
                 </a>
             </div>
 
@@ -46,7 +46,7 @@
                     asp-route-category="Finance">
                     <i class="fa fa-3x fa-chart-line text-primary mb-4"></i>
                     <h6 class="mb-3">Finance</h6>
-                    <p class="mb-0">76 Vacancy</p>
+<p class="mb-0">@((ViewBag.CategoryCounts.ContainsKey("Finance") ? ViewBag.CategoryCounts["Finance"] : 0)) Vacancy</p>
                 </a>
             </div>
         </div>

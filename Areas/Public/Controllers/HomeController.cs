@@ -5,6 +5,9 @@ using JobPortal.Areas.Public.Models;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using JobPortal.Areas.Shared.Models;
+using Microsoft.EntityFrameworkCore;
+
 
 namespace JobPortal.Areas.Public.Controllers
 {
@@ -13,16 +16,33 @@ namespace JobPortal.Areas.Public.Controllers
     {
         private readonly ILogger<HomeController> _log;
         private readonly IConfiguration _config;
+        private readonly AppDbContext _db;
 
-        public HomeController(ILogger<HomeController> log, IConfiguration config)
+
+        public HomeController(ILogger<HomeController> log, IConfiguration config, AppDbContext db)
         {
             _log = log;
             _config = config;
+            _db = db;
         }
 
         // GET: /Public/Home/Index
         [HttpGet]
-        public IActionResult Index() => View();
+        public async Task<IActionResult> Index()
+        {
+            var categoryCounts = await _db.job_listings
+                .GroupBy(j => j.job_category)
+                .Select(g => new
+                {
+                    Category = g.Key,
+                    Count = g.Count()
+                })
+                .ToDictionaryAsync(g => g.Category, g => g.Count);
+
+            ViewBag.CategoryCounts = categoryCounts;
+
+            return View();
+        }
 
         // GET: /Public/Home/About
         [HttpGet]
