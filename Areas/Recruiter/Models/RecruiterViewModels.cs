@@ -44,7 +44,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public decimal? salary_max { get; set; }
 
         [Required, Display(Name = "Job Category")]
-        public string job_category { get; set; } = "Full Time"; // DB default is 'Full Time' :contentReference[oaicite:2]{index=2}
+        public string job_type { get; set; } = "Full Time"; // DB default is 'Full Time' :contentReference[oaicite:2]{index=2}
 
         [Required, Display(Name = "Work Mode")]
         public string work_mode { get; set; } = "On-site"; // DB default is 'On-site' :contentReference[oaicite:3]{index=3}
@@ -61,8 +61,8 @@ namespace JobPortal.Areas.Recruiter.Models
             if (salary_min.HasValue && salary_max.HasValue && salary_min.Value > salary_max.Value)
                 yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
 
-            if (!JobCatalog.Categories.Contains(job_category))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+            if (!JobCatalog.Categories.Contains(job_type))
+                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_type) });
 
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
@@ -93,7 +93,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public decimal? salary_max { get; set; }
 
         [Required, Display(Name = "Job Category")]
-        public string job_category { get; set; } = "Full Time";
+        public string job_type { get; set; } = "Full Time";
 
         [Required, Display(Name = "Work Mode")]
         public string work_mode { get; set; } = "On-site";
@@ -108,8 +108,8 @@ namespace JobPortal.Areas.Recruiter.Models
             if (salary_min.HasValue && salary_max.HasValue && salary_min.Value > salary_max.Value)
                 yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
 
-            if (!JobCatalog.Categories.Contains(job_category))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+            if (!JobCatalog.Categories.Contains(job_type))
+                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_type) });
 
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });

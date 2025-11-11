@@ -10,7 +10,8 @@
         <form id="staffLoginForm" asp-area="JobSeeker" asp-controller="Account" asp-action="StaffLogin" method="post"
             class="auth-form active">
             <label for="email">Email</label>
-            <input type="email" id="email" name="email" placeholder="Enter your staff email" value="@ViewBag.Email" required>
+            <input type="email" id="email" name="email" placeholder="Enter your staff email" value="@ViewBag.Email"
+                required>
 
             <label for="password">Password</label>
             <input type="password" id="password" name="password" placeholder="Enter your password" required>
@@ -24,6 +25,12 @@
             <p class="switch-text">
                 Back to <a href="/JobSeeker/Account/Login">User Login</a>
             </p>
+
+            <p class="switch-text">
+                Don’t have an account?
+                <a asp-area="Recruiter" asp-controller="Account" asp-action="Register">Register here</a>
+            </p>
+
         </form>
     </div>
 </div>
@@ -99,10 +106,10 @@
                         form.method = "POST";
                         form.action = "/JobSeeker/Account/StaffLogin";
                         form.innerHTML = `
-                            <input type="hidden" name="email" value="${pendingEmail}">
-                            <input type="hidden" name="password" value="${pendingPassword}">
-                            <input type="hidden" name="twoFACode" value="${code}">
-                        `;
+                                <input type="hidden" name="email" value="${pendingEmail}">
+                                <input type="hidden" name="password" value="${pendingPassword}">
+                                <input type="hidden" name="twoFACode" value="${code}">
+                            `;
                         document.body.appendChild(form);
                         form.submit();
                     }

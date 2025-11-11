@@ -160,7 +160,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var vm = new JobCreateVm
             {
-                job_category = "Full Time",
+                job_type = "Full Time",
                 work_mode = "On-site"
             };
 
@@ -222,7 +222,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 salary_min = vm.salary_min,
                 salary_max = vm.salary_max,
                 job_status = "Draft", // recruiter cannot open directly
-                job_category = vm.job_category,
+                job_type = vm.job_type,
                 work_mode = vm.work_mode,
                 user_id = recruiterId,
                 company_id = companyId,
@@ -257,7 +257,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_requirements_nice = job.job_requirements_nice,
                 salary_min = job.salary_min,
                 salary_max = job.salary_max,
-                job_category = job.job_category,
+                job_type = job.job_type,
                 work_mode = job.work_mode,
                 job_status = statusEnum,
                 date_posted = job.date_posted,
@@ -339,7 +339,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             job.job_requirements_nice = vm.job_requirements_nice;
             job.salary_min = vm.salary_min;
             job.salary_max = vm.salary_max;
-            job.job_category = vm.job_category;
+            job.job_type = vm.job_type;
             job.work_mode = vm.work_mode;
             job.expiry_date = vm.expiry_date;
             job.job_status = "Draft";
@@ -410,7 +410,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Desc = job.job_description;
             ViewBag.SalaryMin = job.salary_min;
             ViewBag.SalaryMax = job.salary_max;
-            ViewBag.JobCategory = job.job_category;
+            ViewBag.JobCategory = job.job_type;
             ViewBag.WorkMode = job.work_mode;
             ViewBag.Company = job.company?.company_name;
             ViewBag.ExpiryDate = job.expiry_date;

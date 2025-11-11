@@ -41,7 +41,7 @@ namespace JobPortal.Areas.Public.Controllers
 
             // Category (employment type) filter
             if (type is not null)
-                query = query.Where(j => j.job_category == type);
+                query = query.Where(j => j.job_type == type);
 
             // Keyword search (against job_title)
             if (q is not null)
@@ -59,7 +59,7 @@ namespace JobPortal.Areas.Public.Controllers
                     Id = j.job_listing_id,
                     Title = j.job_title,
                     Location = j.company != null ? j.company.company_location : null,
-                    EmploymentType = j.job_category,
+                    EmploymentType = j.job_type,
                     SalaryRange = (j.salary_min.HasValue || j.salary_max.HasValue)
                         ? $"RM{(j.salary_min ?? 0):0,#}–RM{(j.salary_max ?? 0):0,#}"
                         : null,

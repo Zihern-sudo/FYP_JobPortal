@@ -295,7 +295,7 @@ public partial class job_listing
     [StringLength(50)]
     [MySqlCharSet("utf8mb3")]
     [MySqlCollation("utf8mb3_general_ci")]
-    public string job_category { get; set; } = null!;
+    public string job_type { get; set; } = null!;
 
     [StringLength(50)]
     [MySqlCharSet("utf8mb3")]

@@ -636,7 +636,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // 💼 Job Category
             if (!string.IsNullOrEmpty(jobCategory))
             {
-                jobsQuery = jobsQuery.Where(j => j.job_category == jobCategory);
+                jobsQuery = jobsQuery.Where(j => j.job_type == jobCategory);
             }
 
             // 📄 Pagination
@@ -864,75 +864,105 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         private byte[] GenerateModernResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
-            string summary, string education, string experience, string skills, string certifications)
+      string summary, string education, string experience, string skills, string certifications)
         {
             var document = Document.Create(container =>
             {
                 container.Page(page =>
                 {
                     page.Size(PageSizes.A4);
-                    page.Margin(2f, Unit.Centimetre);
+                    page.Margin(1.5f, Unit.Centimetre);
                     page.Background(Colors.White);
 
                     page.Content().Row(row =>
                     {
-                        // Left Sidebar (Profile + Contact + Skills)
-                        row.ConstantItem(200).Column(left =>
+                        // 🔹 Left Sidebar (Profile & Skills)
+                        row.RelativeItem(1.2f).Background(Colors.Grey.Lighten3).Padding(15).Column(left =>
                         {
-                            // Profile Image
+                            // 📸 Profile Image
                             if (profileImage != null && profileImage.Length > 0)
                             {
-                                left.Item().Width(120).Height(120).AlignCenter().Element(e =>
-                        {
-            e.Image(profileImage, ImageScaling.FitArea);
-        });
-                                left.Item().PaddingVertical(5);
+                                left.Item().AlignCenter().Width(120).Height(120).Element(e =>
+                                {
+                                    e.Image(profileImage, ImageScaling.FitArea);
+                                });
+                                left.Item().PaddingVertical(10);
                             }
 
-                            // Name & Contact Info
-                            left.Item().Text(fullName).Bold().FontSize(16).FontColor(Colors.Blue.Medium).AlignCenter();
-                            left.Item().PaddingTop(3).AlignCenter().Text(email).FontSize(9);
-                            left.Item().AlignCenter().Text(phone).FontSize(9);
-                            left.Item().AlignCenter().Text(address).FontSize(9).AlignCenter();
+                            // 🧑 Name & Contact Info
+                            left.Item().AlignCenter().Text(fullName)
+                                .Bold().FontSize(18).FontColor(Colors.Blue.Medium);
+                            if (!string.IsNullOrEmpty(email)) left.Item().AlignCenter().Text("📧 " + email);
+                            if (!string.IsNullOrEmpty(phone)) left.Item().AlignCenter().Text("📞 " + phone);
+                            if (!string.IsNullOrEmpty(address))
+                                left.Item().AlignCenter().Text("📍 " + address).WrapAnywhere();
 
-                            // Divider Line
-                            left.Item().PaddingVertical(10).LineHorizontal(1);
+                            // Divider
+                            left.Item().PaddingVertical(10).LineHorizontal(1).LineColor(Colors.Grey.Medium);
 
-                            // Skills
+                            // 🧠 Skills Section
                             if (!string.IsNullOrEmpty(skills))
                             {
-                                left.Item().Text("Skills").Bold().FontSize(12).Underline();
-                                foreach (var skill in skills.Split(new[] { ',', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                                    left.Item().PaddingTop(2).Text("• " + skill.Trim()).FontSize(10);
+                                left.Item().Text("💡 Skills").Bold().FontSize(12).FontColor(Colors.Black);
+                                foreach (var skill in skills.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries))
+                                    left.Item().PaddingLeft(10).Text("• " + skill.Trim());
                             }
 
-                            // Certifications
+                            // 🏅 Certifications
                             if (!string.IsNullOrEmpty(certifications))
                             {
-                                left.Item().PaddingTop(10).Text("Certifications").Bold().FontSize(12).Underline();
-                                foreach (var cert in certifications.Split(new[] { ',', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                                    left.Item().PaddingTop(2).Text("• " + cert.Trim()).FontSize(10);
+                                left.Item().PaddingTop(10).Text("📜 Certifications").Bold().FontSize(12).FontColor(Colors.Black);
+                                foreach (var cert in certifications.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries))
+                                    left.Item().PaddingLeft(10).Text("• " + cert.Trim());
                             }
+
+                            // 🗣 Languages (Optional for fuller look)
+                            left.Item().PaddingTop(10).Text("🌐 Languages").Bold().FontSize(12).FontColor(Colors.Black);
+                            left.Item().PaddingLeft(10).Text("• English");
+                            left.Item().PaddingLeft(10).Text("• Malay");
+                            left.Item().PaddingLeft(10).Text("• Mandarin");
                         });
 
-                        // Right Main Content (Summary, Education, Experience)
-                        row.RelativeItem().Column(right =>
+                        // 🔹 Right Main Content (Summary, Education, Experience)
+                        row.RelativeItem(1.8f).PaddingLeft(25).Column(right =>
                         {
-                            // Section Styling Helper
-                            void AddSection(string title, string content)
+                            // 🎯 Professional Summary
+                            if (!string.IsNullOrEmpty(summary))
                             {
-                                if (!string.IsNullOrWhiteSpace(content))
-                                {
-                                    right.Item().PaddingTop(10).Text(title).Bold().FontSize(14).FontColor(Colors.Black);
-                                    right.Item().PaddingBottom(5).LineHorizontal(0.5f).LineColor(Colors.Grey.Medium);
-                                    foreach (var line in content.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
-                                        right.Item().PaddingTop(2).Text(line.Trim()).FontSize(11);
-                                }
+                                right.Item().Text("🎯 Professional Summary").Bold().FontSize(14);
+                                right.Item().Text(summary);
+                                right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
 
-                            AddSection("Professional Summary", summary);
-                            AddSection("Education", education);
-                            AddSection("Experience", experience);
+                            // 🎓 Education
+                            if (!string.IsNullOrEmpty(education))
+                            {
+                                right.Item().PaddingTop(10).Text("🎓 Education").Bold().FontSize(14);
+                                right.Item().Text(education);
+                                right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
+                            }
+
+                            // 💼 Experience
+                            if (!string.IsNullOrEmpty(experience))
+                            {
+                                right.Item().PaddingTop(10).Text("💼 Experience").Bold().FontSize(14);
+
+                                foreach (var exp in experience.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    right.Item().PaddingLeft(10).Text("• " + exp.Trim());
+                                }
+
+                                right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
+                            }
+
+                            // 💻 Projects (Optional section)
+                            right.Item().PaddingTop(10).Text("💻 Projects").Bold().FontSize(14);
+                            right.Item().PaddingLeft(10).Text("• Portfolio Website – Built using ASP.NET Core and SQL");
+                            right.Item().PaddingLeft(10).Text("• Resume Builder System – Integrated AI-based feedback module");
+
+                            // 🤝 References (Optional)
+                            right.Item().PaddingTop(10).Text("🤝 References").Bold().FontSize(14);
+                            right.Item().PaddingLeft(10).Text("Available upon request.");
                         });
                     });
                 });
@@ -940,6 +970,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             return document.GeneratePdf();
         }
+
 
 
         // POST: /JobSeeker/Dashboard/SaveResume

@@ -130,7 +130,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.job_listing_id).HasName("PRIMARY");
 
             entity.Property(e => e.date_posted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(e => e.job_category).HasDefaultValueSql("'Full Time'");
+            entity.Property(e => e.job_type).HasDefaultValueSql("'Full Time'");
             entity.Property(e => e.job_status).HasDefaultValueSql("'Draft'");
             entity.Property(e => e.work_mode).HasDefaultValueSql("'On-site'");
 

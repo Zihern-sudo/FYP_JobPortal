@@ -337,3 +337,20 @@ CREATE INDEX idx_email_purpose ON email_verification (email, purpose);
 CREATE INDEX idx_exp_used      ON email_verification (expires_at, used);
 
 /* ------------------------------------ */
+
+/* 2:42pm 11/11/2025 eason job_category to job_type SQL */
+-- 1️⃣ Drop the existing CHECK constraint that references job_category
+ALTER TABLE job_listing
+DROP CHECK chk_job_category;
+
+-- 2️⃣ Rename the column job_category to job_type
+ALTER TABLE job_listing
+CHANGE COLUMN job_category job_type VARCHAR(50) 
+CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci NOT NULL DEFAULT 'Full Time';
+
+-- 3️⃣ Recreate the CHECK constraint using the new column name
+ALTER TABLE job_listing
+ADD CONSTRAINT chk_job_type 
+CHECK (job_type IN ('Contract','Freelance','Full Time','Internship','Part Time'));
+
+/* --------------------------------*/

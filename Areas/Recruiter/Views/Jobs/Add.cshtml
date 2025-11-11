@@ -68,11 +68,11 @@
 
             <!-- Job Category -->
             <div class="col-md-6">
-                <label asp-for="job_category" class="form-label"></label>
-                <select asp-for="job_category" class="form-select"
+                <label asp-for="job_type" class="form-label"></label>
+                <select asp-for="job_type" class="form-select"
                     asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.Categories)">
                 </select>
-                <span asp-validation-for="job_category" class="text-danger"></span>
+                <span asp-validation-for="job_type" class="text-danger"></span>
             </div>
 
             <!-- Work Mode -->
