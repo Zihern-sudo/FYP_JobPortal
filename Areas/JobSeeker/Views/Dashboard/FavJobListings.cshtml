@@ -1,8 +1,4 @@
 @model IEnumerable<JobPortal.Areas.Shared.Models.job_listing>
-@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
-@using Microsoft.AspNetCore.Http
-
-
 
 @{
     Layout = "_LayoutDashboard";
@@ -15,13 +11,7 @@
 <section class="job-listings-section">
     <div class="header-bar">
         <h1 class="page-title">Available Job Listings</h1>
-        <form method="get" class="d-inline">
-            <input type="hidden" name="favouritesOnly" value="@(ViewBag.FavouritesOnly ? "false" : "true")" />
-            <button type="submit" class="favourite-btn">
-                @(ViewBag.FavouritesOnly ? "⭐ All Jobs" : "⭐ Favourites")
-            </button>
-        </form>
-
+        <button class="favourite-btn">⭐ Favourited</button>
     </div>
 
     <!-- 🔍 Filter Bar -->
@@ -116,25 +106,17 @@
                         <div class="tags mb-2">
                             <span class="tag tag-blue">@job.job_type</span>
                             <span class="tag tag-orange">@job.work_mode</span>
-                            <span class="tag tag-green">RM @(job.salary_min?.ToString("N0") ?? "0") - RM
-                                @(job.salary_max?.ToString("N0") ?? "0")</span>
+                            <span class="tag tag-green">RM @(job.salary_min?.ToString("N0") ?? "0") - RM @(job.salary_max?.ToString("N0") ?? "0")</span>
                         </div>
 
                         <p class="description text-muted">@job.job_description</p>
                     </div>
 
-                    <!-- 🔘 View & Favourite Button -->
-                    <div class="text-end ms-3 d-flex gap-1 align-items-center">
-                        <button type="button" class="btn btn-sm p-1 favourite-toggle" data-job-id="@job.job_listing_id"
-                            style="font-size:1.2rem;">
-                            @(ViewBag.FavouriteJobs.Contains(job.job_listing_id) ? "⭐" : "☆")
-                        </button>
-
+                    <!-- 🔘 View Button -->
+                    <div class="text-end ms-3">
                         <a asp-controller="Dashboard" asp-action="JobDetails" asp-route-id="@job.job_listing_id"
                             class="apply-btn btn btn-primary btn-sm">View Details</a>
                     </div>
-
-
                 </div>
             }
 
@@ -168,65 +150,42 @@
     }
 
 </section>
-@section Scripts {
-    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
-    <script>
-        const slider = document.getElementById('salarySlider');
-        const minInput = document.getElementById('minSalary');
-        const maxInput = document.getElementById('maxSalary');
 
-        const initialMin = parseInt(minInput.value) || 0;
-        const initialMax = parseInt(maxInput.value) || 5000;
+<script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
 
-        noUiSlider.create(slider, {
-            start: [initialMin, initialMax],
-            connect: true,
-            step: 500,
-            range: {
-                'min': 0,
-                'max': 10000
-            },
-            tooltips: false
-        });
+<script>
+    const slider = document.getElementById('salarySlider');
+    const minInput = document.getElementById('minSalary');
+    const maxInput = document.getElementById('maxSalary');
 
-        // Update inputs when slider changes
-        slider.noUiSlider.on('update', function (values, handle) {
-            const value = Math.round(values[handle]);
-            if (handle === 0) minInput.value = value;
-            else maxInput.value = value;
-        });
+    const initialMin = parseInt(minInput.value) || 0;
+    const initialMax = parseInt(maxInput.value) || 5000;
 
-        // Update slider when inputs change
-        function updateSliderFromInputs() {
-            const min = parseInt(minInput.value) || 0;
-            const max = parseInt(maxInput.value) || 0;
-            if (min <= max) slider.noUiSlider.set([min, max]);
-        }
+    noUiSlider.create(slider, {
+        start: [initialMin, initialMax],
+        connect: true,
+        step: 500,
+        range: {
+            'min': 0,
+            'max': 10000
+        },
+        tooltips: false
+    });
 
-        minInput.addEventListener('change', updateSliderFromInputs);
-        maxInput.addEventListener('change', updateSliderFromInputs);
-        document.querySelectorAll('.favourite-toggle').forEach(btn => {
-            btn.addEventListener('click', async function () {
-                const jobId = this.dataset.jobId;
+    // Update inputs when slider changes
+    slider.noUiSlider.on('update', function (values, handle) {
+        const value = Math.round(values[handle]);
+        if (handle === 0) minInput.value = value;
+        else maxInput.value = value;
+    });
 
-                const response = await fetch('@Url.Action("ToggleFavourite", "Dashboard")', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'RequestVerificationToken': '@Antiforgery.GetAndStoreTokens(ViewContext.HttpContext).RequestToken'
-                    },
-                    body: JSON.stringify({ jobId })
-                });
+    // Update slider when inputs change
+    function updateSliderFromInputs() {
+        const min = parseInt(minInput.value) || 0;
+        const max = parseInt(maxInput.value) || 0;
+        if (min <= max) slider.noUiSlider.set([min, max]);
+    }
 
-                const result = await response.json();
-
-                if (result.success) {
-                    this.textContent = result.isFavourite ? '⭐' : '☆';
-                }
-            });
-        });
-
-
-
-    </script>
-}
+    minInput.addEventListener('change', updateSliderFromInputs);
+    maxInput.addEventListener('change', updateSliderFromInputs);
+</script>

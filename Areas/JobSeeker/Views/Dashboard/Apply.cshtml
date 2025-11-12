@@ -37,9 +37,9 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Select Existing Resume</label>
-            <select asp-for="SelectedResumeId" class="form-select">
-                <option value="">-- Select existing resume --</option>
+            <label class="form-label">Resume</label>
+            <select asp-for="SelectedResumeId" id="resumeSelect" class="form-select">
+                <option value="">-- Upload New Resume --</option>
                 @if (Model.ExistingResumes != null && Model.ExistingResumes.Any())
                 {
                     foreach (var resume in Model.ExistingResumes)
@@ -52,16 +52,32 @@
             </select>
         </div>
 
-        <div class="text-center mb-3">
-            <strong>OR</strong>
-        </div>
-
-        <div class="mb-3">
-            <label class="form-label">Upload New Resume</label>
+        <div class="mb-3" id="uploadDiv">
+            <label class="form-label">Choose File</label>
             <input asp-for="ResumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx" />
         </div>
-
 
         <button type="submit" class="btn btn-primary w-100">Submit Application</button>
     </form>
 </section>
+<script>
+    const resumeSelect = document.getElementById('resumeSelect');
+    const uploadDiv = document.getElementById('uploadDiv');
+
+    resumeSelect.addEventListener('change', function () {
+        if (resumeSelect.value === "") {
+            // Upload new resume selected → show file input
+            uploadDiv.style.display = 'block';
+        } else {
+            // Existing resume selected → hide file input
+            uploadDiv.style.display = 'none';
+        }
+    });
+
+    // Initialize on page load
+    if (resumeSelect.value === "") {
+        uploadDiv.style.display = 'block';
+    } else {
+        uploadDiv.style.display = 'none';
+    }
+</script>

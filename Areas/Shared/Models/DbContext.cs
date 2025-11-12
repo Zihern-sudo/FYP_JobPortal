@@ -27,6 +27,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<job_application> job_applications { get; set; }
 
+    public virtual DbSet<job_favourite> job_favourites { get; set; }
+
     public virtual DbSet<job_listing> job_listings { get; set; }
 
     public virtual DbSet<job_offer> job_offers { get; set; }
@@ -123,6 +125,21 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.job_listing).WithMany(p => p.job_applications).HasConstraintName("fk_application_job");
 
             entity.HasOne(d => d.user).WithMany(p => p.job_applications).HasConstraintName("fk_application_user");
+        });
+
+        modelBuilder.Entity<job_favourite>(entity =>
+        {
+            entity.HasKey(e => e.fav_id).HasName("PRIMARY");
+
+            entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.job_listing).WithMany(p => p.job_favourites)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("job_favourites_ibfk_2");
+
+            entity.HasOne(d => d.user).WithMany(p => p.job_favourites)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("job_favourites_ibfk_1");
         });
 
         modelBuilder.Entity<job_listing>(entity =>

@@ -189,5 +189,34 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             TempData["Message"] = "Message sent successfully!";
             return RedirectToAction("Thread", new { id = vm.ThreadId });
         }
+
+        [HttpPost]
+        public async Task<IActionResult> AskAI([FromBody] dynamic data)
+        {
+            string prompt = data?.prompt;
+            if (string.IsNullOrWhiteSpace(prompt))
+                return Json(new { reply = "Please type a message." });
+
+            // Example: Using OpenAI API
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("Authorization", "Bearer YOUR_OPENAI_API_KEY");
+
+            var requestBody = new
+            {
+                model = "gpt-3.5-turbo",
+                messages = new[] {
+            new { role = "system", content = "You are a helpful assistant for job seekers." },
+            new { role = "user", content = prompt }
+        }
+            };
+
+            var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody);
+            var json = await response.Content.ReadFromJsonAsync<dynamic>();
+
+            string reply = json?["choices"]?[0]?["message"]?["content"]?.ToString() ?? "Sorry, I didn’t understand that.";
+
+            return Json(new { reply });
+        }
+
     }
 }

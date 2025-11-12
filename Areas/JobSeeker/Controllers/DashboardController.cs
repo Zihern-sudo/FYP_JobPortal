@@ -386,7 +386,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (!Directory.Exists(uploadsDir))
                 Directory.CreateDirectory(uploadsDir);
 
-            string safeFileName = $"{Path.GetFileNameWithoutExtension(resumeFile.FileName)}_{DateTime.Now:yyyyMMdd_HHmm}{Path.GetExtension(resumeFile.FileName)}";
+            var user = await _db.users.FindAsync(int.Parse(userId));
+            string safeFileName = $"{user.first_name}_{DateTime.Now:yyyyMMdd_HHmm}{Path.GetExtension(resumeFile.FileName)}";
             safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
 
             string fullPath = Path.Combine(uploadsDir, safeFileName);
@@ -442,101 +443,83 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         //Submit Application
-        [HttpPost]
-        public async Task<IActionResult> SubmitApplication(ApplyViewModel model, IFormFile resumeFile)
+[HttpPost]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
+{
+    if (!ModelState.IsValid)
+    {
+        // Re-load resumes in case of validation errors
+        var userIdStr = HttpContext.Session.GetString("UserId");
+        model.ExistingResumes = await _db.resumes
+            .Where(r => r.user_id.ToString() == userIdStr)
+            .ToListAsync();
+
+        return View("Apply", model);
+    }
+
+    var userIdString = HttpContext.Session.GetString("UserId");
+    if (string.IsNullOrEmpty(userIdString))
+        return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+    int userId = int.Parse(userIdString);
+
+    string? relativePath = null;
+
+    // ✅ CASE 1: Existing resume selected
+    if (model.SelectedResumeId.HasValue)
+    {
+        var existingResume = await _db.resumes.FindAsync(model.SelectedResumeId.Value);
+        if (existingResume != null)
+            relativePath = existingResume.file_path;
+    }
+
+    // ✅ CASE 2: New file uploaded
+    if (model.ResumeFile != null && model.ResumeFile.Length > 0)
+    {
+        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+        Directory.CreateDirectory(uploadsDir);
+
+        string safeFileName = $"{userId}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(model.ResumeFile.FileName)}";
+        safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
+
+        string fullPath = Path.Combine(uploadsDir, safeFileName);
+        using (var stream = new FileStream(fullPath, FileMode.Create))
         {
-            if (!ModelState.IsValid)
-                return View("Apply", model);
-
-            var userId = HttpContext.Session.GetString("UserId");
-            if (string.IsNullOrEmpty(userId))
-                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
-
-            string? relativePath = null;
-
-            // ✅ Retrieve user and job info
-            var user = await _db.users.FindAsync(int.Parse(userId));
-            var job = await _db.job_listings
-                .Include(j => j.company)
-                .FirstOrDefaultAsync(j => j.job_listing_id == model.JobId);
-
-            if (user == null || job == null)
-                return NotFound();
-
-
-            // ✅ If user selected an existing resume
-            if (model.SelectedResumeId.HasValue)
-            {
-                var existingResume = await _db.resumes.FindAsync(model.SelectedResumeId.Value);
-                if (existingResume != null)
-                {
-                    relativePath = existingResume.file_path;
-                }
-            }
-
-            // ✅ Else if user uploaded a new resume
-            if (resumeFile != null && resumeFile.Length > 0)
-            {
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
-                if (!Directory.Exists(uploadsDir))
-                    Directory.CreateDirectory(uploadsDir);
-
-                string safeFileName = $"{user.first_name}{user.last_name}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(resumeFile.FileName)}";
-                safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
-
-                string fullPath = Path.Combine(uploadsDir, safeFileName);
-                using (var stream = new FileStream(fullPath, FileMode.Create))
-                {
-                    await resumeFile.CopyToAsync(stream);
-                }
-
-                relativePath = $"/uploads/user_resumes/{safeFileName}";
-
-                // 🆕 Save new resume to database
-                var newResume = new resume
-                {
-                    user_id = int.Parse(userId),
-                    upload_date = DateTime.Now,
-                    file_path = relativePath
-                };
-                _db.resumes.Add(newResume);
-                await _db.SaveChangesAsync();
-            }
-
-
-            // ✅ Check if existing application exists (edit mode)
-            var existingApp = await _db.job_applications
-                .FirstOrDefaultAsync(a => a.application_id == model.ApplicationId && a.user_id == int.Parse(userId));
-
-            if (existingApp != null)
-            {
-                // 🔹 Update existing application
-                existingApp.resume_path = relativePath ?? existingApp.resume_path;
-                existingApp.date_updated = DateTime.Now;
-                existingApp.application_status = "Updated";
-
-                _db.job_applications.Update(existingApp);
-                TempData["Success"] = "Your application has been updated successfully!";
-            }
-            else
-            {
-                // 🆕 Create new application
-                var application = new job_application
-                {
-                    user_id = int.Parse(userId),
-                    job_listing_id = model.JobId,
-                    application_status = "Submitted",
-                    date_updated = DateTime.Now,
-                    resume_path = relativePath
-                };
-
-                _db.job_applications.Add(application);
-                TempData["Success"] = "Your application has been submitted successfully!";
-            }
-
-            await _db.SaveChangesAsync();
-            return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
+            await model.ResumeFile.CopyToAsync(stream);
         }
+
+        relativePath = $"/uploads/user_resumes/{safeFileName}";
+
+        // save new resume
+        var newResume = new resume
+        {
+            user_id = userId,
+            upload_date = DateTime.Now,
+            file_path = relativePath
+        };
+        _db.resumes.Add(newResume);
+        await _db.SaveChangesAsync();
+    }
+
+    // ✅ Create new job application
+    var application = new job_application
+    {
+        user_id = userId,
+        job_listing_id = model.JobId,
+        application_status = "Submitted",
+        date_updated = DateTime.Now,
+        resume_path = relativePath
+    };
+
+    _db.job_applications.Add(application);
+    await _db.SaveChangesAsync();
+
+    TempData["Success"] = "Your application has been submitted successfully!";
+    return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
+}
+
+
 
         public async Task<IActionResult> Applications(string? status, string? sortBy, int page = 1)
         {
@@ -663,9 +646,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         // ✅ Dynamic Job Listings with Pagination
-        public async Task<IActionResult> JobListings(int? minSalary, int? maxSalary, string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1)
+        public async Task<IActionResult> JobListings(int? minSalary, int? maxSalary, string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1,
+    bool? favouritesOnly = null)
         {
             int pageSize = 10;
+
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            int? userId = string.IsNullOrEmpty(userIdStr) ? null : int.Parse(userIdStr);
 
             var jobsQuery = _db.job_listings
                 .Include(j => j.company)
@@ -707,6 +694,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 jobsQuery = jobsQuery.Where(j => j.job_type == jobCategory);
             }
 
+            if (favouritesOnly == true && userId.HasValue)
+            {
+                jobsQuery = jobsQuery.Where(j =>
+                    _db.job_favourites.Any(f => f.user_id == userId.Value && f.job_listing_id == j.job_listing_id));
+            }
+
+
             // 📄 Pagination
             int totalJobs = await jobsQuery.CountAsync();
             var jobList = await jobsQuery
@@ -723,6 +717,18 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             ViewBag.SalaryRange = salaryRange;
             ViewBag.JobCategory = jobCategory;
             ViewBag.WorkMode = workMode;
+            ViewBag.FavouritesOnly = favouritesOnly ?? false;
+
+            var favouriteJobIds = new List<int>();
+            if (userId.HasValue)
+            {
+                favouriteJobIds = await _db.job_favourites
+                                           .Where(f => f.user_id == userId.Value)
+                                           .Select(f => f.job_listing_id)
+                                           .ToListAsync();
+            }
+            ViewBag.FavouriteJobs = favouriteJobIds;
+
 
             // 🗺️ Get all distinct locations for dropdown
             ViewBag.Locations = await _db.companies
@@ -734,21 +740,91 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(jobList);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> FavouriteJobs()
+        {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
+
+            // Get job IDs the user has favourited
+            var favJobIds = await _db.job_favourites
+                                     .Where(f => f.user_id == userId)
+                                     .Select(f => f.job_listing_id)
+                                     .ToListAsync();
+
+            // Get job listings for those IDs
+            var jobs = await _db.job_listings
+                                .Where(j => favJobIds.Contains(j.job_listing_id))
+                                .ToListAsync();
+
+            return View(jobs); // pass to a view
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ToggleFavourite([FromBody] FavouriteToggleModel model)
+        {
+            int jobId = model.jobId;
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return Json(new { success = false });
+
+            int userId = int.Parse(userIdStr);
+
+            var existing = await _db.job_favourites
+                .FirstOrDefaultAsync(f => f.user_id == userId && f.job_listing_id == model.jobId);
+
+            bool isFavourite = false;
+            if (existing != null)
+            {
+                _db.job_favourites.Remove(existing);
+            }
+            else
+            {
+                _db.job_favourites.Add(new job_favourite
+                {
+                    user_id = userId,
+                    job_listing_id = model.jobId,
+                    created_at = DateTime.UtcNow
+                });
+                isFavourite = true;
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Json(new { success = true, isFavourite });
+        }
+
 
 
 
         // ✅ Optional: Job Details page
         public async Task<IActionResult> JobDetails(int id)
         {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
+
             var job = await _db.job_listings
-                .Include(j => j.company) // ✅ include company details
+                .Include(j => j.company)
                 .FirstOrDefaultAsync(j => j.job_listing_id == id);
 
-            if (job == null)
-                return NotFound();
+            if (job == null) return NotFound();
+
+            // Check if this job is favourited by the user
+            bool isFavourite = await _db.job_favourites
+                .AnyAsync(f => f.user_id == userId && f.job_listing_id == id);
+
+            ViewBag.IsFavourite = isFavourite;
 
             return View(job);
         }
+
+
 
 
         [HttpPost]
@@ -811,15 +887,31 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
         // GET: /JobSeeker/Dashboard/ResumeBuilder
         [HttpGet]
-        public IActionResult ResumeBuilder()
+        public async Task<IActionResult> ResumeBuilder()
         {
-            // Optionally check if user is logged in
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
 
-            return View(); // Looks for Views/Dashboard/ResumeBuilder.cshtml
+            int userId = int.Parse(userIdStr);
+            var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == userId);
+            if (user == null)
+                return NotFound("User not found.");
+
+            var vm = new ResumeBuilderViewModel
+            {
+                FullName = $"{user.first_name} {user.last_name}",
+                Email = user.email,
+                Phone = user.phone,
+                Address = user.address,
+                Education = user.education,
+                Experience = user.work_experience,
+                Skills = user.skills
+            };
+
+            return View(vm);
         }
+
 
         private byte[] GenerateClassicResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
             string summary, string education, string experience, string skills, string certifications)
@@ -960,10 +1052,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             // 🧑 Name & Contact Info
                             left.Item().AlignCenter().Text(fullName)
                                 .Bold().FontSize(18).FontColor(Colors.Blue.Medium);
-                            if (!string.IsNullOrEmpty(email)) left.Item().AlignCenter().Text("📧 " + email);
-                            if (!string.IsNullOrEmpty(phone)) left.Item().AlignCenter().Text("📞 " + phone);
+                            if (!string.IsNullOrEmpty(email)) left.Item().AlignCenter().Text(email);
+                            if (!string.IsNullOrEmpty(phone)) left.Item().AlignCenter().Text(phone);
                             if (!string.IsNullOrEmpty(address))
-                                left.Item().AlignCenter().Text("📍 " + address).WrapAnywhere();
+                                left.Item().AlignCenter().Text(address).WrapAnywhere();
 
                             // Divider
                             left.Item().PaddingVertical(10).LineHorizontal(1).LineColor(Colors.Grey.Medium);
@@ -979,16 +1071,11 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             // 🏅 Certifications
                             if (!string.IsNullOrEmpty(certifications))
                             {
-                                left.Item().PaddingTop(10).Text("📜 Certifications").Bold().FontSize(12).FontColor(Colors.Black);
+                                left.Item().PaddingTop(10).Text("Certifications").Bold().FontSize(12).FontColor(Colors.Black);
                                 foreach (var cert in certifications.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries))
                                     left.Item().PaddingLeft(10).Text("• " + cert.Trim());
                             }
 
-                            // 🗣 Languages (Optional for fuller look)
-                            left.Item().PaddingTop(10).Text("🌐 Languages").Bold().FontSize(12).FontColor(Colors.Black);
-                            left.Item().PaddingLeft(10).Text("• English");
-                            left.Item().PaddingLeft(10).Text("• Malay");
-                            left.Item().PaddingLeft(10).Text("• Mandarin");
                         });
 
                         // 🔹 Right Main Content (Summary, Education, Experience)
@@ -997,7 +1084,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             // 🎯 Professional Summary
                             if (!string.IsNullOrEmpty(summary))
                             {
-                                right.Item().Text("🎯 Professional Summary").Bold().FontSize(14);
+                                right.Item().Text("Professional Summary").Bold().FontSize(14);
                                 right.Item().Text(summary);
                                 right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
@@ -1005,7 +1092,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             // 🎓 Education
                             if (!string.IsNullOrEmpty(education))
                             {
-                                right.Item().PaddingTop(10).Text("🎓 Education").Bold().FontSize(14);
+                                right.Item().PaddingTop(10).Text("Education").Bold().FontSize(14);
                                 right.Item().Text(education);
                                 right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
@@ -1013,7 +1100,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             // 💼 Experience
                             if (!string.IsNullOrEmpty(experience))
                             {
-                                right.Item().PaddingTop(10).Text("💼 Experience").Bold().FontSize(14);
+                                right.Item().PaddingTop(10).Text("Experience").Bold().FontSize(14);
 
                                 foreach (var exp in experience.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
                                 {
@@ -1022,15 +1109,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
                                 right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
-
-                            // 💻 Projects (Optional section)
-                            right.Item().PaddingTop(10).Text("💻 Projects").Bold().FontSize(14);
-                            right.Item().PaddingLeft(10).Text("• Portfolio Website – Built using ASP.NET Core and SQL");
-                            right.Item().PaddingLeft(10).Text("• Resume Builder System – Integrated AI-based feedback module");
-
-                            // 🤝 References (Optional)
-                            right.Item().PaddingTop(10).Text("🤝 References").Bold().FontSize(14);
-                            right.Item().PaddingLeft(10).Text("Available upon request.");
                         });
                     });
                 });
@@ -1072,8 +1150,11 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (!Directory.Exists(resumesDir))
                 Directory.CreateDirectory(resumesDir);
 
-            var fileName = $"resume_{Guid.NewGuid()}.pdf";
-            var filePath = Path.Combine(resumesDir, fileName);
+            // ✅ New file naming: FirstName + timestamp
+            var user = await _db.users.FindAsync(userId);
+            string fileName = $"{user.first_name}_{DateTime.Now:yyyyMMdd_HHmm}.pdf";
+            string filePath = Path.Combine(resumesDir, fileName);
+
             await System.IO.File.WriteAllBytesAsync(filePath, pdfBytes);
 
             // 3️⃣ Save DB record

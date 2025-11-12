@@ -12,8 +12,8 @@
 
         <label for="template">Choose Resume Template</label>
         <select id="template" name="template" required>
-            <option value="classic">Classic (Simple, Clean)</option>
-            <option value="modern">Modern (Two-column layout)</option>
+            <option value="classic">Classic</option>
+            <option value="modern">Modern</option>
         </select>
 
         <!-- Profile Picture Upload -->
@@ -25,20 +25,21 @@
         </div>
 
         <label>Full Name</label>
-        <input type="text" id="fullName" name="fullName" placeholder="John Doe" required />
+        <input type="text" id="fullName" name="fullName" value="@Model.FullName" placeholder="John Doe" required />
 
         <label>Email</label>
-        <input type="email" id="email" name="email" placeholder="john@example.com" required />
+        <input type="email" id="email" name="email" value="@Model.Email" placeholder="john@example.com" required />
 
         <label>Phone</label>
-        <input type="text" id="phone" name="phone" placeholder="+60 12-345 6789" />
+        <input type="text" id="phone" name="phone" value="@Model.Phone" placeholder="+60 12-345 6789" />
 
         <label>Address</label>
-        <input type="text" id="address" name="address" placeholder="Kuala Lumpur, Malaysia" />
+        <input type="text" id="address" name="address" value="@Model.Address" placeholder="Kuala Lumpur, Malaysia" />
 
         <h3>Professional Summary</h3>
-        <textarea id="summary" name="summary"
-            placeholder="Briefly describe your background, goals, and key strengths..." rows="4"></textarea>
+        <textarea id="summary" name="summary" rows="4"
+            placeholder="Briefly describe your background...">@Model.Summary</textarea>
+
 
         <h3>Education</h3>
         <label>School / University</label>
@@ -74,9 +75,10 @@
 
 
         <h3>Skills & Certifications</h3>
-        <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" />
-        <input type="text" id="certifications" name="certifications"
+        <input type="text" id="skills" name="skills" value="@Model.Skills" placeholder="C#, ASP.NET, SQL" />
+        <input type="text" id="certifications" name="certifications" value="@Model.Certifications"
             placeholder="Microsoft Certified: Azure Fundamentals" />
+
 
         <button type="button" id="previewBtn">Preview Resume</button>
         <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>

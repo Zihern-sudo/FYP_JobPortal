@@ -25,4 +25,8 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string Message { get; set; } = string.Empty;
         public DateTime Date { get; set; }
     }
+    public class FavouriteToggleModel
+{
+    public int jobId { get; set; }
+}
 }

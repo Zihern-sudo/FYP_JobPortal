@@ -1,4 +1,6 @@
 @model JobPortal.Areas.Shared.Models.job_listing
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@using Microsoft.AspNetCore.Http
 
 @{
     Layout = "_LayoutDashboard";
@@ -9,12 +11,11 @@
     <h1>@Model.job_title</h1>
 
     <div class="job-meta">
-
         @*
        // 🖼️ Company Logo (if available) 
-        @if (!string.IsNullOrEmpty(Model.company.company_logo_path))
+        @if (!string.IsNullOrEmpty(Model.company.company_photo))
         {
-            <img src="~/uploads/@Model.company.company_logo_path" 
+            <img src="~/uploads/@Model.company.company_photo" 
                  alt="Company Logo" 
                  class="company-logo mb-3" 
                  style="width:120px; height:auto;" />
@@ -57,11 +58,44 @@
 
     </div>
 
-    <div class="d-flex justify-content-between mt-4">
+    <div class="d-flex justify-content-between align-items-center mt-4">
         <a href="@Url.Action("JobListings")" class="btn btn-secondary">← Back to Listing</a>
 
-        <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
-            class="btn btn-success">Apply Now</a>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Favourite star button (to the left of Apply) -->
+            <button type="button" class="btn btn-sm p-1 favourite-toggle" data-job-id="@Model.job_listing_id"
+                style="font-size:1.5rem; line-height:1;">
+                @(ViewBag.IsFavourite ? "⭐" : "☆")
+            </button>
+
+            <!-- Apply button -->
+            <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
+                class="btn btn-success">Apply Now</a>
+        </div>
     </div>
 
+
 </section>
+@section Scripts {
+    <script>
+        document.querySelectorAll('.favourite-toggle').forEach(btn => {
+            btn.addEventListener('click', async function () {
+                const jobId = this.dataset.jobId;
+                const response = await fetch('@Url.Action("ToggleFavourite", "Dashboard")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': '@Antiforgery.GetAndStoreTokens(ViewContext.HttpContext).RequestToken'
+                    },
+                    body: JSON.stringify({ jobId })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.textContent = result.isFavourite ? '⭐' : '☆';
+                }
+            });
+        });
+    </script>
+}

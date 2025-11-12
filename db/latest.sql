@@ -355,7 +355,7 @@ CHECK (job_type IN ('Contract','Freelance','Full Time','Internship','Part Time')
 
 /* --------------------------------*/
 
-/*9:43pm 11/11/2025 */
+/*9:43pm 11/11/2025 eason */
 
 ALTER TABLE email_verification
 MODIFY COLUMN purpose ENUM('RecruiterRegister','SeekerRegister','PasswordReset') 
@@ -370,3 +370,16 @@ ADD COLUMN job_category VARCHAR(50) NOT NULL DEFAULT 'Other';
 
 
 /* ---- */
+
+/* 1:30pm 12/11/2025 eason */
+CREATE TABLE job_favourites (
+    fav_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    job_listing_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, job_listing_id),
+    FOREIGN KEY (user_id) REFERENCES user(user_id),
+    FOREIGN KEY (job_listing_id) REFERENCES job_listing(job_listing_id)
+);
+
+/* -- */
