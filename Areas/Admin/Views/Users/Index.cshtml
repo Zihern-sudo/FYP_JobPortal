@@ -126,7 +126,7 @@
                             <th style="width:120px">User Status</th>
                             <th style="width:120px">Company</th>
                             <th style="width:160px">Created</th>
-                            <th style="width:180px" class="text-end">Actions</th>
+                            <th style="width:260px" class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -177,6 +177,14 @@
 
                                             <a class="btn btn-sm btn-outline-primary" asp-action="Preview"
                                                 asp-route-id="@r.Id">Open</a>
+
+                                            @* NEW: View Company (only if recruiter and company is NOT yet verified/active) *@
+                                            @if (r.Role == "Recruiter" && (string.IsNullOrEmpty(r.CompanyStatus) || r.CompanyStatus == "Pending" || r.CompanyStatus == "Incomplete" || r.CompanyStatus == "Rejected"))
+                                            {
+                                                <a class="btn btn-sm btn-outline-secondary"
+                                                   asp-action="CompanyProfile"
+                                                   asp-route-id="@r.Id">View Company</a>
+                                            }
                                         </div>
                                     </td>
                                 </tr>

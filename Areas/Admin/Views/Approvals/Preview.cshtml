@@ -2,7 +2,7 @@
 @model JobPortal.Areas.Admin.Models.ApprovalPreviewViewModel
 
 <a asp-area="Admin" asp-controller="Approvals" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
-    &leftarrow; Back to Approvals
+  &leftarrow; Back to Approvals
 </a>
 
 <div class="row g-3">
@@ -10,6 +10,19 @@
     <div class="card shadow-sm">
       <div class="card-header bg-white fw-semibold">Job details (read-only)</div>
       <div class="card-body">
+
+        @* NEW: company photo if provided by controller *@
+        @{
+          var companyPhotoUrl = ViewBag.CompanyPhotoUrl as string;
+        }
+        @if (!string.IsNullOrWhiteSpace(companyPhotoUrl))
+        {
+          <div class="mb-3">
+            <img src="@companyPhotoUrl" alt="Company photo"
+              style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
+          </div>
+        }
+
         <dl class="row">
           <dt class="col-sm-3">Job Title</dt>
           <dd class="col-sm-9">@Model.JobTitle</dd>

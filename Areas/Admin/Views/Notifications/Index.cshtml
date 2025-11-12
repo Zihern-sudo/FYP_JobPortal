@@ -1,0 +1,287 @@
+@* ===============================================
+   File: Areas/Admin/Views/Notifications/Index.cshtml
+   =============================================== *@
+@model JobPortal.Areas.Admin.Models.NotificationsIndexViewModel
+@{
+    ViewData["Title"] = "Notification Centre";
+
+    string PillClass(string? t)
+    {
+        if (string.IsNullOrWhiteSpace(t)) return "badge bg-secondary";
+        var s = t.ToLowerInvariant();
+        if (s.Contains("system")) return "badge rounded-pill px-2 py-1 text-bg-primary";
+        if (s.Contains("message")) return "badge rounded-pill px-2 py-1 text-bg-success";
+        if (s.Contains("approval") || s.Contains("review")) return "badge rounded-pill px-2 py-1 text-bg-warning";
+        return "badge bg-secondary rounded-pill px-2 py-1";
+    }
+
+    bool hasUnreadFilter = string.Equals(Model.Filter, "unread", StringComparison.OrdinalIgnoreCase);
+    bool hasTypeFilter = !string.IsNullOrWhiteSpace(Model.Type);
+
+    // Results count (start–end of total)
+    var total = Model.Items.TotalItems;
+    var page = Math.Max(1, Model.Page);
+    var size = Math.Max(1, Model.PageSize);
+    var start = total == 0 ? 0 : ((page - 1) * size) + 1;
+    var end = Math.Min(page * size, total);
+}
+
+<style>
+    /* Layout + spacing polish */
+    .nc-wrap {
+        max-width: 1100px;
+    }
+
+    .nc-toolbar {
+        background: #fff;
+        border: 1px solid #eee;
+        border-radius: 1rem;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+    }
+
+    .nc-card {
+        border: 1px solid #eee;
+        border-radius: 1rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .03);
+    }
+
+    .nc-card.unread {
+        background: #f9fbff;
+        border-color: #e7efff;
+    }
+
+    .nc-title {
+        font-weight: 700;
+    }
+
+    .nc-meta {
+        font-size: .825rem;
+        color: #6c757d;
+    }
+
+    .nc-empty {
+        padding: 3rem 1rem;
+        text-align: center;
+        color: #6c757d;
+    }
+
+    .nc-empty .emoji {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: .5rem;
+    }
+
+    .nc-filters .btn {
+        --bs-btn-padding-y: .4rem;
+        --bs-btn-padding-x: .8rem;
+    }
+
+    .chip-clear {
+        display: inline-flex;
+        align-items: center;
+        gap: .25rem;
+        padding: .25rem .7rem;
+        border-radius: 999px;
+        background: #f1f3f5;
+        font-size: .85rem;
+        text-decoration: none;
+    }
+
+    .chip-clear:hover {
+        background: #e9ecef;
+        text-decoration: none;
+    }
+</style>
+
+<div class="container mt-4 nc-wrap">
+
+    @* Toolbar with filters and actions in one row *@
+    <div class="nc-toolbar mb-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-12">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+
+                    @* Left side: Filters Form (auto-submit on change) *@
+                    <form id="filtersForm" method="get" class="d-flex flex-wrap align-items-center gap-2">
+                        <input type="hidden" name="page" value="1" />
+                        <input type="hidden" name="pageSize" value="@Model.PageSize" />
+
+                        <div class="btn-group nc-filters" role="group" aria-label="Read filter">
+                            <input type="radio" class="btn-check" name="filter" id="f_all" value="all" @(Model.Filter ==
+                                                                                                                                       "all" ? "checked" : null)>
+                            <label class="btn btn-outline-secondary" for="f_all">All</label>
+
+                            <input type="radio" class="btn-check" name="filter" id="f_unread" value="unread"
+                                @(Model.Filter == "unread" ? "checked" : null)>
+                            <label class="btn btn-outline-secondary" for="f_unread">Unread</label>
+                        </div>
+
+                        <div class="input-group" style="width:260px;">
+                            <span class="input-group-text">Type</span>
+                            <select id="typeSel" class="form-select" name="type">
+                                @* All option *@
+                                @if (string.IsNullOrEmpty(Model.Type))
+                                {
+                                    <option value="" selected>All</option>
+                                }
+                                else
+                                {
+                                    <option value="">All</option>
+                                }
+                                @* Concrete types *@
+                                @foreach (var t in Model.AvailableTypes)
+                                {
+                                    if (string.Equals(Model.Type, t, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <option value="@t" selected>@t</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@t">@t</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        @* (Apply button removed – auto-submit enabled below) *@
+                    </form>
+
+                    @* Right side: Mark all as read *@
+                    <form asp-action="MarkAllAsRead" method="post" class="mb-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-secondary" @(Model.UnreadCount == 0 ? "disabled" :
+                                                                                                            null)>
+                            Mark all as read (@Model.UnreadCount)
+                        </button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+
+        @* Applied filter chips + Reset link (own row, full width) *@
+        <div class="row mt-2">
+            <div class="col-12 d-flex flex-wrap gap-2">
+                @{
+                    bool hasUnread = string.Equals(Model.Filter, "unread", StringComparison.OrdinalIgnoreCase);
+                    bool hasType = !string.IsNullOrWhiteSpace(Model.Type);
+                }
+                @if (hasUnread)
+                {
+                    <a class="chip-clear" asp-action="Index" asp-route-page="1" asp-route-pageSize="@Model.PageSize"
+                        asp-route-filter="all" asp-route-type="@Model.Type">
+                        Unread <span aria-hidden="true">×</span>
+                    </a>
+                }
+                @if (hasType)
+                {
+                    <a class="chip-clear" asp-action="Index" asp-route-page="1" asp-route-pageSize="@Model.PageSize"
+                        asp-route-filter="@Model.Filter" asp-route-type="">
+                        Type: @Model.Type <span aria-hidden="true">×</span>
+                    </a>
+                }
+                @if (hasUnread || hasType)
+                {
+                    <a class="chip-clear" asp-action="Index" asp-route-page="1" asp-route-pageSize="@Model.PageSize"
+                        asp-route-filter="all" asp-route-type="">
+                        Reset filters
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* Content *@
+    @if (!Model.Items.Items.Any())
+    {
+        <div class="nc-empty">
+            <span class="emoji">🎉</span>
+            <div>No notifications.</div>
+        </div>
+    }
+    else
+    {
+        foreach (var n in Model.Items.Items)
+        {
+            <div class="nc-card @(n.IsRead ? "" : "unread")">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="fs-4" aria-hidden="true">
+                        @{
+                            var t = (n.Type ?? "").ToLowerInvariant();
+                            var icon = t.Contains("system") ? "⚙️" : t.Contains("message") ? "📨" :
+                            (t.Contains("approval") || t.Contains("review")) ? "✅" : "🔔";
+                        }
+                        @icon
+                    </div>
+                    <div class="flex-fill">
+                        <div class="d-flex justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="nc-title">@n.Title</span>
+                                <span class="@PillClass(n.Type)">@(!string.IsNullOrEmpty(n.Type) ? n.Type : "General")</span>
+                            </div>
+                            <div class="nc-meta">@n.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+                        </div>
+                        <div class="text-muted mt-1">@n.TextPreview</div>
+                    </div>
+                    @if (!n.IsRead)
+                    {
+                        <form asp-action="MarkAsRead" method="post" class="ms-2">
+                            @Html.AntiForgeryToken()
+                            <input name="id" type="hidden" value="@n.Id" />
+                            <button type="submit" class="btn btn-sm btn-primary">Mark read</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Pager + results count *@
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-2">
+            <div class="text-muted small mb-2 mb-md-0">
+                Showing @start–@end of @total
+            </div>
+            @if (Model.Items.TotalPages > 1)
+            {
+                <nav>
+                    <ul class="pagination mb-0">
+                        @for (int p = 1; p <= Model.Items.TotalPages; p++)
+                        {
+                            <li class="page-item @(p == Model.Page ? "active" : "")">
+                                <a class="page-link" asp-action="Index" asp-route-page="@p" asp-route-pageSize="@Model.PageSize"
+                                    asp-route-filter="@Model.Filter" asp-route-type="@Model.Type">@p</a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const form = document.getElementById('filtersForm');
+            if (!form) return;
+
+            const autosubmit = () => {
+                const page = form.querySelector('input[name="page"]');
+                if (page) page.value = '1';            // reset to first page on filter change
+                if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                else form.submit();
+            };
+
+            // Radios (All/Unread)
+            form.querySelectorAll('input[name="filter"]').forEach(el => {
+                el.addEventListener('change', autosubmit);
+            });
+
+            // Type select
+            const typeSel = form.querySelector('select[name="type"]');
+            if (typeSel) typeSel.addEventListener('change', autosubmit);
+        })();
+    </script>
+}

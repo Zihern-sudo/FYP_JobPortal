@@ -77,6 +77,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     (!toExclusive.HasValue || u.created_at < toExclusive.Value));
             }
 
+            // Effective company status rule
             var projected = qset
                 .OrderBy(u => u.first_name).ThenBy(u => u.last_name)
                 .Select(u => new RecruiterRow
@@ -87,7 +88,9 @@ namespace JobPortal.Areas.Admin.Controllers
                     Status = u.user_status,
                     Role = u.user_role,
                     Company = u.company != null ? u.company.company_name : null,
-                    CompanyStatus = u.company != null ? u.company.company_status : null,
+                    CompanyStatus = u.company != null
+                        ? (u.company.job_listings.Any(j => j.job_status == "Open") ? "Active" : u.company.company_status)
+                        : null,
                     CreatedAt = u.created_at
                 });
 
@@ -229,13 +232,11 @@ namespace JobPortal.Areas.Admin.Controllers
                         password_hash = "AQAAAAIAAYagAAAAEDCZu4pS5gczGSWwSIstyH0K91mopa2ahDjX186ZkIsPB4to1cH5eFdgvXLHg0AMRA==",
                         user_role = roleCsv,
                         user_status = stat
-                        // Notification flags are no longer on the user entity.
                     };
                     _db.users.Add(u);
                     usersCreated++;
-                    await _db.SaveChangesAsync(); // ensure u.user_id is available
+                    await _db.SaveChangesAsync();
 
-                    // Create default notification preferences for new users
                     var pref = new notification_preference
                     {
                         user_id = u.user_id,
@@ -257,7 +258,6 @@ namespace JobPortal.Areas.Admin.Controllers
                     usersUpdated++;
                     await _db.SaveChangesAsync();
 
-                    // Ensure an existing preference row exists (create if missing)
                     var pref = await _db.notification_preferences
                         .FirstOrDefaultAsync(p => p.user_id == u.user_id);
 
@@ -360,7 +360,9 @@ namespace JobPortal.Areas.Admin.Controllers
                     Status = u.user_status,
                     Role = u.user_role,
                     Company = u.company != null ? u.company.company_name : null,
-                    CompanyStatus = u.company != null ? u.company.company_status : null,
+                    CompanyStatus = u.company != null
+                        ? (u.company.job_listings.Any(j => j.job_status == "Open") ? "Active" : u.company.company_status)
+                        : null,
                     Created = u.created_at
                 }).ToList();
 
@@ -483,14 +485,24 @@ namespace JobPortal.Areas.Admin.Controllers
                     x.user_role,
                     x.user_status,
                     x.created_at,
+                    CompanyId = x.company != null ? (int?)x.company.company_id : null,
                     CompanyName = x.company != null ? x.company.company_name : null,
-                    CompanyStatus = x.company != null ? x.company.company_status : null,
+                    CompanyStatusRaw = x.company != null ? x.company.company_status : null,
+                    CompanyIndustry = x.company != null ? x.company.company_industry : null,
+                    CompanyLocation = x.company != null ? x.company.company_location : null,
+                    CompanyDescription = x.company != null ? x.company.company_description : null,
+                    CompanyPhoto = x.company != null ? x.company.company_photo : null,  // <-- NEW: include path
+                    OpenJobs = x.company != null ? x.company.job_listings.Count(j => j.job_status == "Open") : 0,
                     x.phone,
                     x.address
                 })
                 .FirstOrDefault();
 
             if (u == null) return NotFound();
+
+            var effectiveCompanyStatus = u.CompanyId.HasValue
+                ? (u.OpenJobs > 0 ? "Active" : u.CompanyStatusRaw)
+                : null;
 
             var vm = new RecruiterPreviewViewModel
             {
@@ -502,10 +514,23 @@ namespace JobPortal.Areas.Admin.Controllers
                 Status = u.user_status,
                 CreatedAt = u.created_at,
                 CompanyName = u.CompanyName,
-                CompanyStatus = u.CompanyStatus,
+                CompanyStatus = effectiveCompanyStatus,
                 Phone = u.phone,
                 Address = u.address
             };
+
+            // Provide rich company details for the view without changing the VM contract
+            ViewBag.Company = u.CompanyId.HasValue ? new
+            {
+                Id = u.CompanyId.Value,
+                Name = u.CompanyName,
+                Status = effectiveCompanyStatus,
+                Industry = u.CompanyIndustry,
+                Location = u.CompanyLocation,
+                Description = u.CompanyDescription,
+                OpenJobs = u.OpenJobs,
+                CompanyPhotoUrl = u.CompanyPhoto      // <-- NEW: expose photo to the view
+            } : null;
 
             ViewData["Title"] = u.user_role;
             return View(vm);
@@ -524,8 +549,19 @@ namespace JobPortal.Areas.Admin.Controllers
         public IActionResult Reactivate(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
             => SetUserStatus(id, "Active", "User reactivated.", status, q, from, to, page, role);
 
-        // Single-item helpers (Approve/Reject/Suspend/Reactivate) call SetUserStatus(...)
-        // We extend SetUserStatus to also flip company_status.
+        // Redirect helper: from a user id, jump to the Companies/Preview page if company exists
+        [HttpGet]
+        public IActionResult CompanyProfile(int id, string status = "All", string q = "", int page = 1, string role = "All")
+        {
+            var comp = _db.companies.AsNoTracking().FirstOrDefault(c => c.user_id == id);
+            if (comp == null)
+            {
+                Flash("warning", "Company profile not found for this recruiter.");
+                return RedirectToAction(nameof(Index), new { status, q, page, role });
+            }
+            return RedirectToAction("Preview", "Companies", new { area = "Admin", id = comp.company_id });
+        }
+
         private IActionResult SetUserStatus(int id, string newStatus, string okMessage,
             string status, string q, DateTime? from, DateTime? to, int page, string role)
         {
@@ -549,19 +585,18 @@ namespace JobPortal.Areas.Admin.Controllers
                     u.company.company_status = "Rejected";
             }
 
-            // Only on recruiter + company exists
             if (u.user_role == "Recruiter" && u.company != null)
             {
                 if (newStatus == "Active" &&
                     string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
-                    u.company.company_status = "Verified"; // approved company
+                    u.company.company_status = "Verified";
                 }
                 else if (newStatus == "Inactive" &&
                          (string.Equals(u.company.company_status, "Pending", StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(u.company.company_status, "Incomplete", StringComparison.OrdinalIgnoreCase)))
                 {
-                    u.company.company_status = "Rejected"; // rejected company
+                    u.company.company_status = "Rejected";
                 }
             }
 

@@ -1,10 +1,11 @@
-// File: Areas/Admin/Controllers/CompaniesController.cs  (FULL UPDATED)
+// File: Areas/Admin/Controllers/CompaniesController.cs  (ASYNC UPDATED - FIXED CALLS)
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Admin.Models;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Shared.Extensions; // TryGetUserId()
+using JobPortal.Services;                // INotificationService
 using System;
 using System.Linq;
 using System.Text;
@@ -15,7 +16,13 @@ namespace JobPortal.Areas.Admin.Controllers
     public class CompaniesController : Controller
     {
         private readonly AppDbContext _db;
-        public CompaniesController(AppDbContext db) => _db = db;
+        private readonly INotificationService _notif;
+
+        public CompaniesController(AppDbContext db, INotificationService notif)
+        {
+            _db = db;
+            _notif = notif;
+        }
 
         // GET: /Admin/Companies
         public IActionResult Index(
@@ -33,26 +40,24 @@ namespace JobPortal.Areas.Admin.Controllers
 
             var baseQuery = _db.companies.AsNoTracking();
 
-            // counts (unfiltered)
             int all = baseQuery.Count();
             int verified = baseQuery.Count(c => c.company_status == "Verified");
-            int unverified = baseQuery.Count(c => c.company_status == null || c.company_status == "" || c.company_status == "Unverified");
+            int unverified = baseQuery.Count(c => c.company_status == null || c.company_status == "" || c.company_status == "Pending");
             int incomplete = baseQuery.Count(c => c.company_status == "Incomplete");
             int rejected = baseQuery.Count(c => c.company_status == "Rejected");
 
             var qset = baseQuery;
 
-            // status filter
             switch ((status ?? "All").Trim())
             {
                 case "Verified": qset = qset.Where(c => c.company_status == "Verified"); break;
-                case "Unverified": qset = qset.Where(c => c.company_status == null || c.company_status == "" || c.company_status == "Unverified"); break;
+                case "Unverified": qset = qset.Where(c => c.company_status == null || c.company_status == "" || c.company_status == "Pending"); break;
                 case "Incomplete": qset = qset.Where(c => c.company_status == "Incomplete"); break;
                 case "Rejected": qset = qset.Where(c => c.company_status == "Rejected"); break;
-                default:           /* All */ break;
+                case "Active": qset = qset.Where(c => c.company_status == "Active"); break;
+                default: break;
             }
 
-            // text search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim();
@@ -62,16 +67,14 @@ namespace JobPortal.Areas.Admin.Controllers
                     EF.Functions.Like(c.company_location ?? "", $"%{term}%"));
             }
 
-            // date-range filter by job activity (date_posted)
             if (from.HasValue || to.HasValue)
             {
-                var toExclusive = to?.Date.AddDays(1); // inclusive UI → exclusive query upper bound
+                var toExclusive = to?.Date.AddDays(1);
                 qset = qset.Where(c => c.job_listings.Any(j =>
                     (!from.HasValue || j.date_posted >= from.Value.Date) &&
                     (!toExclusive.HasValue || j.date_posted < toExclusive.Value)));
             }
 
-            // projection
             var projected = qset
                 .OrderBy(c => c.company_name)
                 .Select(c => new CompanyRow
@@ -80,11 +83,12 @@ namespace JobPortal.Areas.Admin.Controllers
                     Name = c.company_name,
                     Industry = c.company_industry,
                     Location = c.company_location,
-                    Status = c.company_status,
+                    Status = c.job_listings.Any(j => j.job_status == "Open")
+                                ? "Active"
+                                : (c.company_status ?? "Pending"),
                     Jobs = c.job_listings.Count()
                 });
 
-            // paging
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, 100);
             int total = projected.Count();
@@ -108,16 +112,15 @@ namespace JobPortal.Areas.Admin.Controllers
                 }
             };
 
-            // Persist filters for view (no VM changes required)
             ViewBag.From = from?.ToString("yyyy-MM-dd");
             ViewBag.To = to?.ToString("yyyy-MM-dd");
 
             return View(vm);
         }
 
-        // POST: bulk verify/reject
+        // POST: bulk verify/reject (ASYNC)
         [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult Bulk(string actionType, int[] ids, string? comments, string status = "All", string q = "", int page = 1)
+        public async Task<IActionResult> Bulk(string actionType, int[] ids, string? comments, string status = "All", string q = "", int page = 1)
         {
             if (ids == null || ids.Length == 0)
             {
@@ -145,7 +148,7 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             foreach (var c in companies) c.company_status = setTo;
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             if (this.TryGetUserId(out var adminId, out _))
             {
@@ -159,8 +162,28 @@ namespace JobPortal.Areas.Admin.Controllers
                         timestamp = now
                     });
                 }
-                _db.SaveChanges();
+                await _db.SaveChangesAsync();
             }
+
+            // notify owners (Verify/Reject handled in bulk)
+            var notifyTasks = companies
+                .Where(c => c.user_id > 0)
+                .Select(c =>
+                {
+                    var title = setTo == "Verified"
+                        ? "Company profile approved"
+                        : "Company profile rejected";
+
+                    var msg = setTo == "Verified"
+                        ? $"Your company profile \"{c.company_name}\" has been approved. You can now post jobs."
+                        : $"Your company profile \"{c.company_name}\" has been rejected.{(string.IsNullOrWhiteSpace(comments) ? "" : $" Reason: {comments.Trim()}")}";
+
+                    var type = setTo == "Verified" ? "Approval" : "Review";
+                    return _notif.SendAsync(c.user_id, title, msg, type: type);  // ← fixed
+                });
+
+            try { await Task.WhenAll(notifyTasks); }
+            catch { /* best effort */ }
 
             Flash("success", $"{companies.Count} compan{(companies.Count == 1 ? "y" : "ies")} {setTo.ToLowerInvariant()}.");
             return RedirectToAction(nameof(Index), new { status, q, page });
@@ -175,10 +198,11 @@ namespace JobPortal.Areas.Admin.Controllers
             switch ((status ?? "All").Trim())
             {
                 case "Verified": qset = qset.Where(c => c.company_status == "Verified"); break;
-                case "Unverified": qset = qset.Where(c => c.company_status == null || c.company_status == "" || c.company_status == "Unverified"); break;
+                case "Unverified": qset = qset.Where(c => c.company_status == null || c.company_status == "" || c.company_status == "Pending"); break;
                 case "Incomplete": qset = qset.Where(c => c.company_status == "Incomplete"); break;
                 case "Rejected": qset = qset.Where(c => c.company_status == "Rejected"); break;
-                default:           /* All */ break;
+                case "Active": qset = qset.Where(c => c.company_status == "Active"); break;
+                default: break;
             }
 
             if (!string.IsNullOrWhiteSpace(q))
@@ -205,7 +229,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     c.company_name,
                     c.company_industry,
                     c.company_location,
-                    Status = c.company_status ?? "Unverified",
+                    Status = c.job_listings.Any(j => j.job_status == "Open") ? "Active" : (c.company_status ?? "Unverified"),
                     Jobs = c.job_listings.Count()
                 })
                 .ToList();
@@ -258,25 +282,28 @@ namespace JobPortal.Areas.Admin.Controllers
                 Industry = c.company_industry,
                 Location = c.company_location,
                 Description = c.company_description,
-                Status = c.company_status,
+                Status = c.job_listings.Any(j => j.job_status == "Open") ? "Active" : (c.company_status ?? "Pending"),
                 RecentJobs = jobs
             };
+
+            // expose the photo path for the view
+            ViewBag.CompanyPhotoUrl = c.company_photo;
 
             ViewData["Title"] = "Company Preview";
             return View(vm);
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult Verify(int id)
-            => SetStatus(id, "Verified", "Company verified.");
+        public async Task<IActionResult> Verify(int id)
+            => await SetStatus(id, "Verified", "Company verified.");
 
         [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult MarkIncomplete(int id)
-            => SetStatus(id, "Incomplete", "Company marked as incomplete.");
+        public async Task<IActionResult> MarkIncomplete(int id)
+            => await SetStatus(id, "Incomplete", "Company marked as incomplete.");
 
         [HttpPost, ValidateAntiForgeryToken]
-        public IActionResult Reject(int id, string? comments)
-            => SetStatus(id, "Rejected", string.IsNullOrWhiteSpace(comments) ? "Company rejected." : $"Company rejected: {comments}");
+        public async Task<IActionResult> Reject(int id, string? comments)
+            => await SetStatus(id, "Rejected", string.IsNullOrWhiteSpace(comments) ? "Company rejected." : $"Company rejected: {comments}", comments);
 
         private void AutoFlagIncompleteCompanies()
         {
@@ -295,13 +322,14 @@ namespace JobPortal.Areas.Admin.Controllers
             _db.SaveChanges();
         }
 
-        private IActionResult SetStatus(int id, string status, string logMsg)
+        // NOTE: recruiterComments used when status == "Rejected"
+        private async Task<IActionResult> SetStatus(int id, string status, string logMsg, string? recruiterComments = null)
         {
             var c = _db.companies.FirstOrDefault(x => x.company_id == id);
             if (c == null) return NotFound();
 
             c.company_status = status;
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             if (this.TryGetUserId(out var adminId, out _))
             {
@@ -311,8 +339,37 @@ namespace JobPortal.Areas.Admin.Controllers
                     action_type = $"Company-{status}",
                     timestamp = DateTime.UtcNow
                 });
-                _db.SaveChanges();
+                await _db.SaveChangesAsync();
             }
+
+            // ---- Notify the company owner (recruiter) for Verified / Rejected / Incomplete ----
+            if (c.user_id > 0 && (status == "Verified" || status == "Rejected" || status == "Incomplete"))
+            {
+                string title, message, type;
+
+                if (status == "Verified")
+                {
+                    title = "Company profile approved";
+                    message = $"Your company profile \"{c.company_name}\" has been approved. You can now post jobs.";
+                    type = "Approval";
+                }
+                else if (status == "Rejected")
+                {
+                    title = "Company profile rejected";
+                    message = $"Your company profile \"{c.company_name}\" has been rejected.{(string.IsNullOrWhiteSpace(recruiterComments) ? "" : $" Reason: {recruiterComments.Trim()}")}";
+                    type = "Review";
+                }
+                else // Incomplete
+                {
+                    title = "Company profile incomplete";
+                    message = $"Your company profile \"{c.company_name}\" is marked as incomplete. Please fill in all required details (e.g., name and location) and resubmit for approval.";
+                    type = "Review";
+                }
+
+                try { await _notif.SendAsync(c.user_id, title, message, type: type); }  // ← fixed
+                catch { /* ignore notification failure */ }
+            }
+            // ---------------------------------------------------------------------
 
             Flash("success", logMsg);
             return RedirectToAction(nameof(Preview), new { id });

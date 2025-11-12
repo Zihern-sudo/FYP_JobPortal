@@ -1,4 +1,7 @@
 @* File: Areas/Recruiter/Views/Shared/_RecruiterLayout.cshtml *@
+@using Microsoft.AspNetCore.Http
+@inject JobPortal.Areas.Shared.Models.AppDbContext Db
+
 @{
   Layout = null;
   var title = (string?)ViewData["Title"] ?? "Recruiter";
@@ -15,6 +18,25 @@
   bool isMsgTpl = ctrl.Equals("Templates", StringComparison.OrdinalIgnoreCase);
   bool isJobTpl = ctrl.Equals("JobPostTemplates", StringComparison.OrdinalIgnoreCase);
   bool expandT = isMsgTpl || isJobTpl;
+
+  // --- Recruiter info for navbar (reads existing session/db only) ---
+  var uidStr = Context?.Session?.GetString("UserId");
+  int uid;
+  JobPortal.Areas.Shared.Models.user? me = null;
+  string? companyPhoto = null;
+
+  if (int.TryParse(uidStr, out uid))
+  {
+    me = Db.users.FirstOrDefault(u => u.user_id == uid);
+    var comp = Db.companies.FirstOrDefault(c => c.user_id == uid);
+    companyPhoto = comp?.company_photo;
+  }
+
+  var displayName = (me is null) ? "Recruiter" : $"{me.first_name} {me.last_name}".Trim();
+
+  var photoUrl = string.IsNullOrWhiteSpace(companyPhoto)
+  ? Url.Content("~/img/company-default.png")
+  : Url.Content(companyPhoto.StartsWith("~") ? companyPhoto : "~/" + companyPhoto.TrimStart('/'));
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -24,12 +46,283 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>@title - Recruiter</title>
 
-  @* IMPORTANT: use the default ASP.NET path for Bootstrap *@
   <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" asp-append-version="true" />
   <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
   <link rel="stylesheet" href="~/css/recruiter.css" asp-append-version="true" />
 
-  @* Optional CDN fallback if lib files are missing (keeps UI styled) *@
+  <style>
+    :root {
+      --rk-header-h: 64px;
+      --rk-sidebar-w: 260px;
+      --rk-surface: #ffffff;
+      --rk-surface-soft: #f5f7fb;
+      --rk-brand: #0D6EFD;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      /* stops any “sticking out” look */
+      min-height: 100vh;
+      background: var(--rk-surface-soft);
+    }
+
+    /* ===== Header ===== */
+    .rk-header {
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+      height: var(--rk-header-h);
+      background: var(--rk-surface);
+      border-bottom: 1px solid #e9ecef;
+    }
+
+    .rk-brand {
+      gap: .5rem;
+      font-weight: 600;
+      letter-spacing: .2px;
+    }
+
+    .rk-chip {
+      display: inline-block;
+      padding: .2rem .5rem;
+      border-radius: .5rem;
+      background: #eef2ff;
+      font-size: .8rem;
+      color: #334155;
+    }
+
+    .rk-hamburger {
+      display: none;
+      width: 38px;
+      height: 38px;
+      border: 1px solid #e9ecef;
+      border-radius: .5rem;
+      background: #fff;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ===== Layout grid ===== */
+    .rk-layout {
+      display: grid;
+      grid-template-columns: var(--rk-sidebar-w) minmax(0, 1fr);
+      min-height: calc(100vh - var(--rk-header-h));
+    }
+
+    /* ===== Sidebar: clean vertical nav (no list-group chrome) ===== */
+    .rk-sidebar {
+      background: var(--rk-brand);
+      color: #fff;
+      position: sticky;
+      top: var(--rk-header-h);
+      align-self: start;
+      height: calc(100vh - var(--rk-header-h));
+      overflow-y: auto;
+      padding: 1rem .75rem 1rem 1rem;
+    }
+
+    .rk-navlabel {
+      text-transform: uppercase;
+      font-size: .72rem;
+      letter-spacing: .08em;
+      color: rgba(255, 255, 255, .7);
+      margin: .25rem .75rem .5rem .75rem;
+    }
+
+    .rk-sidenav {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .rk-link {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .5rem .75rem;
+      border-radius: .5rem;
+      color: #fff;
+      text-decoration: none;
+      transition: background-color .15s ease;
+    }
+
+    .rk-link:hover,
+    .rk-link:focus {
+      background: rgba(255, 255, 255, .12);
+    }
+
+    .rk-link.active {
+      color: var(--rk-brand);
+      background: #fff;
+      font-weight: 600;
+      box-shadow: 0 0 0 2px #fff inset;
+    }
+
+    /* Nested Templates group */
+    .rk-subnav {
+      list-style: none;
+      margin: .25rem 0 0 .25rem;
+      padding-left: .5rem;
+      border-left: 1px dashed rgba(255, 255, 255, .35);
+    }
+
+    .rk-subnav .rk-link {
+      padding-left: 1.25rem;
+      font-size: .95rem;
+    }
+
+    /* ===== Main content ===== */
+    .rk-content {
+      padding: 1.25rem 1.5rem 2.25rem;
+    }
+
+    .rk-content-inner {
+      max-width: 1400px;
+      margin-inline: auto;
+    }
+
+    .rk-page-title {
+      margin-bottom: .75rem;
+    }
+
+    /* ===== Caret (collapse) ===== */
+    .caret {
+      display: inline-block;
+      transition: transform .2s ease;
+    }
+
+    .caret.rotate {
+      transform: rotate(180deg);
+    }
+
+    /* ===== Notifications UI (kept) ===== */
+    .notif-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      line-height: 1;
+      border-radius: .5rem;
+      padding: 0;
+    }
+
+    .notif-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      transform: none;
+      min-width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 .25rem;
+      font-size: .65rem;
+      border-radius: 999px;
+      box-shadow: 0 0 0 2px #fff;
+    }
+
+    .notif-dropdown {
+      min-width: 380px;
+      max-width: 440px;
+      padding-top: .35rem;
+      padding-bottom: .35rem;
+    }
+
+    .notif-dropdown .dropdown-header {
+      font-weight: 600;
+      padding: .5rem .75rem;
+    }
+
+    .notif-dropdown hr {
+      margin: .35rem 0;
+    }
+
+    .notif-list {
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .notif-item {
+      padding: .55rem .75rem;
+      border-radius: .5rem;
+      margin: .15rem .5rem;
+      transition: background-color .15s ease, transform .05s ease;
+    }
+
+    .notif-item:hover {
+      background-color: #f7f7f7;
+    }
+
+    .notif-type {
+      font-size: .675rem;
+      border-radius: .4rem;
+      padding: .15rem .4rem;
+      background: #eef1f5;
+    }
+
+    .notif-title {
+      font-weight: 600;
+    }
+
+    .notif-time {
+      color: #6c757d;
+      font-size: .75rem;
+      white-space: nowrap;
+    }
+
+    .notif-body-truncate {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: #6c757d;
+    }
+
+    .notif-dot {
+      width: .5rem;
+      height: .5rem;
+      border-radius: 50%;
+      background: #dc3545;
+      margin-left: .5rem;
+      flex: 0 0 auto;
+    }
+
+    .notif-empty {
+      padding: .9rem .75rem;
+      color: #6c757d;
+    }
+
+    /* ===== Responsive ===== */
+    @@media (max-width: 992px) {
+      .rk-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .rk-sidebar {
+        position: static;
+        height: auto;
+        overflow: visible;
+        padding: 1rem;
+      }
+
+      .rk-content {
+        padding: 1rem;
+      }
+
+      .rk-hamburger {
+        display: inline-flex;
+      }
+    }
+  </style>
+
   <script>
     (function () {
       function loaded(href) {
@@ -48,71 +341,148 @@
 </head>
 
 <body>
-  <header class="navbar navbar-light bg-white border-bottom px-3" style="min-height:64px;">
-    <div class="container-fluid">
-      <div class="navbar-brand fw-semibold">JobPortal • <span class="text-secondary">Recruiter</span></div>
+  <!-- Header -->
+  <header class="rk-header d-flex align-items-center">
+    <div class="container-fluid px-3 d-flex justify-content-between align-items-center">
+      <!-- Mobile sidebar toggle -->
+      <button class="rk-hamburger" type="button" data-bs-toggle="offcanvas" data-bs-target="#rkMobileNav"
+        aria-controls="rkMobileNav" aria-label="Open navigation">☰</button>
+
+      <div class="rk-brand d-flex align-items-center">
+        <img src="/img/FYP_Logo.jpg" alt="Joboria Logo" style="height:24px" />
+        <span class="ms-2">Joboria • <span class="text-secondary">Recruiter</span></span>
+      </div>
+
       <div class="d-flex align-items-center gap-3">
-        <span class="text-muted small">@User?.Identity?.Name</span>
+        @* ===== Notification bell with anchored badge + dropdown (Recruiter) ===== *@
+        <div class="dropdown">
+          <button id="notifDropdownBtn" class="btn btn-link notif-btn text-decoration-none" type="button"
+            data-bs-toggle="dropdown" aria-expanded="false" title="Notifications" aria-label="Notifications">
+            <span class="fs-5">🔔</span>
+            <span id="notifBadge" class="badge rounded-pill bg-danger notif-badge d-none">0</span>
+          </button>
+
+          <div class="dropdown-menu dropdown-menu-end shadow notif-dropdown" aria-labelledby="notifDropdownBtn">
+            <div class="dropdown-header d-flex justify-content-between align-items-center">
+              <span>Notifications</span>
+              <form asp-area="Recruiter" asp-controller="Notifications" asp-action="MarkAllAsRead" method="post"
+                class="m-0">
+                <button type="submit" class="btn btn-link btn-sm" id="notifMarkAllBtn" disabled>Mark all read</button>
+              </form>
+            </div>
+            <hr class="mb-0" />
+            <div id="notifList" class="notif-list py-2">
+              <div class="notif-empty small px-3">No notifications.</div>
+            </div>
+            <hr class="mt-0" />
+            <a class="dropdown-item text-center" asp-area="Recruiter" asp-controller="Notifications" asp-action="Index">
+              Open Notification Centre
+            </a>
+          </div>
+        </div>
+        @* ===== end notifications block ===== *@
+
+        <img src="@photoUrl" alt="Company" class="rounded-circle border"
+          style="width:36px;height:36px;object-fit:cover;" />
+        <span class="rk-chip">@displayName</span>
+        <a class="btn btn-outline-danger btn-sm" asp-area="Recruiter" asp-controller="Account"
+          asp-action="Logout">Logout</a>
       </div>
     </div>
   </header>
 
-  <main class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar p-3">
-      <div class="fw-bold text-uppercase small text-muted mb-2">Navigation</div>
+  <!-- App Layout -->
+  <div class="rk-layout">
+    <!-- Sidebar (desktop) -->
+    <aside class="rk-sidebar d-none d-lg-block">
+      <div class="rk-navlabel">Navigation</div>
+      <ul class="rk-sidenav">
+        <li><a class="rk-link @(isHome ? "active" : "")" asp-area="Recruiter" asp-controller="Home"
+            asp-action="Index">Home</a></li>
+        <li><a class="rk-link @(isJobs ? "active" : "")" asp-area="Recruiter" asp-controller="Jobs"
+            asp-action="Index">Jobs</a></li>
+        <li><a class="rk-link @(isCompanies ? "active" : "")" asp-area="Recruiter" asp-controller="Company"
+            asp-action="Manage">Companies</a></li>
+        <li><a class="rk-link @(isCandidates ? "active" : "")" asp-area="Recruiter" asp-controller="Candidates"
+            asp-action="Index">Candidates</a></li>
+        <li><a class="rk-link @(isScreen ? "active" : "")" asp-area="Recruiter" asp-controller="Screening"
+            asp-action="Queue">Screening Queue</a></li>
+        <li><a class="rk-link @(isInbox ? "active" : "")" asp-area="Recruiter" asp-controller="Inbox"
+            asp-action="Index">Inbox</a></li>
 
-      <div class="list-group nav-templates">
-        <a class="list-group-item list-group-item-action @(isHome ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Home" asp-action="Index">Home</a>
-
-        <a class="list-group-item list-group-item-action @(isJobs ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Jobs" asp-action="Index">Jobs</a>
-
-        <a class="list-group-item list-group-item-action @(isCompanies ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Company" asp-action="Manage">Companies</a>
-
-        <a class="list-group-item list-group-item-action @(isCandidates ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Candidates" asp-action="Index">Candidates</a>
-
-        <a class="list-group-item list-group-item-action @(isScreen ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Screening" asp-action="Queue">Screening Queue</a>
-
-        <a class="list-group-item list-group-item-action @(isInbox ? "active" : "")" asp-area="Recruiter"
-          asp-controller="Inbox" asp-action="Index">Inbox</a>
-
-        @* Templates (collapsible) *@
-        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center parent @(expandT ? "active-parent" : "")"
-          data-bs-toggle="collapse" href="#tmplMenu" role="button" aria-expanded="@(expandT.ToString().ToLower())"
-          aria-controls="tmplMenu">
-          Templates
-          <span class="ms-2 small" aria-hidden="true">▾</span>
-        </a>
-        <div id="tmplMenu" class="collapse @(expandT ? "show" : "")">
-          <div class="list-group subnav">
-            <a class="list-group-item list-group-item-action @(isMsgTpl ? "active" : "")" asp-area="Recruiter"
-              asp-controller="Templates" asp-action="Index">
-              Message Templates
-            </a>
-            <a class="list-group-item list-group-item-action @(isJobTpl ? "active" : "")" asp-area="Recruiter"
-              asp-controller="JobPostTemplates" asp-action="Index">
-              Job Templates
-            </a>
+        <!-- Templates (collapsible) -->
+        <li class="mt-2">
+          <a class="rk-link d-flex align-items-center @(expandT ? "active-parent" : "")" data-bs-toggle="collapse"
+            href="#tmplMenu" role="button" aria-expanded="@(expandT.ToString().ToLower())" aria-controls="tmplMenu">
+            Templates <span class="ms-auto caret" aria-hidden="true">▾</span>
+          </a>
+          <div id="tmplMenu" class="collapse @(expandT ? "show" : "")">
+            <ul class="rk-subnav">
+              <li><a class="rk-link @(isMsgTpl ? "active" : "")" asp-area="Recruiter" asp-controller="Templates"
+                  asp-action="Index">Message Templates</a></li>
+              <li><a class="rk-link @(isJobTpl ? "active" : "")" asp-area="Recruiter" asp-controller="JobPostTemplates"
+                  asp-action="Index">Job Templates</a></li>
+            </ul>
           </div>
-        </div>
+        </li>
 
-        <a class="list-group-item list-group-item-action" asp-area="Recruiter" asp-controller="Bulk"
-          asp-action="Index">Bulk Tools</a>
-      </div>
+        <li class="mt-2"><a class="rk-link" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index">Bulk Tools</a>
+        </li>
+      </ul>
     </aside>
 
-    <!-- Content -->
-    <section class="p-4">
-      @RenderBody()
-    </section>
-  </main>
+    <!-- Sidebar (mobile off-canvas) -->
+    <div class="offcanvas offcanvas-start text-bg-dark" tabindex="-1" id="rkMobileNav"
+      aria-labelledby="rkMobileNavLabel">
+      <div class="offcanvas-header">
+        <h6 class="offcanvas-title" id="rkMobileNavLabel">Navigation</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body">
+        <ul class="rk-sidenav">
+          <li><a class="rk-link text-white @(isHome ? "active" : "")" asp-area="Recruiter" asp-controller="Home"
+              asp-action="Index" data-bs-dismiss="offcanvas">Home</a></li>
+          <li><a class="rk-link text-white @(isJobs ? "active" : "")" asp-area="Recruiter" asp-controller="Jobs"
+              asp-action="Index" data-bs-dismiss="offcanvas">Jobs</a></li>
+          <li><a class="rk-link text-white @(isCompanies ? "active" : "")" asp-area="Recruiter" asp-controller="Company"
+              asp-action="Manage" data-bs-dismiss="offcanvas">Companies</a></li>
+          <li><a class="rk-link text-white @(isCandidates ? "active" : "")" asp-area="Recruiter"
+              asp-controller="Candidates" asp-action="Index" data-bs-dismiss="offcanvas">Candidates</a></li>
+          <li><a class="rk-link text-white @(isScreen ? "active" : "")" asp-area="Recruiter" asp-controller="Screening"
+              asp-action="Queue" data-bs-dismiss="offcanvas">Screening Queue</a></li>
+          <li><a class="rk-link text-white @(isInbox ? "active" : "")" asp-area="Recruiter" asp-controller="Inbox"
+              asp-action="Index" data-bs-dismiss="offcanvas">Inbox</a></li>
+          <li class="mt-2">
+            <a class="rk-link text-white d-flex align-items-center" data-bs-toggle="collapse" href="#mTmplMenu"
+              role="button" aria-expanded="@(expandT.ToString().ToLower())" aria-controls="mTmplMenu">
+              Templates <span class="ms-auto caret" aria-hidden="true">▾</span>
+            </a>
+            <div id="mTmplMenu" class="collapse @(expandT ? "show" : "")">
+              <ul class="rk-subnav">
+                <li><a class="rk-link text-white @(isMsgTpl ? "active" : "")" asp-area="Recruiter"
+                    asp-controller="Templates" asp-action="Index" data-bs-dismiss="offcanvas">Message Templates</a></li>
+                <li><a class="rk-link text-white @(isJobTpl ? "active" : "")" asp-area="Recruiter"
+                    asp-controller="JobPostTemplates" asp-action="Index" data-bs-dismiss="offcanvas">Job Templates</a>
+                </li>
+              </ul>
+            </div>
+          </li>
+          <li class="mt-2"><a class="rk-link text-white" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index"
+              data-bs-dismiss="offcanvas">Bulk Tools</a></li>
+        </ul>
+      </div>
+    </div>
 
-  @* Bootstrap bundle (Popper included). Use default lib path; fallback to CDN if not present *@
+    <!-- Main content -->
+    <main class="rk-content">
+      <div class="rk-content-inner">
+        <h1 class="h5 rk-page-title">@ViewData["Title"]</h1>
+        @RenderBody()
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
   <script>
     (function () {
       function script(src, cb) {
@@ -126,6 +496,125 @@
           script('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js', function () { });
         }
       }, 300);
+    })();
+  </script>
+
+  <script>
+    (function () {
+      try {
+        history.pushState(null, '', location.href);
+        window.addEventListener('popstate', function () { history.pushState(null, '', location.href); });
+        window.addEventListener('pageshow', function (e) { if (e.persisted) { history.pushState(null, '', location.href); } });
+      } catch (_) { }
+
+      function syncCaret(toggleEl, collapseEl) {
+        var caret = toggleEl.querySelector('.caret');
+        if (!caret) return;
+        var isOpen = collapseEl.classList.contains('show') || toggleEl.getAttribute('aria-expanded') === 'true';
+        caret.classList.toggle('rotate', !!isOpen);
+      }
+      function wireToggle(toggleEl) {
+        var targetSel = toggleEl.getAttribute('href') || toggleEl.getAttribute('data-bs-target');
+        if (!targetSel) return;
+        var collapseEl = document.querySelector(targetSel);
+        if (!collapseEl) return;
+        syncCaret(toggleEl, collapseEl);
+        collapseEl.addEventListener('shown.bs.collapse', function () { syncCaret(toggleEl, collapseEl); });
+        collapseEl.addEventListener('hidden.bs.collapse', function () { syncCaret(toggleEl, collapseEl); });
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(wireToggle);
+      });
+
+      // =========================
+      // Notifications (AJAX) — Recruiter
+      // =========================
+      const notifBadge = document.getElementById('notifBadge');
+      const notifList = document.getElementById('notifList');
+      const markAllBtn = document.getElementById('notifMarkAllBtn');
+      const dropdownEl = document.getElementById('notifDropdownBtn');
+
+      async function fetchJSON(url) {
+        try {
+          const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.json();
+        } catch (e) { return null; }
+      }
+
+      function renderBadge(count) {
+        const n = Number(count || 0);
+        if (n > 0) {
+          notifBadge.textContent = (n > 99 ? '99+' : String(n));
+          notifBadge.classList.remove('d-none');
+          markAllBtn?.removeAttribute('disabled');
+        } else {
+          notifBadge.classList.add('d-none');
+          markAllBtn?.setAttribute('disabled', 'disabled');
+        }
+      }
+
+      function iconFor(t) {
+        if (!t) return '🔔';
+        t = String(t).toLowerCase();
+        if (t.includes('system')) return '⚙️';
+        if (t.includes('message')) return '📨';
+        if (t.includes('approval') || t.includes('review')) return '✅';
+        return '🔔';
+      }
+
+      function typeClass(t) {
+        if (!t) return '';
+        t = String(t).toLowerCase();
+        if (t.includes('system')) return 'notif-type--System';
+        if (t.includes('message')) return 'notif-type--Message';
+        if (t.includes('approval') || t.includes('review')) return 'notif-type--Approval';
+        return '';
+      }
+
+      function renderItems(items) {
+        if (!Array.isArray(items) || items.length === 0) {
+          notifList.innerHTML = '<div class="notif-empty small px-3">No notifications.</div>';
+          return;
+        }
+        notifList.innerHTML = items.map(function (n) {
+          const title = (n.title || 'Notification');
+          const type = (n.type || 'General');
+          const body = (n.textPreview || n.message || '');
+          const time = (n.createdAtLocal || n.createdAt || '');
+          const url = (n.url || '/Recruiter/Notifications');
+          const unreadDot = n.isRead ? '' : '<span class="notif-dot" aria-hidden="true"></span>';
+          return `
+            <a class="dropdown-item notif-item d-flex align-items-start ${n.isRead ? '' : 'notif-item-unread'}" href="${url}">
+              <div class="me-2" aria-hidden="true" style="font-size:1.05rem; line-height:1;">${iconFor(type)}</div>
+              <div class="flex-fill">
+                <div class="d-flex justify-content-between align-items-start">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="notif-title">${title}</span>
+                    <span class="notif-type ${typeClass(type)}">${type || 'General'}</span>
+                  </div>
+                  <small class="notif-time">${time}</small>
+                </div>
+                <div class="notif-body-truncate small">${body}</div>
+              </div>
+              ${unreadDot}
+            </a>`;
+        }).join('');
+      }
+
+      async function refreshBadge() {
+        const data = await fetchJSON('/Recruiter/Notifications/UnreadCount');
+        if (data && typeof data.count !== 'undefined') renderBadge(data.count);
+      }
+      async function refreshPeek() {
+        const data = await fetchJSON('/Recruiter/Notifications/Peek');
+        if (data && Array.isArray(data.items)) renderItems(data.items);
+        else renderItems([]);
+      }
+
+      refreshBadge();
+      if (dropdownEl) dropdownEl.addEventListener('show.bs.dropdown', refreshPeek);
+      setInterval(refreshBadge, 60000);
     })();
   </script>
 

@@ -32,5 +32,33 @@ namespace JobPortal.Areas.Shared.Extensions
 
             return true;
         }
+
+        /// <summary>
+        /// Flexible reader: supports int or string session values and both "UserId" and "user_id".
+        /// No redirect side-effects; just returns true/false.
+        /// </summary>
+        public static bool TryGetUserIdFlexible(this Controller controller, out int userId)
+        {
+            userId = 0;
+            var s = controller.HttpContext.Session;
+
+            // 1) Try int keys
+            int? byInt = s.GetInt32("UserId") ?? s.GetInt32("user_id");
+            if (byInt.HasValue)
+            {
+                userId = byInt.Value;
+                return userId > 0;
+            }
+
+            // 2) Try string keys
+            var byStr = s.GetString("UserId") ?? s.GetString("user_id");
+            if (!string.IsNullOrWhiteSpace(byStr) && int.TryParse(byStr, out var parsed) && parsed > 0)
+            {
+                userId = parsed;
+                return true;
+            }
+
+            return false;
+        }
     }
 }

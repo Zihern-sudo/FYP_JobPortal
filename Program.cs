@@ -23,6 +23,7 @@ builder.Services.AddSession(options =>
 });
 
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<INotificationService, NotificationService>(); // ⬅ register notification service
 
 var app = builder.Build();
 

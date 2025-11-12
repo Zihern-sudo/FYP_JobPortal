@@ -20,6 +20,7 @@ using JobPortal.Areas.Recruiter.Models;
 using System.Net.Http;
 using System.Text.Json;
 using System.IO; // <-- required for Path/Directory
+using JobPortal.Services;               // <-- INotificationService
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -29,12 +30,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
     private readonly AppDbContext _db;
     private readonly IConfiguration _config;
     private readonly ILogger<AccountController> _log;
+    private readonly INotificationService _notif;   // <-- inject service
 
-    public AccountController(AppDbContext db, IConfiguration config, ILogger<AccountController> log)
+    public AccountController(AppDbContext db, IConfiguration config, ILogger<AccountController> log, INotificationService notif)
     {
       _db = db;
       _config = config;
       _log = log;
+      _notif = notif;                                // <-- assign
     }
 
     [HttpGet, AllowAnonymous]
@@ -113,6 +116,23 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
       _db.users.Add(u);
       await _db.SaveChangesAsync();
+
+      // ----- NEW: notify Admins that a recruiter registered -----
+      try
+      {
+        var fullName = $"{u.first_name} {u.last_name}".Trim();
+        await _notif.SendToAdminsAsync(
+          "New recruiter registered",
+          $"{fullName} ({u.email}) has registered as a recruiter. Their company profile will be submitted and is pending approval.",
+          type: "System"
+        );
+      }
+      catch (Exception ex)
+      {
+        // Do not block sign-up; just log.
+        _log.LogWarning(ex, "Failed to send admin notification for recruiter registration (user_id {UserId})", u.user_id);
+      }
+      // ----------------------------------------------------------
 
       HttpContext.Session.Remove("RecruiterRegisterVerifiedEmail");
       HttpContext.Session.SetString("UserId", u.user_id.ToString());
@@ -241,7 +261,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
       }
     }
 
-    // ---- Callback: mark token verified and return to Register ----
     [HttpGet, AllowAnonymous]
     public async Task<IActionResult> VerifyEmail([FromQuery] Guid token, [FromQuery] string email)
     {
@@ -276,8 +295,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
       return RedirectToAction(nameof(Register));
     }
 
-    // --- SMTP: sends HTML + plain text using appsettings.json -> "Email" section (Gmail) ---
-    // UPDATED: optional inline LinkedResource (logo) support + from display renamed to Joboria.
+    // --- SMTP (unchanged) ---
     private async Task SendViaSmtpAsync(string toEmail, string subject, string htmlBody, string textBody, LinkedResource? inlineLogo = null)
     {
       var host = _config["Email:SmtpHost"];
@@ -304,11 +322,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
       };
       msg.To.Add(to);
 
-      // Plain text (fallback for old clients)
       var plainView = AlternateView.CreateAlternateViewFromString(
           textBody, Encoding.UTF8, MediaTypeNames.Text.Plain);
 
-      // HTML body (+ optional linked logo)
       var htmlView = AlternateView.CreateAlternateViewFromString(
           htmlBody, Encoding.UTF8, MediaTypeNames.Text.Html);
 
@@ -323,7 +339,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
       using var client = new SmtpClient(host, port)
       {
-        EnableSsl = true, // STARTTLS on 587
+        EnableSsl = true,
         Credentials = new NetworkCredential(user, pass),
         DeliveryMethod = SmtpDeliveryMethod.Network,
         Timeout = 20000
@@ -332,14 +348,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
       await client.SendMailAsync(msg);
     }
 
-    // --- Branded HTML email (responsive, inline styles, button) ---
-    // UPDATED: accepts optional logo CID and all branding switched to Joboria.
+    // --- Branded HTML email (unchanged) ---
     private string BuildVerifyEmailHtml(string verifyUrl, string? logoCid)
     {
       var year = DateTime.UtcNow.Year;
       var safeUrl = System.Net.WebUtility.HtmlEncode(verifyUrl);
 
-      // If we have a CID, use inline image. If not, omit the <img>.
       var logoImg = string.IsNullOrWhiteSpace(logoCid)
         ? ""
         : $@"<img src=""cid:{logoCid}"" alt=""Joboria Logo"" width=""36"" height=""36"" style=""display:block; border:0; outline:none; text-decoration:none; border-radius:6px;"" />";
@@ -352,7 +366,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
   <meta name=""viewport"" content=""width=device-width, initial-scale=1"">
   <title>Verify your email</title>
   <style>
-    /* Minimal mobile-safe reset */
     body, table, td, a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
     table, td {{ mso-table-lspace:0pt; mso-table-rspace:0pt; }}
     img {{ -ms-interpolation-mode:bicubic; }}
@@ -426,7 +439,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 </html>";
     }
 
-    // --- Plain-text fallback ---
     private string BuildVerifyEmailText(string verifyUrl)
     {
       var sb = new StringBuilder();
@@ -441,5 +453,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
       sb.AppendLine("If you didn’t request this, you can ignore this email.");
       return sb.ToString();
     }
+
+    [HttpGet]
+    public IActionResult Logout()
+    {
+      HttpContext.Session.Clear();
+      return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+    }
+
   }
 }

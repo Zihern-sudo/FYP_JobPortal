@@ -8,6 +8,35 @@
         "Rejected" => "badge text-bg-danger",
         _ => "badge text-bg-secondary"
     };
+
+    // --- NEW: Resolve photo from the model (works with common property names) ---
+    string? companyPhotoUrl = null;
+    string? TryGetPhoto(object src)
+    {
+        if (src == null) return null;
+        var t = src.GetType();
+        var p =
+        t.GetProperty("company_photo") ??
+        t.GetProperty("CompanyPhotoUrl") ??
+        t.GetProperty("CompanyLogoUrl") ??
+        t.GetProperty("LogoUrl") ??
+        t.GetProperty("Company_Photo") ??
+        t.GetProperty("CompanyPhoto") ??
+        t.GetProperty("CompanyLogo") ??
+        t.GetProperty("Photo") ??
+        t.GetProperty("Logo") ??
+        t.GetProperty("PhotoUrl");
+
+        if (p == null) return null;
+        var v = p.GetValue(src);
+        if (v is string s && !string.IsNullOrWhiteSpace(s)) return s;
+        if (v is byte[] bytes && bytes.Length > 0) return "data:image/png;base64," + Convert.ToBase64String(bytes);
+        return null;
+    }
+    companyPhotoUrl = TryGetPhoto(Model);
+
+    // --- ONE-LINER ADD: also accept controller-provided ViewBag.CompanyPhotoUrl ---
+    if (string.IsNullOrWhiteSpace(companyPhotoUrl)) { companyPhotoUrl = ViewBag.CompanyPhotoUrl as string; }
 }
 
 <a asp-area="Admin" asp-controller="Companies" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
@@ -19,6 +48,15 @@
         <div class="card shadow-sm">
             <div class="card-header bg-white fw-semibold">Company Profile</div>
             <div class="card-body">
+                @* NEW: Show company photo/banner if available *@
+                @if (!string.IsNullOrWhiteSpace(companyPhotoUrl))
+                {
+                    <div class="mb-3">
+                        <img src="@companyPhotoUrl" alt="Company photo"
+                            style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
+                    </div>
+                }
+
                 <div class="mb-2"><strong>@Model.Name</strong> <span
                         class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status :
                                                 "Unverified")</span></div>

@@ -100,5 +100,16 @@ namespace JobPortal.Areas.Admin.Controllers
 
             return View(vm);
         }
+
+        // --- Logout (Recruiter) ---
+        [HttpGet]
+        public IActionResult Logout()
+        {
+            // Why: ensure full sign-out for session-based auth
+            HttpContext.Session.Clear();
+
+            // Return to Recruiter login
+            return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+        }
     }
 }

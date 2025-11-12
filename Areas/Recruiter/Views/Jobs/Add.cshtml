@@ -20,11 +20,7 @@
 <form asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post">
     @Html.AntiForgeryToken()
 
-    <div class="mb-3">
-        <label asp-for="job_status" class="form-label">Status</label>
-        <select asp-for="job_status" class="form-select"
-            asp-items="Html.GetEnumSelectList<JobPortal.Areas.Recruiter.Models.JobStatus>()"></select>
-    </div>
+    @* Removed job_status selection: recruiters cannot set status *@
 
     <div class="mb-3">
         <label asp-for="job_title" class="form-label">Job Title</label>
@@ -85,7 +81,6 @@
             </div>
         </div>
     </div>
-
 
     @* --- Application Deadline --- *@
     <div class="mb-3">

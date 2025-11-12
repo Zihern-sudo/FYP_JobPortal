@@ -11,6 +11,38 @@
         "Inactive" => "badge text-bg-secondary",
         _ => "badge text-bg-light"
     };
+
+    // Company detail payload provided via ViewBag.Company (keeps VM unchanged)
+    var comp = ViewBag.Company;
+
+    // --- NEW: Try to resolve a company photo URL (string or byte[]) from comp or Model ---
+    string? companyPhotoUrl = null;
+
+    // Helper local function to probe an object for a likely photo property
+    string? ResolvePhoto(object src)
+    {
+        if (src == null) return null;
+        var t = src.GetType();
+        var p =
+        t.GetProperty("company_photo") ??
+        t.GetProperty("CompanyPhotoUrl") ??
+        t.GetProperty("CompanyLogoUrl") ??
+        t.GetProperty("LogoUrl") ??
+        t.GetProperty("Company_Photo") ??
+        t.GetProperty("CompanyPhoto") ??
+        t.GetProperty("CompanyLogo") ??
+        t.GetProperty("Photo") ??
+        t.GetProperty("Logo") ??
+        t.GetProperty("PhotoUrl");
+
+        if (p == null) return null;
+        var v = p.GetValue(src);
+        if (v is string s && !string.IsNullOrWhiteSpace(s)) return s;
+        if (v is byte[] bytes && bytes.Length > 0) return "data:image/png;base64," + Convert.ToBase64String(bytes);
+        return null;
+    }
+
+    companyPhotoUrl = ResolvePhoto(comp) ?? ResolvePhoto(Model);
 }
 
 <a asp-area="Admin" asp-controller="Users" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
@@ -22,13 +54,24 @@
         <div class="card shadow-sm">
             <div class="card-header bg-white fw-semibold">Profile</div>
             <div class="card-body">
-                <div class="mb-2">
-                    <strong>@Model.FirstName @Model.LastName</strong>
-                    <span class="@Chip(Model.Status)">@Model.Status</span>
+                <div class="mb-2 d-flex align-items-start gap-3">
+                    @* NEW: Company photo/logo (if available) *@
+                    @if (!string.IsNullOrWhiteSpace(companyPhotoUrl))
+                    {
+                        <img src="@companyPhotoUrl" alt="Company logo"
+                            style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #eee;" />
+                    }
+
+                    <div>
+                        <div class="mb-1">
+                            <strong>@Model.FirstName @Model.LastName</strong>
+                            <span class="@Chip(Model.Status)">@Model.Status</span>
+                        </div>
+                        <div class="text-muted small mb-1">Email: @Model.Email</div>
+                        <div class="text-muted small mb-1">Role: @Model.Role</div>
+                        <div class="text-muted small mb-1">Joined: @Model.CreatedAt:g</div>
+                    </div>
                 </div>
-                <div class="text-muted small mb-1">Email: @Model.Email</div>
-                <div class="text-muted small mb-1">Role: @Model.Role</div>
-                <div class="text-muted small mb-1">Joined: @Model.CreatedAt:g</div>
                 <hr />
                 <div class="mb-1"><strong>Company:</strong> @(string.IsNullOrWhiteSpace(Model.CompanyName) ? "-" :
                                         Model.CompanyName)
@@ -48,6 +91,53 @@
                 }
             </div>
         </div>
+
+        @* NEW: Detailed company profile (if present) *@
+        @if (comp != null)
+        {
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Company Profile</span>
+                    <div>
+                        <span class="badge bg-secondary me-2">@comp.Status</span>
+                        <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Companies"
+                            asp-action="Preview" asp-route-id="@comp.Id">Open</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @* NEW: Larger logo/banner if available *@
+                    @if (!string.IsNullOrWhiteSpace(companyPhotoUrl))
+                    {
+                        <div class="mb-3">
+                            <img src="@companyPhotoUrl" alt="Company logo"
+                                style="max-width:220px;height:auto;border-radius:10px;border:1px solid #eee;" />
+                        </div>
+                    }
+
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Name</dt>
+                        <dd class="col-sm-8">@comp.Name</dd>
+                        @if (!string.IsNullOrWhiteSpace((string)comp.Industry))
+                        {
+                            <dt class="col-sm-4">Industry</dt>
+                            <dd class="col-sm-8">@comp.Industry</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace((string)comp.Location))
+                        {
+                            <dt class="col-sm-4">Location</dt>
+                            <dd class="col-sm-8">@comp.Location</dd>
+                        }
+                        @if (!string.IsNullOrWhiteSpace((string)comp.Description))
+                        {
+                            <dt class="col-sm-4">Description</dt>
+                            <dd class="col-sm-8">@comp.Description</dd>
+                        }
+                        <dt class="col-sm-4">Open Jobs</dt>
+                        <dd class="col-sm-8">@comp.OpenJobs</dd>
+                    </dl>
+                </div>
+            </div>
+        }
     </div>
 
     <div class="col-lg-4">
@@ -77,8 +167,6 @@
                     <input type="hidden" name="id" value="@Model.Id" />
                     <button class="btn btn-secondary">Reject Registration (Inactive)</button>
                 </form>
-
-
             </div>
         </div>
     </div>

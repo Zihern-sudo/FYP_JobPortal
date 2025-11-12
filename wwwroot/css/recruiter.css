@@ -206,3 +206,164 @@ body {
 .auth-hide-chrome .app {
   grid-template-columns: 1fr !important;
 }
+
+/* ===== Recruiter app shell (matches Admin look) ===== */
+:root {
+  --rk-header-h: 64px;
+  --rk-sidebar-w: 260px;
+  --rk-surface: #ffffff;
+  --rk-surface-soft: #f5f7fb;
+  --rk-ink-weak: #6c757d;
+  --rk-brand: #0D6EFD;
+}
+
+/* Reset bleed and base look (keep existing body/app rules above) */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--rk-surface-soft);
+}
+
+/* Header */
+.rk-header {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  height: var(--rk-header-h);
+  background: var(--rk-surface);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.rk-brand {
+  gap: .5rem;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.rk-chip {
+  display: inline-block;
+  padding: .2rem .5rem;
+  border-radius: .5rem;
+  background: #eef2ff;
+  font-size: .8rem;
+  color: #334155;
+}
+
+/* Layout grid */
+.rk-layout {
+  display: grid;
+  grid-template-columns: var(--rk-sidebar-w) minmax(0, 1fr);
+  min-height: calc(100vh - var(--rk-header-h));
+}
+
+/* Sidebar – clean vertical nav, no list-group chrome */
+.rk-sidebar {
+  background: #0D6EFD;
+  color: #fff;
+  position: sticky;
+  top: var(--rk-header-h);
+  align-self: start;
+  height: calc(100vh - var(--rk-header-h));
+  overflow-y: auto;
+  padding: 1rem .75rem 1rem 1rem;
+}
+
+.rk-navlabel {
+  text-transform: uppercase;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  color: rgba(255, 255, 255, .7);
+  margin: .25rem .75rem .5rem .75rem;
+}
+
+.rk-sidenav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rk-link {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .5rem .75rem;
+  border-radius: .5rem;
+  color: #fff;
+  text-decoration: none;
+  transition: background-color .15s ease;
+}
+
+.rk-link:hover,
+.rk-link:focus {
+  background: rgba(255, 255, 255, .12);
+}
+
+.rk-link.active {
+  color: #0D6EFD;
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px #fff inset;
+}
+
+/* Main content */
+.rk-content {
+  padding: 1.25rem 1.5rem 2.25rem;
+}
+
+.rk-content-inner {
+  max-width: 1400px;
+  margin-inline: auto;
+}
+
+.rk-page-title {
+  margin-bottom: .75rem;
+}
+
+/* Mobile toggle */
+.rk-hamburger {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #e9ecef;
+  border-radius: .5rem;
+  background: #fff;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .rk-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .rk-sidebar {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding: 1rem;
+  }
+
+  .rk-content {
+    padding: 1rem;
+  }
+
+  .rk-hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Optional: make recruiter kanban/cards feel consistent with new surface */
+.kanban-col {
+  background: #fafafa;
+  border: 1px dashed #e5e7eb;
+}
+
+.candidate-card {
+  border-color: #e9ecef;
+  border-radius: .75rem;
+}

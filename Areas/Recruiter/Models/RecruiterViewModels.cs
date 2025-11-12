@@ -358,4 +358,40 @@ namespace JobPortal.Areas.Recruiter.Models
         public string Order { get; set; } = "";
         public Dictionary<int, string> LatestApprovalStatuses { get; set; } = new();
     }
+
+
+    // Generic pager
+    public class PagedResult<T>
+    {
+        public IList<T> Items { get; set; } = new List<T>();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalItems { get; set; }
+        public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling((double)TotalItems / PageSize);
+    }
+
+    // A single notification row
+    public class NotificationListItemVM
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string TextPreview { get; set; } = "";
+        public string? Type { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsRead { get; set; }
+    }
+
+    // Page view model for Notification Centre
+    public class RecruiterNotificationsIndexVM
+    {
+        public PagedResult<NotificationListItemVM> Items { get; set; } = new();
+        public int UnreadCount { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+
+        // Filters
+        public string Filter { get; set; } = "all";   // "all" | "unread"
+        public string? Type { get; set; }
+        public IList<string> AvailableTypes { get; set; } = new List<string>();
+    }
 }

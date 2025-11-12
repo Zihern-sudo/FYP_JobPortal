@@ -255,7 +255,8 @@ public sealed class RecruiterRow
     [Required] public string Status { get; init; } = "Active";     // user_status
     [Required] public string Role { get; init; } = "Recruiter";     // user_role
     public string? Company { get; init; }
-    public string? CompanyStatus { get; init; }                     // company_status
+    public string? CompanyStatus { get; init; }
+    public int? CompanyId { get; init; }                      // company_status
     public DateTime CreatedAt { get; init; }
 }
 
@@ -286,6 +287,13 @@ public sealed class RecruiterPreviewViewModel
     public string? CompanyStatus { get; init; }
     public string? Phone { get; init; }
     public string? Address { get; init; }
+
+    public int? CompanyId { get; init; }
+    public string? CompanyIndustry { get; init; }
+    public string? CompanyLocation { get; init; }
+    public string? CompanyDescription { get; init; }
+    public int OpenJobs { get; init; }
+    public bool HasCompany => CompanyId.HasValue;
 }
 
 
@@ -306,4 +314,28 @@ public sealed class LegalSettingsViewModel
 
     [Display(Name = "Privacy Policy")]
     public string Privacy { get; set; } = string.Empty;
+}
+
+
+// Compact item used in dropdown & list
+public sealed class NotificationListItemViewModel
+{
+    public int Id { get; init; }
+    public string Title { get; init; } = string.Empty;
+    public string? TextPreview { get; init; }
+    public string? Type { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public bool IsRead { get; init; }
+}
+
+// Paged index for Notification Centre
+public sealed class NotificationsIndexViewModel
+{
+    public PagedResult<NotificationListItemViewModel> Items { get; init; } = new();
+    public int UnreadCount { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 10;
+    public string Filter { get; init; } = "all";      // "all" | "unread"
+    public string? Type { get; init; }                // exact type match
+    public List<string> AvailableTypes { get; init; } = new(); // for dropdown
 }

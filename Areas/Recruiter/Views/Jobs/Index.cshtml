@@ -29,6 +29,7 @@
 
   // Build pending IDs for auto-refresh polling
   var pendingIds = new List<int>();
+  bool allowPost = (bool)(ViewBag.AllowPost ?? false);
 }
 
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
@@ -55,9 +56,19 @@
   <button type="submit" class="btn btn-primary">Search</button>
   <a asp-action="Index" class="btn btn-outline-secondary">Reset</a>
 
-  <a class="btn btn-primary btn-sm ms-auto" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add">New Job</a>
-  <a class="btn btn-outline-primary btn-sm" asp-area="Recruiter" asp-controller="JobPostTemplates"
-    asp-action="Index">New Job using Template</a>
+  @if (allowPost)
+  {
+    <a class="btn btn-primary btn-sm ms-auto" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add">New Job</a>
+    <a class="btn btn-outline-primary btn-sm" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Index">
+      New Job using Template
+    </a>
+  }
+  else
+  {
+    <span class="badge text-bg-warning ms-auto" title="Your company must be Verified or Active to post jobs.">
+      Company not verified
+    </span>
+  }
 </form>
 
 <div class="card shadow-sm">
@@ -75,6 +86,7 @@
               </a>
             </th>
             <th>Title</th>
+            <th>Approval</th>
             <th>Deadline</th>
             <th>Location</th>
             <th>Status</th>
@@ -106,11 +118,25 @@
 
               bool isOpen = string.Equals(j.job_status, "Open", StringComparison.OrdinalIgnoreCase);
 
+              var pct = stText == "Approved" ? 100
+              : stText == "ChangesRequested" ? 66
+              : stText == "Pending" ? 50
+              : stText == "Rejected" ? 100
+              : 0;
+              var barClass = stText == "Approved" ? "bg-success"
+              : stText == "ChangesRequested" ? "bg-warning"
+              : stText == "Pending" ? "bg-info"
+              : stText == "Rejected" ? "bg-danger"
+              : "bg-secondary";
+
               <tr>
                 <td>@j.job_listing_id</td>
-                <td>
-                  @j.job_title
-                  <span class="@ChipClass(stText) ms-2" title="Admin approval status">@stText</span>
+                <td>@j.job_title</td>
+                <td style="min-width:200px">
+                  <div class="progress" style="height:6px;">
+                    <div class="progress-bar @barClass" role="progressbar" style="width:@pct%"></div>
+                  </div>
+                  <small class="@ChipClass(stText) mt-1 d-inline-block" title="Admin approval status">@stText</small>
                 </td>
                 <td>@deadline</td>
                 <td>@(j.company?.company_location ?? "")</td>
@@ -132,7 +158,6 @@
                   <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
                     asp-route-id="@j.job_listing_id">Edit</a>
 
-                  @* Hide unless Open *@
                   @if (isOpen)
                   {
                     <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Preview"
@@ -147,7 +172,7 @@
           else
           {
             <tr>
-              <td colspan="9" class="text-center text-muted">No jobs found.</td>
+              <td colspan="10" class="text-center text-muted">No jobs found.</td>
             </tr>
           }
         </tbody>
@@ -205,7 +230,7 @@
       const ids = raw.split(',').map(x => parseInt(x, 10)).filter(n => !isNaN(n));
       if (!ids.length) return;
 
-      let tries = 0, maxTries = 60; // ~10 minutes at 10s
+      let tries = 0, maxTries = 60;
       const tick = async () => {
         tries++;
         try {
@@ -213,7 +238,6 @@
             const res = await fetch(`${baseUrl}/${id}`, { credentials: 'same-origin' });
             if (!res.ok) continue;
             const data = await res.json();
-            // When admin approves, their flow also sets job_status to Open; reload to reflect UI instantly.
             if ((data && data.status) && String(data.status).trim() === 'Approved') {
               window.location.reload();
               return;
@@ -225,7 +249,6 @@
       setTimeout(tick, 10000);
     })();
 
-    // Existing toast from TempData (optional)
     (function () {
       var el = document.getElementById('toast-notify');
       var body = document.getElementById('toast-message');

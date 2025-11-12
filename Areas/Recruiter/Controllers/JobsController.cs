@@ -8,6 +8,7 @@ using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Recruiter.Models;   // ViewModels, enums
 using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -18,54 +19,34 @@ namespace JobPortal.Areas.Recruiter.Controllers
         public JobsController(AppDbContext db) => _db = db;
 
         private const string TEMP_APPLY_KEY = "tpl_apply_payload";
-
-        // Keep existing paging defaults
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
-        // NEW: Guarantee 1 recruiter -> 1 company for inserts (post-DB cleanup).
-        // If a recruiter has no company yet, create a minimal placeholder so FK is valid.
-        private async Task<int> EnsureCompanyForRecruiterAsync(int recruiterId)
+        // Gate: recruiter can post only if company is Verified/Active
+        private async Task<(bool Allowed, string? Reason, int? CompanyId)> CanPostJobAsync(int recruiterId)
         {
-            var companyId = await _db.companies
+            var co = await _db.companies
                 .Where(c => c.user_id == recruiterId)
-                .Select(c => (int?)c.company_id)
+                .Select(c => new { c.company_id, c.company_status })
                 .FirstOrDefaultAsync();
 
-            if (companyId.HasValue)
-                return companyId.Value;
+            if (co == null)
+                return (false, "You must create a company profile and get it verified before posting jobs.", null);
 
-            // Create a minimal company row (only when missing).
-            var user = await _db.users
-                .Where(u => u.user_id == recruiterId)
-                .Select(u => new { u.first_name, u.last_name })
-                .FirstOrDefaultAsync();
+            var status = (co.company_status ?? "").Trim();
+            var ok = status.Equals("Verified", StringComparison.OrdinalIgnoreCase)
+                  || status.Equals("Active", StringComparison.OrdinalIgnoreCase);
 
-            var displayName = (user is null)
-                ? $"Recruiter {recruiterId}"
-                : $"{user.first_name} {user.last_name}".Trim();
-
-            var co = new company
-            {
-                user_id = recruiterId,
-                company_name = $"{displayName}'s Company",
-                company_industry = null,
-                company_location = null,
-                company_description = null,
-                company_status = "Active"
-            };
-
-            _db.companies.Add(co);
-            await _db.SaveChangesAsync();
-            return co.company_id;
+            return ok
+                ? (true, null, co.company_id)
+                : (false, "Your company profile is not verified yet. Please complete it and wait for Admin verification.", co.company_id);
         }
 
         private async Task CreateApprovalForJobAsync(int jobId, int submittedByUserId)
         {
-            // WHY: keep all approval inserts consistent.
             var row = new job_post_approval
             {
-                user_id = submittedByUserId,          // ensure this matches your schema
+                user_id = submittedByUserId,
                 job_listing_id = jobId,
                 approval_status = "Pending",
                 comments = null,
@@ -75,7 +56,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             await _db.SaveChangesAsync();
         }
 
-        // Payload passed from JobPostTemplatesController.Apply via TempData
         private sealed class TplDto
         {
             public string? title { get; set; }
@@ -85,6 +65,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             public string? status { get; set; }
         }
 
+        // LIST + toolbar state (hides New buttons when company not verified/active)
         public async Task<IActionResult> Index(string? q, string? status, string? order, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
@@ -135,6 +116,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Where(x => x != null)
                 .ToDictionary(x => x.job_listing_id, x => x.approval_status);
 
+            // Expose allow-post flag to the view (controls toolbar buttons)
+            var gate = await CanPostJobAsync(recruiterId);
+            ViewBag.AllowPost = gate.Allowed;
+
             var vm = new JobsIndexVM
             {
                 Items = items,
@@ -151,12 +136,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View(vm);
         }
 
-        // --- CREATE (GET/POST) ---
-
+        // CREATE (GET)
         [HttpGet]
-        public IActionResult Add(string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool? fromTemplate = null)
+        public async Task<IActionResult> Add(string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool? fromTemplate = null)
         {
-            if (!this.TryGetUserId(out _, out var early)) return early!;
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            // BLOCK: require Verified/Active company before opening the Add form
+            var gate = await CanPostJobAsync(recruiterId);
+            if (!gate.Allowed)
+            {
+                TempData["Message"] = gate.Reason ?? "Company verification required before posting jobs.";
+                return RedirectToAction(nameof(Index));
+            }
 
             var vm = new JobCreateVm
             {
@@ -197,12 +189,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View("Add", vm);
         }
 
+        // CREATE (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Add(JobCreateVm vm)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
-
             if (!ModelState.IsValid) return View(vm);
 
             if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
@@ -211,7 +203,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            var companyId = await EnsureCompanyForRecruiterAsync(recruiterId);
+            // BLOCK: require Verified/Active company at creation
+            var gate = await CanPostJobAsync(recruiterId);
+            if (!gate.Allowed || gate.CompanyId == null)
+            {
+                TempData["Message"] = gate.Reason ?? "Company verification required before posting jobs.";
+                return RedirectToAction(nameof(Index));
+            }
 
             var entity = new job_listing
             {
@@ -225,7 +223,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_type = vm.job_type,
                 work_mode = vm.work_mode,
                 user_id = recruiterId,
-                company_id = companyId,
+                company_id = gate.CompanyId.Value,
                 date_posted = DateTime.Now,
                 expiry_date = vm.expiry_date
             };
@@ -237,7 +235,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id = entity.job_listing_id });
         }
 
-        // ===== Edit
+        // EDIT (GET)
         [HttpGet]
         public async Task<IActionResult> Edit(int id, string? title = null, string? description = null, string? must = null, string? nice = null, string? status = null, bool fromTemplate = false)
         {
@@ -296,7 +294,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     vm.job_status = parsed;
             }
 
-            // NEW: expose latest approval feedback to the view
+            // Latest approval info for progress bar
             var latestApproval = await _db.job_post_approvals
                 .Where(a => a.job_listing_id == id)
                 .OrderByDescending(a => a.approval_id)
@@ -314,6 +312,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View(vm);
         }
 
+        // EDIT (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(JobEditVm vm, string? setStatus)
@@ -332,7 +331,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            // Persist edits; keep Draft until admin approves
+            // Keep as Draft until admin approves
             job.job_title = vm.job_title;
             job.job_description = vm.job_description;
             job.job_requirements = vm.job_requirements;
@@ -350,12 +349,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
         }
 
-
+        // SUBMIT FOR APPROVAL
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SubmitForApproval(int id)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            // BLOCK: require Verified/Active company when submitting for approval
+            var gate = await CanPostJobAsync(recruiterId);
+            if (!gate.Allowed)
+            {
+                TempData["Message"] = gate.Reason ?? "Company verification required before submitting jobs for approval.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
 
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
@@ -372,7 +379,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
         }
 
-        // ===== Preview (guarded)
+        // PREVIEW (only for Open jobs)
         [HttpGet]
         public async Task<IActionResult> Preview(int id)
         {
@@ -418,7 +425,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // ===== Pipeline (guarded) — removed duplicate attribute
+        // PIPELINE (only for Open jobs)
         [HttpGet]
         public async Task<IActionResult> Pipeline(int id)
         {
@@ -505,6 +512,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
+        // Save current job as template
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveAsTemplate(int id, string name)
@@ -542,10 +550,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id });
         }
 
-        // File: Areas/Recruiter/Controllers/JobsController.cs
-        // --- ADD BELOW inside the JobsController class ---
-
-        // Whitelist of valid forward transitions
+        // Move candidate within pipeline
         private static readonly Dictionary<string, string> _nextStage = new(StringComparer.OrdinalIgnoreCase)
         {
             ["AI-Screened"] = "Shortlisted",
@@ -560,34 +565,31 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             if (string.IsNullOrWhiteSpace(toStage)) return BadRequest(new { ok = false, error = "Missing target stage." });
 
-            // Disallow moving to Offer here – must go through CreateOffer
             if (toStage.Equals("Offer", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { ok = false, error = "Use CreateOffer endpoint for Offer stage." });
 
-            // Load job (must belong to recruiter)
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == jobId)
                 .FirstOrDefaultAsync();
             if (job is null) return NotFound(new { ok = false, error = "Job not found." });
 
-            // Load application under this job
             var app = await _db.job_applications
                 .Where(a => a.job_listing_id == jobId && a.application_id == applicationId)
                 .FirstOrDefaultAsync();
             if (app is null) return NotFound(new { ok = false, error = "Application not found." });
 
             var current = (app.application_status ?? "").Trim();
-            // Enforce forward-only, single-step transitions
             if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals(toStage, StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
 
-            app.application_status = toStage;                // persists to job_application.application_status
+            app.application_status = toStage;
             app.date_updated = DateTime.Now;
             await _db.SaveChangesAsync();
 
             return Json(new { ok = true, applicationId, newStage = toStage });
         }
 
+        // Create offer
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
@@ -595,7 +597,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             if (vm is null || vm.ApplicationId <= 0) return BadRequest(new { ok = false, error = "Invalid payload." });
 
-            // Load application + job, ensure recruiter owns the job
             var app = await _db.job_applications
                 .Include(a => a.job_listing)
                 .Where(a => a.application_id == vm.ApplicationId)
@@ -604,12 +605,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (app is null) return NotFound(new { ok = false, error = "Application not found." });
             if (app.job_listing.user_id != recruiterId) return Forbid();
 
-            // Ensure we're moving from Interview -> Offer
             var current = (app.application_status ?? "").Trim();
             if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals("Offer", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { ok = false, error = $"Invalid transition: {current} → Offer." });
 
-            // Create a "Sent" job_offer row and link it
             var offer = new Areas.Shared.Models.job_offer
             {
                 application_id = app.application_id,
@@ -624,7 +623,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             };
             _db.job_offers.Add(offer);
 
-            // Move application to Offer
             app.application_status = "Offer";
             app.date_updated = DateTime.Now;
 
@@ -639,6 +637,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             });
         }
 
+        // AJAX: latest approval info (used by Edit + Index polling UIs)
         [HttpGet]
         public async Task<IActionResult> ApprovalInfo(int id)
         {
@@ -662,6 +661,5 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 updatedAt = a?.date_approved
             });
         }
-
     }
 }

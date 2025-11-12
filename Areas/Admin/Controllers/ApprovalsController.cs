@@ -35,7 +35,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             var query = _db.job_post_approvals
                 .AsNoTracking()
-                .Include(a => a.job_listing.company)
+                .Include(a => a.job_listing!.company) // keep company available for preview rows if needed
                 .OrderByDescending(a => a.approval_id)
                 .AsQueryable();
 
@@ -46,8 +46,8 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 var like = $"%{q}%";
                 query = query.Where(a =>
-                    EF.Functions.Like(a.job_listing.job_title, like) ||
-                    EF.Functions.Like(a.job_listing.company.company_name, like));
+                    EF.Functions.Like(a.job_listing!.job_title, like) ||
+                    EF.Functions.Like(a.job_listing!.company!.company_name, like));
             }
 
             var total = query.Count();
@@ -58,10 +58,10 @@ namespace JobPortal.Areas.Admin.Controllers
                 {
                     Id = a.approval_id,
                     JobId = a.job_listing_id,
-                    JobTitle = a.job_listing.job_title,
-                    Company = a.job_listing.company.company_name,
+                    JobTitle = a.job_listing!.job_title,
+                    Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status, // Pending/Approved/ChangesRequested/Rejected
-                    Date = a.job_listing.date_posted
+                    Date = a.job_listing!.date_posted
                 })
                 .ToList();
 
@@ -91,27 +91,37 @@ namespace JobPortal.Areas.Admin.Controllers
 
             var item = _db.job_post_approvals
                 .AsNoTracking()
-                .Include(a => a.job_listing.company)
+                .Include(a => a.job_listing!.company)
                 .Where(a => a.approval_id == id)
                 .Select(a => new ApprovalPreviewViewModel
                 {
                     Id = a.approval_id,
                     JobId = a.job_listing_id,
-                    JobTitle = a.job_listing.job_title,
-                    Company = a.job_listing.company.company_name,
+                    JobTitle = a.job_listing!.job_title,
+                    Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status,
-                    Date = a.job_listing.date_posted,
-                    JobDescription = a.job_listing.job_description,
-                    JobRequirements = a.job_listing.job_requirements,
+                    Date = a.job_listing!.date_posted,
+                    JobDescription = a.job_listing!.job_description,
+                    JobRequirements = a.job_listing!.job_requirements,
                     Comments = a.comments
                 })
                 .FirstOrDefault();
 
             if (item == null) return NotFound();
+
+            // NEW: provide company photo path to the view without changing VM
+            var photo = _db.job_post_approvals
+                .AsNoTracking()
+                .Where(a => a.approval_id == id)
+                .Select(a => a.job_listing!.company!.company_photo)
+                .FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(photo))
+                ViewBag.CompanyPhotoUrl = photo;
+
             return View(item);
         }
 
-        // --- Single-item Actions (unchanged) ----------------------------------------
+        // --- Single-item Actions -----------------------------------------------------
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -119,8 +129,10 @@ namespace JobPortal.Areas.Admin.Controllers
         {
             if (!this.TryGetUserId(out var adminId, out var early)) return early!;
 
+            // Include company so we can persist status
             var approval = _db.job_post_approvals
-                .Include(a => a.job_listing)
+                .Include(a => a.job_listing!)
+                    .ThenInclude(j => j.company)
                 .FirstOrDefault(a => a.approval_id == id);
             if (approval == null) return NotFound();
 
@@ -129,8 +141,13 @@ namespace JobPortal.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
 
-            if (approval.job_listing.job_status == "Draft")
+            if (approval.job_listing!.job_status == "Draft")
+            {
                 approval.job_listing.job_status = "Open";
+                // persist: company is Active when at least one Open job exists
+                if (approval.job_listing.company != null)
+                    approval.job_listing.company.company_status = "Active";
+            }
 
             _db.admin_logs.Add(new admin_log
             {
@@ -162,7 +179,7 @@ namespace JobPortal.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
 
-            if (approval.job_listing.job_status == "Open")
+            if (approval.job_listing!.job_status == "Open")
                 approval.job_listing.job_status = "Paused";
 
             _db.admin_logs.Add(new admin_log
@@ -195,7 +212,7 @@ namespace JobPortal.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
 
-            if (approval.job_listing.job_status != "Closed")
+            if (approval.job_listing!.job_status != "Closed")
                 approval.job_listing.job_status = "Draft";
 
             _db.admin_logs.Add(new admin_log
@@ -227,9 +244,10 @@ namespace JobPortal.Areas.Admin.Controllers
                 return RedirectToAction(nameof(Index), new { status = returnStatus, q, page, pageSize });
             }
 
-            // Load approvals and related job
+            // Load approvals + job + company for persistence
             var approvals = _db.job_post_approvals
-                .Include(a => a.job_listing)
+                .Include(a => a.job_listing!)
+                    .ThenInclude(j => j.company)
                 .Where(a => ids.Contains(a.approval_id))
                 .ToList();
 
@@ -245,8 +263,14 @@ namespace JobPortal.Areas.Admin.Controllers
                         a.date_approved = now;
                         if (!string.IsNullOrWhiteSpace(comments))
                             a.comments = comments;
-                        if (a.job_listing.job_status == "Draft")
+
+                        if (a.job_listing!.job_status == "Draft")
+                        {
                             a.job_listing.job_status = "Open";
+                            if (a.job_listing.company != null)
+                                a.job_listing.company.company_status = "Active"; // persist Active
+                        }
+
                         _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Approved job #{a.job_listing_id}", timestamp = now });
                         changed++;
                         break;
@@ -256,7 +280,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         a.date_approved = null;
                         if (!string.IsNullOrWhiteSpace(comments))
                             a.comments = comments;
-                        if (a.job_listing.job_status == "Open")
+                        if (a.job_listing!.job_status == "Open")
                             a.job_listing.job_status = "Paused";
                         _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Rejected job #{a.job_listing_id}", timestamp = now });
                         changed++;
@@ -267,7 +291,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         a.date_approved = null;
                         if (!string.IsNullOrWhiteSpace(comments))
                             a.comments = comments;
-                        if (a.job_listing.job_status != "Closed")
+                        if (a.job_listing!.job_status != "Closed")
                             a.job_listing.job_status = "Draft";
                         _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Requested changes for job #{a.job_listing_id}", timestamp = now });
                         changed++;
