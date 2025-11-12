@@ -369,6 +369,49 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return Json(new { success = true });
         }
 
+        [HttpPost]
+        public async Task<IActionResult> UploadResume(IFormFile resumeFile)
+        {
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            if (resumeFile == null || resumeFile.Length == 0)
+            {
+                TempData["Message"] = "Please select a file to upload.";
+                return RedirectToAction("Settings", "Dashboard", new { area = "JobSeeker" });
+            }
+
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+            if (!Directory.Exists(uploadsDir))
+                Directory.CreateDirectory(uploadsDir);
+
+            string safeFileName = $"{Path.GetFileNameWithoutExtension(resumeFile.FileName)}_{DateTime.Now:yyyyMMdd_HHmm}{Path.GetExtension(resumeFile.FileName)}";
+            safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
+
+            string fullPath = Path.Combine(uploadsDir, safeFileName);
+            using (var stream = new FileStream(fullPath, FileMode.Create))
+            {
+                await resumeFile.CopyToAsync(stream);
+            }
+
+            var relativePath = $"/uploads/user_resumes/{safeFileName}";
+
+            var resume = new resume
+            {
+                user_id = int.Parse(userId),
+                upload_date = DateTime.Now,
+                file_path = relativePath
+            };
+
+            _db.resumes.Add(resume);
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = "Resume uploaded successfully!";
+            return RedirectToAction("Settings", "Dashboard", new { area = "JobSeeker" });
+        }
+
+
         // Apply Page
         [HttpGet]
         public async Task<IActionResult> Apply(int id)
@@ -381,13 +424,18 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (job == null) return NotFound();
 
             var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == int.Parse(userId));
+            var userResumes = await _db.resumes
+                .Where(r => r.user_id == int.Parse(userId))
+                .OrderByDescending(r => r.upload_date)
+                .ToListAsync();
 
             var model = new ApplyViewModel
             {
                 JobId = job.job_listing_id,
                 JobTitle = job.job_title,
                 FullName = $"{user.first_name} {user.last_name}",
-                Email = user.email
+                Email = user.email,
+                ExistingResumes = userResumes
             };
 
             return View(model);
@@ -415,16 +463,25 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (user == null || job == null)
                 return NotFound();
 
-            // ✅ Upload folder path
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "job_applications");
-            if (!Directory.Exists(uploadsDir))
-                Directory.CreateDirectory(uploadsDir);
 
-            // ✅ Save resume if uploaded
+            // ✅ If user selected an existing resume
+            if (model.SelectedResumeId.HasValue)
+            {
+                var existingResume = await _db.resumes.FindAsync(model.SelectedResumeId.Value);
+                if (existingResume != null)
+                {
+                    relativePath = existingResume.file_path;
+                }
+            }
+
+            // ✅ Else if user uploaded a new resume
             if (resumeFile != null && resumeFile.Length > 0)
             {
-                // Example: EasonLowCheeGuan_TechCorp_UIUXDesigner_20251101_1916_Resume.pdf
-                string safeFileName = $"{user.first_name}{user.last_name}_{job.company.company_name}_{job.job_title}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(resumeFile.FileName)}";
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+                if (!Directory.Exists(uploadsDir))
+                    Directory.CreateDirectory(uploadsDir);
+
+                string safeFileName = $"{user.first_name}{user.last_name}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(resumeFile.FileName)}";
                 safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
 
                 string fullPath = Path.Combine(uploadsDir, safeFileName);
@@ -433,8 +490,19 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     await resumeFile.CopyToAsync(stream);
                 }
 
-                relativePath = $"/uploads/job_applications/{safeFileName}";
+                relativePath = $"/uploads/user_resumes/{safeFileName}";
+
+                // 🆕 Save new resume to database
+                var newResume = new resume
+                {
+                    user_id = int.Parse(userId),
+                    upload_date = DateTime.Now,
+                    file_path = relativePath
+                };
+                _db.resumes.Add(newResume);
+                await _db.SaveChangesAsync();
             }
+
 
             // ✅ Check if existing application exists (edit mode)
             var existingApp = await _db.job_applications

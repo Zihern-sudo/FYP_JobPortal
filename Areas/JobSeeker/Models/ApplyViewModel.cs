@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
+using JobPortal.Areas.Shared.Models;
 
 namespace JobPortal.Areas.JobSeeker.Models
 {
     public class ApplyViewModel
     {
-         // 🔹 Unique ID for the application (for edit/update operations)
+        // 🔹 Unique ID for the application (for edit/update operations)
         public int ApplicationId { get; set; }
         // 🔹 The Job being applied for
         public int JobId { get; set; }
@@ -23,9 +24,11 @@ namespace JobPortal.Areas.JobSeeker.Models
         // 🔹 The applicant's information
         [Display(Name = "Skills")]
         public string Skills { get; set; } = string.Empty;
-
+        // 🆕 Resume selection
+        public int? SelectedResumeId { get; set; } // selected from dropdown
         [Display(Name = "Upload Resume")]
         public IFormFile? ResumeFile { get; set; }
+        public List<resume>? ExistingResumes { get; set; } // populate from DB
 
         // 🔹 Optional feedback/result fields for viewing application later
         public string? ApplicationStatus { get; set; }

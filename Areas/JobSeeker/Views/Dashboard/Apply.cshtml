@@ -10,7 +10,8 @@
 <section class="apply-job-section">
     <h2 class="page-title">Apply for @Model.JobTitle</h2>
 
-    <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post" enctype="multipart/form-data" class="card shadow-sm p-4">
+    <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post"
+        enctype="multipart/form-data" class="card shadow-sm p-4">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="JobId" />
 
@@ -31,13 +32,35 @@
 
         <div class="mb-3">
             <label class="form-label">Skills</label>
-            <textarea asp-for="Skills" class="form-control" placeholder="List relevant skills or experiences"></textarea>
+            <textarea asp-for="Skills" class="form-control"
+                placeholder="List relevant skills or experiences"></textarea>
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Upload Resume</label>
+            <label class="form-label">Select Existing Resume</label>
+            <select asp-for="SelectedResumeId" class="form-select">
+                <option value="">-- Select existing resume --</option>
+                @if (Model.ExistingResumes != null && Model.ExistingResumes.Any())
+                {
+                    foreach (var resume in Model.ExistingResumes)
+                    {
+                        <option value="@resume.resume_id">
+                            @System.IO.Path.GetFileName(resume.file_path) (@resume.upload_date.ToString("yyyy-MM-dd HH:mm"))
+                        </option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="text-center mb-3">
+            <strong>OR</strong>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Upload New Resume</label>
             <input asp-for="ResumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx" />
         </div>
+
 
         <button type="submit" class="btn btn-primary w-100">Submit Application</button>
     </form>
