@@ -1,7 +1,7 @@
 @* File: Areas/Recruiter/Views/JobPostTemplates/Index.cshtml *@
 @model JobPortal.Areas.Recruiter.Models.TemplatesIndexVM
 @{
-    ViewData["Title"] = Model.IsArchivedList ? "Archived Job Post Templates" : "Job Post Templates";
+
     var items = Model.Items;
     bool isArchived = Model.IsArchivedList;
     int? jobId = Model.ThreadId; // Using ThreadId to hold JobId from VM
@@ -30,7 +30,7 @@
 
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">@ViewData["Title"]</h3>
+  
 
     <div class="d-flex gap-2">
         <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Create">

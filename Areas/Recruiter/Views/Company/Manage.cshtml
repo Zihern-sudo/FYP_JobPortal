@@ -1,6 +1,6 @@
 @model JobPortal.Areas.Recruiter.Models.CompanyProfileVm
 @{
-    ViewData["Title"] = "Company Profile";
+    
 
     var rawStatus = (ViewBag.CompanyStatus as string ?? "").Trim();
     var status = rawStatus.ToLowerInvariant();

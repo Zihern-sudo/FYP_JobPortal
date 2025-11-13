@@ -2,7 +2,7 @@
 @using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
-  ViewData["Title"] = ViewData["Title"] ?? "Candidate";
+
   var p = (CandidateVM)ViewBag.Profile;
   var notes = ViewBag.Messages as List<NoteVM> ?? new List<NoteVM>();
   var offerVm = (OfferFormVM)ViewBag.OfferForm;

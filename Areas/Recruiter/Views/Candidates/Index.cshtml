@@ -3,7 +3,7 @@
    ====================================================== *@
 @model JobPortal.Areas.Recruiter.Models.CandidatesIndexVM
 @{
-    ViewData["Title"] = "Candidates";
+  
     var q = Model.Query;
     var stage = Model.Stage;
     string RoutePreserve(int page) => Url.Action("Index", new
