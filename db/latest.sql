@@ -383,3 +383,11 @@ CREATE TABLE job_favourites (
 );
 
 /* -- */
+
+
+/* 10:44pm 15/11/2025 eason */
+
+ALTER TABLE user
+ADD COLUMN target_industry VARCHAR(100) NULL AFTER skills;
+
+/* --- */

@@ -12,9 +12,9 @@
 
         <!-- 🔹 Search Bar -->
         <div class="job-search mb-4">
-            <form asp-action="Index" method="get" class="d-flex">
+            <form asp-area="JobSeeker" asp-controller="Dashboard" asp-action="JobListings" method="get" class="d-flex">
                 <input type="text" name="search" value="@Model.SearchKeyword" class="form-control me-2"
-                       placeholder="Search jobs by title, company or industry" />
+                    placeholder="Search jobs by title, company or industry" />
                 <button type="submit" class="btn btn-primary">Search</button>
             </form>
         </div>
@@ -31,12 +31,9 @@
                                 <h5 class="card-title">@job.JobTitle</h5>
                                 <p class="card-text">@job.CompanyName</p>
                                 <p class="card-text"><small class="text-muted">@job.Industry</small></p>
-                                <a asp-area="JobSeeker" 
-                                asp-controller="Dashboard" 
-                                asp-action="JobDetails" 
-                                asp-route-id="@job.JobId"
-                                class="btn btn-sm btn-primary mt-auto">
-                                View Details</a>
+                                <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="JobDetails"
+                                    asp-route-id="@job.JobId" class="btn btn-sm btn-primary mt-auto">
+                                    View Details</a>
                             </div>
                         </div>
                     </div>

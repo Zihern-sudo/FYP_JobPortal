@@ -3,6 +3,8 @@ using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
 using JobPortal.Areas.Shared.Models.Extensions; // ⬅ AddAreaRoleGuards()
 using QuestPDF.Infrastructure;
+using OpenAI;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +26,10 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<INotificationService, NotificationService>(); // ⬅ register notification service
+
+builder.Services.AddScoped<JobPortal.Services.ChatbotService>();
+
+
 
 var app = builder.Build();
 

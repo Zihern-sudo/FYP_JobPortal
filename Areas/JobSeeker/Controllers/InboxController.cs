@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.JobSeeker.Models;
 using JobPortal.Areas.Shared.Models;
+using JobPortal.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,11 +14,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
     public class InboxController : Controller
     {
         private readonly AppDbContext _db;
+        private readonly ChatbotService _chatbot;
         private const int DefaultPageSize = 10;
         private const int MaxPageSize = 20;
 
-        public InboxController(AppDbContext db)
+
+        public InboxController(ChatbotService chatbot, AppDbContext db)
         {
+            _chatbot = chatbot;
             _db = db;
         }
 
@@ -191,31 +195,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AskAI([FromBody] dynamic data)
+        public async Task<IActionResult> AskAI(string question)
         {
-            string prompt = data?.prompt;
-            if (string.IsNullOrWhiteSpace(prompt))
-                return Json(new { reply = "Please type a message." });
-
-            // Example: Using OpenAI API
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", "Bearer YOUR_OPENAI_API_KEY");
-
-            var requestBody = new
-            {
-                model = "gpt-3.5-turbo",
-                messages = new[] {
-            new { role = "system", content = "You are a helpful assistant for job seekers." },
-            new { role = "user", content = prompt }
-        }
-            };
-
-            var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", requestBody);
-            var json = await response.Content.ReadFromJsonAsync<dynamic>();
-
-            string reply = json?["choices"]?[0]?["message"]?["content"]?.ToString() ?? "Sorry, I didn’t understand that.";
-
-            return Json(new { reply });
+            var answer = await _chatbot.AskAsync(question);
+            return Json(new { reply = answer });
         }
 
     }

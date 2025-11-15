@@ -13,6 +13,8 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string? Skills { get; set; }
         public string? Education { get; set; }
         public string? WorkExperience { get; set; }
+        public string? TargetIndustry { get; set; }
+
         public IFormFile? ProfileImage { get; set; }
         public string? ProfilePicturePath { get; set; }
         public bool notif_inapp { get; set; }

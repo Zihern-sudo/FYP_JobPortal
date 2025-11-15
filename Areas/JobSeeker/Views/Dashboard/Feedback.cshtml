@@ -8,7 +8,7 @@
     <p class="subtitle">Upload your resume below to analyze and get AI-powered keyword insights.</p>
 
     <!-- ✅ Upload Form -->
-    <form asp-area="JobSeeker" asp-controller="Resume" asp-action="UploadResume" method="post"
+    <form asp-area="JobSeeker" asp-controller="Resume" asp-action="GenerateResumeFeedback" method="post"
         enctype="multipart/form-data">
         <div class="upload-area" id="uploadArea">
             <div class="upload-content">
@@ -86,7 +86,7 @@
         const formData = new FormData();
         formData.append("resumeFile", fileInput.files[0]);
 
-        const response = await fetch("/JobSeeker/Resume/UploadResume", {
+        const response = await fetch("/JobSeeker/Resume/GenerateResumeFeedback", {
             method: "POST",
             body: formData
         });

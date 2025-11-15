@@ -96,6 +96,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 await _db.SaveChangesAsync();
             }
 
+            // 🔹 Fetch resume history for this user
+            var resumes = await _db.resumes
+                .Where(r => r.user_id == userId)
+                .OrderByDescending(r => r.upload_date)
+                .ToListAsync();
+
+            ViewBag.UserResumes = resumes;
+
             var vm = new ProfileViewModel
             {
                 UserId = user.user_id,
@@ -108,6 +116,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 Skills = user.skills,
                 Education = user.education,
                 WorkExperience = user.work_experience,
+                TargetIndustry = user.target_industry,
+
 
                 // now load from notification_preference table
                 notif_email = pref.allow_email,
@@ -180,6 +190,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             user.skills = vm.Skills;
             user.education = vm.Education;
             user.work_experience = vm.WorkExperience;
+            user.target_industry = vm.TargetIndustry;
+
 
             // ✅ Fetch (or create) notification preference
             var pref = await _db.notification_preferences.FirstOrDefaultAsync(p => p.user_id == vm.UserId);
@@ -369,38 +381,70 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return Json(new { success = true });
         }
 
+        public async Task<IActionResult> ManageResume()
+        {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
+
+            var resumes = await _db.resumes
+                .Where(r => r.user_id == userId)
+                .OrderByDescending(r => r.upload_date)
+                .ToListAsync();
+
+            ViewBag.UserResumes = resumes;
+            return View();
+        }
+
         [HttpPost]
         public async Task<IActionResult> UploadResume(IFormFile resumeFile)
         {
-            var userId = HttpContext.Session.GetString("UserId");
-            if (string.IsNullOrEmpty(userId))
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
 
             if (resumeFile == null || resumeFile.Length == 0)
             {
-                TempData["Message"] = "Please select a file to upload.";
-                return RedirectToAction("Settings", "Dashboard", new { area = "JobSeeker" });
+                TempData["Error"] = "Please upload a valid resume file.";
+                return RedirectToAction(nameof(ManageResume));
             }
 
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
-            if (!Directory.Exists(uploadsDir))
-                Directory.CreateDirectory(uploadsDir);
+            // 🔹 Get user's first name from DB
+            var user = await _db.users.Where(u => u.user_id == userId).FirstOrDefaultAsync();
+            string firstNameSafe = (user?.first_name ?? "User")
+                .Replace(" ", "")
+                .Replace(".", "")
+                .Replace("-", "");
 
-            var user = await _db.users.FindAsync(int.Parse(userId));
-            string safeFileName = $"{user.first_name}_{DateTime.Now:yyyyMMdd_HHmm}{Path.GetExtension(resumeFile.FileName)}";
+            // 📌 Extract extension only
+            string extension = Path.GetExtension(resumeFile.FileName);
+
+            // 📌 Build SAFE filename: FirstName + Timestamp
+            string safeFileName = $"{firstNameSafe}_{DateTime.Now:yyyyMMddHHmmss}{extension}";
             safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
 
-            string fullPath = Path.Combine(uploadsDir, safeFileName);
+            // 📁 Ensure upload folder exists
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+            Directory.CreateDirectory(uploadsDir);
+
+            // 💾 Save file
+            var fullPath = Path.Combine(uploadsDir, safeFileName);
             using (var stream = new FileStream(fullPath, FileMode.Create))
             {
                 await resumeFile.CopyToAsync(stream);
             }
 
+            // 🌐 Store relative path
             var relativePath = $"/uploads/user_resumes/{safeFileName}";
 
+            // 🗄 Save record in DB
             var resume = new resume
             {
-                user_id = int.Parse(userId),
+                user_id = userId,
                 upload_date = DateTime.Now,
                 file_path = relativePath
             };
@@ -409,9 +453,27 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             await _db.SaveChangesAsync();
 
             TempData["Success"] = "Resume uploaded successfully!";
-            return RedirectToAction("Settings", "Dashboard", new { area = "JobSeeker" });
+            return RedirectToAction(nameof(ManageResume));
         }
 
+
+        [HttpPost]
+        public async Task<IActionResult> DeleteResume(int id)
+        {
+            var resume = await _db.resumes.FindAsync(id);
+            if (resume == null)
+                return NotFound();
+
+            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", resume.file_path.TrimStart('/'));
+            if (System.IO.File.Exists(fullPath))
+                System.IO.File.Delete(fullPath);
+
+            _db.resumes.Remove(resume);
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = "Resume deleted successfully!";
+            return RedirectToAction(nameof(ManageResume));
+        }
 
         // Apply Page
         [HttpGet]
@@ -442,82 +504,86 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(model);
         }
 
-        //Submit Application
-[HttpPost]
-[ValidateAntiForgeryToken]
-public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
-{
-    if (!ModelState.IsValid)
-    {
-        // Re-load resumes in case of validation errors
-        var userIdStr = HttpContext.Session.GetString("UserId");
-        model.ExistingResumes = await _db.resumes
-            .Where(r => r.user_id.ToString() == userIdStr)
-            .ToListAsync();
-
-        return View("Apply", model);
-    }
-
-    var userIdString = HttpContext.Session.GetString("UserId");
-    if (string.IsNullOrEmpty(userIdString))
-        return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
-
-    int userId = int.Parse(userIdString);
-
-    string? relativePath = null;
-
-    // ✅ CASE 1: Existing resume selected
-    if (model.SelectedResumeId.HasValue)
-    {
-        var existingResume = await _db.resumes.FindAsync(model.SelectedResumeId.Value);
-        if (existingResume != null)
-            relativePath = existingResume.file_path;
-    }
-
-    // ✅ CASE 2: New file uploaded
-    if (model.ResumeFile != null && model.ResumeFile.Length > 0)
-    {
-        var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
-        Directory.CreateDirectory(uploadsDir);
-
-        string safeFileName = $"{userId}_{DateTime.Now:yyyyMMdd_HHmm}_{Path.GetFileName(model.ResumeFile.FileName)}";
-        safeFileName = string.Concat(safeFileName.Split(Path.GetInvalidFileNameChars()));
-
-        string fullPath = Path.Combine(uploadsDir, safeFileName);
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
         {
-            await model.ResumeFile.CopyToAsync(stream);
+            if (!ModelState.IsValid)
+            {
+                var userIdStr = HttpContext.Session.GetString("UserId");
+                model.ExistingResumes = await _db.resumes
+                    .Where(r => r.user_id.ToString() == userIdStr)
+                    .ToListAsync();
+                return View("Apply", model);
+            }
+
+            var userIdString = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdString))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdString);
+
+            string? relativePath = null;
+
+            // CASE 1: Existing resume selected
+            if (model.SelectedResumeId.HasValue)
+            {
+                var existingResume = await _db.resumes.FindAsync(model.SelectedResumeId.Value);
+                if (existingResume != null)
+                    relativePath = existingResume.file_path;
+            }
+
+            // CASE 2: New file uploaded (always rename)
+            if (model.ResumeFile != null && model.ResumeFile.Length > 0)
+            {
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+                Directory.CreateDirectory(uploadsDir);
+
+                // Get the user info
+                var user = await _db.users.FindAsync(userId);
+                string firstNameSafe = string.Concat(user.first_name.Where(c => !char.IsWhiteSpace(c)));
+
+                string extension = Path.GetExtension(model.ResumeFile.FileName);
+
+                // New filename: UserID_FirstName_Date
+                string safeFileName = $"{firstNameSafe}_{DateTime.Now:yyyyMMddHHmmss}{extension}";
+
+                string fullPath = Path.Combine(uploadsDir, safeFileName);
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    await model.ResumeFile.CopyToAsync(stream);
+                }
+
+                relativePath = $"/uploads/user_resumes/{safeFileName}";
+
+                // Save to resumes table
+                var newResume = new resume
+                {
+                    user_id = userId,
+                    upload_date = DateTime.Now,
+                    file_path = relativePath
+                };
+                _db.resumes.Add(newResume);
+                await _db.SaveChangesAsync();
+            }
+
+            // Create job application
+            var application = new job_application
+            {
+                user_id = userId,
+                job_listing_id = model.JobId,
+                application_status = "Submitted",
+                date_updated = DateTime.Now,
+                resume_path = relativePath
+            };
+
+            _db.job_applications.Add(application);
+            await _db.SaveChangesAsync();
+
+            TempData["Success"] = "Your application has been submitted successfully!";
+            return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
         }
 
-        relativePath = $"/uploads/user_resumes/{safeFileName}";
-
-        // save new resume
-        var newResume = new resume
-        {
-            user_id = userId,
-            upload_date = DateTime.Now,
-            file_path = relativePath
-        };
-        _db.resumes.Add(newResume);
-        await _db.SaveChangesAsync();
-    }
-
-    // ✅ Create new job application
-    var application = new job_application
-    {
-        user_id = userId,
-        job_listing_id = model.JobId,
-        application_status = "Submitted",
-        date_updated = DateTime.Now,
-        resume_path = relativePath
-    };
-
-    _db.job_applications.Add(application);
-    await _db.SaveChangesAsync();
-
-    TempData["Success"] = "Your application has been submitted successfully!";
-    return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
-}
 
 
 
@@ -572,17 +638,24 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
             var dashboard = new ApplicationsDashboardViewModel
             {
                 TotalApplications = totalApplications,
-                ApplicationsInReview = await _db.job_applications.CountAsync(a => a.user_id == id && a.application_status == "In Review"),
+                ApplicationsInReview = await _db.job_applications.CountAsync(a => a.user_id == id && a.application_status == "AI-Screened"),
                 InterviewsScheduled = await _db.job_applications.CountAsync(a => a.user_id == id && a.application_status == "Interview"),
                 RecentActivities = applications.Take(5).Select(a => new RecentActivityViewModel
                 {
                     Message = $"Updated application for {a.job_listing.job_title} ({a.application_status})",
                     Date = a.date_updated
                 }).ToList(),
-                RecentNotifications = new List<RecentNotificationViewModel>
-        {
-            new RecentNotificationViewModel { Message = "Keep track of your applications here!", Date = DateTime.Now }
-        }
+                RecentNotifications = await _db.notifications
+    .Where(n => n.user_id == id)
+    .OrderByDescending(n => n.notification_date_created)
+    .Take(5)
+    .Select(n => new RecentNotificationViewModel
+    {
+        Message = n.notification_msg,
+        Date = n.notification_date_created
+    })
+    .ToListAsync()
+
             };
 
             var model = new MyApplicationsViewModel
@@ -654,6 +727,17 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
             var userIdStr = HttpContext.Session.GetString("UserId");
             int? userId = string.IsNullOrEmpty(userIdStr) ? null : int.Parse(userIdStr);
 
+            // Get user's target industry
+            string? targetIndustry = null;
+            if (userId.HasValue)
+            {
+                targetIndustry = await _db.users
+                    .Where(u => u.user_id == userId.Value)
+                    .Select(u => u.target_industry)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Base query
             var jobsQuery = _db.job_listings
                 .Include(j => j.company)
                 .Where(j => j.job_status == "Open");
@@ -668,11 +752,26 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                     j.company.company_industry.Contains(search));
             }
 
-            // 📍 Filter by Location
+            // 📍 Location filter
             if (!string.IsNullOrEmpty(location))
             {
                 jobsQuery = jobsQuery.Where(j => j.company.company_location == location);
             }
+
+            // 🧭 Salary, work mode, category filters remain the same...
+
+            // 🔹 Sort so that target industry jobs appear first
+            if (!string.IsNullOrEmpty(targetIndustry))
+            {
+                jobsQuery = jobsQuery
+                    .OrderByDescending(j => j.company.company_industry == targetIndustry) // true comes first
+                    .ThenByDescending(j => j.date_posted); // then sort by date posted
+            }
+            else
+            {
+                jobsQuery = jobsQuery.OrderByDescending(j => j.date_posted);
+            }
+
 
             // 🧭 Filter by salary range
             if (minSalary.HasValue && maxSalary.HasValue)
@@ -824,67 +923,6 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
             return View(job);
         }
 
-
-
-
-        [HttpPost]
-        public async Task<IActionResult> AnalyzeResume(IFormFile resumeFile)
-        {
-            if (resumeFile == null || resumeFile.Length == 0)
-            {
-                ViewBag.Error = "Please upload a valid resume file.";
-                return View("Feedback");
-            }
-
-            // Mock resume text for now
-            string extractedText = "Experienced skilled in C#, ASP.NET, SQL, and Azure.";
-
-            // ✅ Send text to TextRazor API
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("x-textrazor-key", "b426ca814983ef70ffdf990b592414657a82ac2cf2cade032c8f4dc7");
-
-            // Correctly create StringContent (UTF8 + media type)
-            var formData = $"extractors=entities&text={Uri.EscapeDataString(extractedText)}";
-            var data = new StringContent(formData, Encoding.UTF8, "application/x-www-form-urlencoded");
-
-            var response = await client.PostAsync("https://api.textrazor.com/", data);
-            var jsonResponse = await response.Content.ReadAsStringAsync();
-
-            // ✅ Parse response safely
-            var extractedKeywords = new List<string>();
-            using (JsonDocument doc = JsonDocument.Parse(jsonResponse))
-            {
-                if (doc.RootElement.TryGetProperty("response", out var responseObj) &&
-                    responseObj.TryGetProperty("entities", out var entities))
-                {
-                    foreach (var entity in entities.EnumerateArray())
-                    {
-                        if (entity.TryGetProperty("entityId", out var keyword))
-                        {
-                            extractedKeywords.Add(keyword.GetString() ?? "");
-                        }
-                    }
-                }
-            }
-
-            // ✅ Compare with target keywords
-            var targetKeywords = new List<string> { "C#", "ASP.NET", "SQL", "JavaScript", "Azure" };
-            int matchCount = 0;
-            foreach (var word in extractedKeywords)
-            {
-                if (targetKeywords.Contains(word))
-                    matchCount++;
-            }
-
-            double matchPercent = (double)matchCount / targetKeywords.Count * 100;
-
-            // ✅ Send results to view
-            ViewBag.Keywords = extractedKeywords;
-            ViewBag.MatchScore = Math.Round(matchPercent, 2);
-
-            return View("Feedback");
-        }
-
         // GET: /JobSeeker/Dashboard/ResumeBuilder
         [HttpGet]
         public async Task<IActionResult> ResumeBuilder()
@@ -928,7 +966,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                     page.Header().Column(column =>
                     {
                         column.Spacing(10);
-                        // 👤 Profile Picture (optional)
+                        //  Profile Picture (optional)
                         if (profileImage != null && profileImage.Length > 0)
                         {
                             column.Item().AlignCenter().Width(80).Height(80).Element(e =>
@@ -937,7 +975,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
             });
                         }
 
-                        // 🧑 Full Name
+                        //  Full Name
                         column.Item().Text(fullName)
                             .Bold()
                             .FontSize(22)
@@ -949,7 +987,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                     {
                         column.Spacing(10);
 
-                        // 📧 Contact Info
+                        // Contact Info
                         column.Item().Text($"Email: {email}");
                         if (!string.IsNullOrWhiteSpace(phone))
                             column.Item().Text($"Phone: {phone}");
@@ -958,21 +996,21 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
 
                         column.Item().PaddingVertical(5).LineHorizontal(1).LineColor(Colors.Grey.Medium);
 
-                        // 🧾 Summary
+                        // Summary
                         if (!string.IsNullOrWhiteSpace(summary))
                         {
                             column.Item().Text("Professional Summary:").Bold();
                             column.Item().Text(summary);
                         }
 
-                        // 🎓 Education
+                        //  Education
                         if (!string.IsNullOrWhiteSpace(education))
                         {
                             column.Item().Text("Education:").Bold();
                             column.Item().Text(education);
                         }
 
-                        // 💼 Experience
+                        //  Experience
                         if (!string.IsNullOrWhiteSpace(experience))
                         {
                             column.Item().Text("Experience:").Bold();
@@ -984,14 +1022,14 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                             }
                         }
 
-                        // 🧠 Skills
+                        // Skills
                         if (!string.IsNullOrWhiteSpace(skills))
                         {
                             column.Item().Text("Skills:").Bold();
                             column.Item().Text(skills);
                         }
 
-                        // 🏅 Certifications
+                        // Certifications
                         if (!string.IsNullOrWhiteSpace(certifications))
                         {
                             column.Item().Text("Certifications:").Bold();
@@ -1039,7 +1077,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                         // 🔹 Left Sidebar (Profile & Skills)
                         row.RelativeItem(1.2f).Background(Colors.Grey.Lighten3).Padding(15).Column(left =>
                         {
-                            // 📸 Profile Image
+                            // Profile Image
                             if (profileImage != null && profileImage.Length > 0)
                             {
                                 left.Item().AlignCenter().Width(120).Height(120).Element(e =>
@@ -1049,7 +1087,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                                 left.Item().PaddingVertical(10);
                             }
 
-                            // 🧑 Name & Contact Info
+                            // Name & Contact Info
                             left.Item().AlignCenter().Text(fullName)
                                 .Bold().FontSize(18).FontColor(Colors.Blue.Medium);
                             if (!string.IsNullOrEmpty(email)) left.Item().AlignCenter().Text(email);
@@ -1060,7 +1098,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                             // Divider
                             left.Item().PaddingVertical(10).LineHorizontal(1).LineColor(Colors.Grey.Medium);
 
-                            // 🧠 Skills Section
+                            //  Skills Section
                             if (!string.IsNullOrEmpty(skills))
                             {
                                 left.Item().Text("💡 Skills").Bold().FontSize(12).FontColor(Colors.Black);
@@ -1068,7 +1106,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                                     left.Item().PaddingLeft(10).Text("• " + skill.Trim());
                             }
 
-                            // 🏅 Certifications
+                            //  Certifications
                             if (!string.IsNullOrEmpty(certifications))
                             {
                                 left.Item().PaddingTop(10).Text("Certifications").Bold().FontSize(12).FontColor(Colors.Black);
@@ -1081,7 +1119,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                         // 🔹 Right Main Content (Summary, Education, Experience)
                         row.RelativeItem(1.8f).PaddingLeft(25).Column(right =>
                         {
-                            // 🎯 Professional Summary
+                            //  Professional Summary
                             if (!string.IsNullOrEmpty(summary))
                             {
                                 right.Item().Text("Professional Summary").Bold().FontSize(14);
@@ -1121,8 +1159,10 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
 
         // POST: /JobSeeker/Dashboard/SaveResume
         [HttpPost]
-        public async Task<IActionResult> SaveResume(IFormFile? profilePic, string fullName, string email, string phone, string address,
-            string summary, string education, string experience, string skills, string certifications, string template)
+        public async Task<IActionResult> SaveResumePDF(
+            IFormFile? profilePic, string fullName, string email, string phone,
+            string address, string summary, string education, string experience,
+            string skills, string certifications, string template)
         {
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
@@ -1130,7 +1170,7 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
 
             int userId = int.Parse(userIdStr);
 
-            // 🖼 Convert image to byte array (if uploaded)
+            // 🖼 Convert image to bytes (optional)
             byte[]? imageBytes = null;
             if (profilePic != null && profilePic.Length > 0)
             {
@@ -1139,36 +1179,47 @@ public async Task<IActionResult> SubmitApplication(ApplyViewModel model)
                 imageBytes = ms.ToArray();
             }
 
-            // 1️⃣ Generate PDF with the image
+            // Generate PDF
             var pdfBytes = template switch
             {
                 "modern" => GenerateModernResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
                 "classic" => GenerateClassicResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
+                _ => throw new Exception("Invalid template selected")
             };
-            // 2️⃣ Save PDF to wwwroot/resumes
-            var resumesDir = Path.Combine(_webHostEnvironment.WebRootPath, "resumes");
-            if (!Directory.Exists(resumesDir))
-                Directory.CreateDirectory(resumesDir);
 
-            // ✅ New file naming: FirstName + timestamp
+            // Ensure resumes folder exists
+            var resumesDir = Path.Combine(_webHostEnvironment.WebRootPath, "resumes");
+            Directory.CreateDirectory(resumesDir);
+
+            // Safest Filename Format
             var user = await _db.users.FindAsync(userId);
-            string fileName = $"{user.first_name}_{DateTime.Now:yyyyMMdd_HHmm}.pdf";
-            string filePath = Path.Combine(resumesDir, fileName);
+
+            string firstNameSafe = (user?.first_name ?? "User")
+                .Replace(" ", "")
+                .Replace(".", "")
+                .Replace("-", "");
+
+            string safeFileName = $"{firstNameSafe}_{DateTime.Now:yyyyMMddHHmmss}.pdf";
+
+            string filePath = Path.Combine(resumesDir, safeFileName);
 
             await System.IO.File.WriteAllBytesAsync(filePath, pdfBytes);
 
-            // 3️⃣ Save DB record
+            // 3️⃣ SAVE IN DB
             var newResume = new resume
             {
                 user_id = userId,
                 upload_date = DateTime.Now,
-                file_path = "/resumes/" + fileName
+
+                // ⚠ FIXED: Correct folder path
+                file_path = $"/resumes/{safeFileName}"
             };
+
             _db.resumes.Add(newResume);
             await _db.SaveChangesAsync();
 
-            // 4️⃣ Return file for download
-            return File(pdfBytes, "application/pdf", fileName);
+            // 4️⃣ RETURN PDF FILE TO USER
+            return File(pdfBytes, "application/pdf", safeFileName);
         }
 
         public IActionResult GetRecentNotifications()

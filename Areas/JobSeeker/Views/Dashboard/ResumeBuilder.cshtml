@@ -7,11 +7,11 @@
 <div class="resume-builder-container">
     <h1>Resume Builder</h1>
 
-    <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResume" enctype="multipart/form-data">
+    <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResumePDF" enctype="multipart/form-data">
         <h3>Personal Information</h3>
 
         <label for="template">Choose Resume Template</label>
-        <select id="template" name="template" required>
+        <select id="template" name="template" class="form-select" required>
             <option value="classic">Classic</option>
             <option value="modern">Modern</option>
         </select>
@@ -79,18 +79,11 @@
         <input type="text" id="certifications" name="certifications" value="@Model.Certifications"
             placeholder="Microsoft Certified: Azure Fundamentals" />
 
-
-        <button type="button" id="previewBtn">Preview Resume</button>
         <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>
 
         <input type="hidden" id="education" name="education" />
         <input type="hidden" id="experience" name="experience" />
     </form>
-
-    <div id="resumePreview" style="border:1px solid #ccc; padding:20px; margin-top:20px;">
-        <h2>Resume Preview</h2>
-        <div id="resumeContent"></div>
-    </div>
 </div>
 
 <script>
@@ -106,56 +99,6 @@
             };
             reader.readAsDataURL(file);
         }
-    });
-
-    // 🧾 Preview Resume Content
-    document.getElementById("previewBtn").addEventListener("click", function () {
-        const name = document.getElementById("fullName").value;
-        const email = document.getElementById("email").value;
-        const phone = document.getElementById("phone").value;
-        const address = document.getElementById("address").value;
-        const summary = document.getElementById("summary").value;
-        const school = document.getElementById("school").value;
-        const degree = document.getElementById("degree").value;
-        const eduYear = document.getElementById("eduYear").value;
-        const skills = document.getElementById("skills").value;
-        const certifications = document.getElementById("certifications").value;
-        const profileImg = document.getElementById("previewImg").src;
-
-        // Gather all experience sections
-        const experiences = [];
-        document.querySelectorAll(".experience-entry").forEach(entry => {
-            const company = entry.querySelector('[name="company"]').value.trim();
-            const position = entry.querySelector('[name="position"]').value.trim();
-            const duration = entry.querySelector('[name="duration"]').value.trim();
-            const achievements = entry.querySelector('[name="achievements"]').value.trim();
-
-            if (company || position || duration || achievements) {
-                experiences.push(`${position} at ${company} (${duration}) — ${achievements}`);
-            }
-        });
-
-        // Create preview content dynamically (hide empty sections)
-        let content = `
-            <div style="display:flex; align-items:center; gap:20px;">
-                ${profileImg && profileImg !== "#" ? `<img src="${profileImg}" style="width:100px; height:100px; border-radius:50%; object-fit:cover;">` : ""}
-                <div>
-                    <h3>${name}</h3>
-                    ${email ? `<p>${email}</p>` : ""}
-                    ${phone ? `<p>${phone}</p>` : ""}
-                    ${address ? `<p>${address}</p>` : ""}
-                </div>
-            </div>
-            <hr/>
-        `;
-
-        if (summary) content += `<p><strong>Summary:</strong> ${summary}</p>`;
-        if (degree || school || eduYear) content += `<p><strong>Education:</strong> ${degree} at ${school} (${eduYear})</p>`;
-        if (experiences.length > 0) content += `<p><strong>Experience:</strong><br> ${experiences.join("<br>")}</p>`;
-        if (skills) content += `<p><strong>Skills:</strong> ${skills}</p>`;
-        if (certifications) content += `<p><strong>Certifications:</strong> ${certifications}</p>`;
-
-        document.getElementById("resumeContent").innerHTML = content;
     });
 
     // ➕ Add new experience entry

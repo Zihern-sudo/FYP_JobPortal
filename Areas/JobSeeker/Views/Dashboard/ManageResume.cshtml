@@ -1,0 +1,58 @@
+@{
+    Layout = "_LayoutDashboard";
+    ViewData["Title"] = "Manage Resumes";
+}
+
+<h1 class="page-title">Manage My Resumes</h1>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+<!-- Upload Form -->
+<form asp-action="UploadResume" asp-controller="Dashboard" asp-area="JobSeeker" method="post" enctype="multipart/form-data" class="mt-2 border p-3 rounded">
+    <label class="fw-bold">Upload New Resume</label>
+    <input type="file" name="resumeFile" class="form-control mb-2" required />
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+<!-- Resume History -->
+@if (ViewBag.UserResumes != null && ViewBag.UserResumes.Count > 0)
+{
+    <h4 class="mt-3 fw-bold">Resume History</h4>
+    <table class="table table-striped mt-2">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Uploaded</th>
+                <th style="width:150px">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in ViewBag.UserResumes)
+            {
+                <tr>
+                    <td><a href="@r.file_path" target="_blank">@System.IO.Path.GetFileName(r.file_path)</a></td>
+                    <td>@r.upload_date.ToString("dd MMM yyyy, hh:mm tt")</td>
+                    <td class="text-end">
+                        <a href="@r.file_path" target="_blank" class="btn btn-outline-primary btn-sm">View</a>
+                        <form asp-action="DeleteResume" asp-controller="Dashboard" asp-area="JobSeeker" method="post" style="display:inline" onsubmit="return confirm('Delete this resume?');">
+                            <input type="hidden" name="id" value="@r.resume_id" />
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p class="text-muted"><i>No resumes uploaded yet.</i></p>
+}

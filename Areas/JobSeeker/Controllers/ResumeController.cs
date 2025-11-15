@@ -6,21 +6,37 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
+using JobPortal.Areas.JobSeeker.Models;
+using JobPortal.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using JobPortal.Areas.Shared.Models;
+using System; // for Uri.EscapeDataString
+using Microsoft.AspNetCore.Identity;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
     [Area("JobSeeker")]
     public class ResumeController : Controller
     {
+        private readonly AppDbContext _db;
+
+        public ResumeController(AppDbContext db)
+        {
+            _db = db;
+        }
         [HttpPost]
-        public async Task<IActionResult> UploadResume(IFormFile resumeFile)
+        public async Task<IActionResult> GenerateResumeFeedback(IFormFile resumeFile)
         {
             if (resumeFile == null || resumeFile.Length == 0)
                 return Json(new { success = false, message = "Please upload a valid resume file." });
 
             string extractedText = "";
 
-            // ✅ Extract text from PDF using PdfPig
+            // 📌 EXTRACT PDF TEXT
             using (var stream = resumeFile.OpenReadStream())
             using (var pdf = PdfDocument.Open(stream))
             {
@@ -31,105 +47,86 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 extractedText = sb.ToString();
             }
 
-            // ✅ Send extracted text to TextRazor API
-            string apiKey = "b426ca814983ef70ffdf990b592414657a82ac2cf2cade032c8f4dc7";
-            string apiUrl = "https://api.textrazor.com/";
+            // ====== BASIC SAFETY CLEANUP ======
+            extractedText = extractedText.Replace("\n", " ").Replace("\r", " ");
 
-            using (var httpClient = new HttpClient())
+            // 📌 KEYWORD LISTS (Your system prompt will mention this simple scoring method)
+            var educationKeywords = new List<string> { "SPM", "DIPLOMA", "DEGREE", "BACHELOR", "MASTER", "MASTERS", "PHD" };
+            var experienceKeywords = new List<string> { "YEAR", "EXPERIENCE", "INTERN", "INTERNSHIP" };
+            var skillKeywords = new List<string>
+    {
+        "C#", "ASP.NET", "SQL", "JAVASCRIPT", "JAVA", "PYTHON",
+        "HTML", "CSS", "LEADERSHIP", "COMMUNICATION",
+        "TEAMWORK", "PROBLEM", "SOFTWARE", "DEVELOPER", "MANAGE"
+    };
+            var certKeywords = new List<string> { "CERTIFIED", "CERTIFICATE", "AWS", "AZURE", "CISCO", "MICROSOFT", "GOOGLE" };
+
+            // ============================
+            // 📌 EDUCATION SCORING
+            // ============================
+            int eduScore = 0;
+            string eduText = extractedText.ToUpper();
+
+            if (Regex.IsMatch(eduText, @"\bPHD|DOCTORATE\b")) eduScore = 10;
+            else if (Regex.IsMatch(eduText, @"\bMASTER|MASTERS|MSC\b")) eduScore = 8;
+            else if (Regex.IsMatch(eduText, @"\bDEGREE|BACHELOR\b")) eduScore = 6;
+            else if (Regex.IsMatch(eduText, @"\bDIPLOMA\b")) eduScore = 4;
+            else if (Regex.IsMatch(eduText, @"\bSPM|STPM|O LEVEL\b")) eduScore = 2;
+
+            // ============================
+            // 📌 EXPERIENCE SCORING
+            // ============================
+            int expScore = 0;
+            var expMatch = Regex.Match(eduText, @"(\d+)\s*(YEAR|YEARS)");
+
+            if (expMatch.Success)
             {
-                httpClient.DefaultRequestHeaders.Add("x-textrazor-key", apiKey);
+                int years = int.Parse(expMatch.Groups[1].Value);
 
-                var content = new FormUrlEncodedContent(new[]
-                {
-                    new KeyValuePair<string, string>("extractors", "entities,topics,words"),
-                    new KeyValuePair<string, string>("text", extractedText)
-                });
-
-                var response = await httpClient.PostAsync(apiUrl, content);
-                var result = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                    return Json(new { success = false, message = "Error calling TextRazor API." });
-
-                using var doc = JsonDocument.Parse(result);
-                var keywords = new List<string>();
-
-                if (doc.RootElement.TryGetProperty("response", out var resp) &&
-                    resp.TryGetProperty("entities", out var entities))
-                {
-                    foreach (var entity in entities.EnumerateArray())
-                    {
-                        if (entity.TryGetProperty("entityId", out var keyword))
-                            keywords.Add(keyword.GetString() ?? string.Empty);
-                    }
-                }
-
-                // ✅ Define keyword lists
-                var educationKeywords = new List<string> { "SPM", "Diploma", "Degree", "Bachelor", "Masters", "PhD" };
-                var experienceKeywords = new List<string> { "year", "experience", "internship", "developer", "engineer", "manager" };
-                var skillKeywords = new List<string> { "C#", "ASP.NET", "SQL", "JavaScript", "Problem Solving", "Communication", "Teamwork", "Software Development", "HTML", "CSS", "Java", "Python", "Leadership", "Managing", "Manage", "Business", "Economy" };
-                var certKeywords = new List<string> { "certified", "certificate", "AWS", "Azure", "Google", "Microsoft", "Cisco", "Oracle" };
-
-                // ✅ Education Scoring (based on highest qualification)
-                int eduScore = 0;
-                if (Regex.IsMatch(extractedText, @"\b(PHD|DOCTORATE)\b", RegexOptions.IgnoreCase))
-                    eduScore = 10;
-                else if (Regex.IsMatch(extractedText, @"\b(MASTER|MASTERS|MSC)\b", RegexOptions.IgnoreCase))
-                    eduScore = 8;
-                else if (Regex.IsMatch(extractedText, @"\b(DEGREE|BACHELOR)\b", RegexOptions.IgnoreCase))
-                    eduScore = 6;
-                else if (Regex.IsMatch(extractedText, @"\b(DIPLOMA)\b", RegexOptions.IgnoreCase))
-                    eduScore = 4;
-                else if (Regex.IsMatch(extractedText, @"\b(SPM|O LEVEL|STPM)\b", RegexOptions.IgnoreCase))
-                    eduScore = 2;
-
-                // ✅ Experience Scoring (based on years found)
-                int expScore = 0;
-                var expMatch = Regex.Match(extractedText, @"(\d+)\s*(year|years)", RegexOptions.IgnoreCase);
-                if (expMatch.Success)
-                {
-                    int years = int.Parse(expMatch.Groups[1].Value);
-                    if (years >= 10) expScore = 10;
-                    else if (years >= 7) expScore = 8;
-                    else if (years >= 4) expScore = 6;
-                    else if (years >= 2) expScore = 4;
-                    else expScore = 2;
-                }
-                else if (Regex.IsMatch(extractedText, @"\b(intern|internship)\b", RegexOptions.IgnoreCase))
-                    expScore = 2;
-
-
-                // ✅ Skills Scoring (intersection of known list + text)
-                int skillMatchCount = skillKeywords.Count(k =>
-                    extractedText.Contains(k, StringComparison.OrdinalIgnoreCase));
-                int skillScore = Math.Min(skillMatchCount, 10);
-
-                // ✅ Certifications Scoring
-                int certCount = certKeywords.Count(k =>
-                    extractedText.Contains(k, StringComparison.OrdinalIgnoreCase));
-
-                int certScore = certCount switch
-                {
-                    >= 3 => 10,
-                    2 => 6,
-                    1 => 4,
-                    _ => 0
-                };
-
-                // ✅ Overall Score
-                double overallScore = Math.Round((eduScore + expScore + skillScore + certScore) / 4.0, 2);
-
-                // ✅ Return summarized result (hide matched keywords)
-                return Json(new
-                {
-                    success = true,
-                    education = $"{eduScore}/10",
-                    experience = $"{expScore}/10",
-                    skills = $"{skillScore}/10",
-                    certifications = $"{certScore}/10",
-                    overallScore = overallScore
-                });
+                if (years >= 10) expScore = 10;
+                else if (years >= 7) expScore = 8;
+                else if (years >= 4) expScore = 6;
+                else if (years >= 2) expScore = 4;
+                else expScore = 2;
             }
+            else if (Regex.IsMatch(eduText, @"\bINTERN|INTERNSHIP\b"))
+            {
+                expScore = 2;
+            }
+
+            // ============================
+            // 📌 SKILL MATCH SCORING
+            // ============================
+            int skillScore = skillKeywords.Count(s => eduText.Contains(s));
+            if (skillScore > 10) skillScore = 10;
+
+            // ============================
+            // 📌 CERTIFICATION SCORING
+            // ============================
+            int certCount = certKeywords.Count(s => eduText.Contains(s));
+            int certScore = certCount switch
+            {
+                >= 3 => 10,
+                2 => 6,
+                1 => 4,
+                _ => 0
+            };
+
+            // ============================
+            // 📌 FINAL OVERALL SCORE
+            // ============================
+            double overallScore = Math.Round((eduScore + expScore + skillScore + certScore) / 4.0, 2);
+
+            // RETURN
+            return Json(new
+            {
+                success = true,
+                education = $"{eduScore}/10",
+                experience = $"{expScore}/10",
+                skills = $"{skillScore}/10",
+                certifications = $"{certScore}/10",
+                overallScore = overallScore
+            });
         }
     }
 }
