@@ -37,7 +37,7 @@ builder.Services
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "OpenAI:ApiKey is required.")
     .ValidateOnStart();
 
-builder.Services.AddHttpClient<IOpenAIClient, OpenAIClient>();
+builder.Services.AddHttpClient<IOpenAIClient, IOpenAIClient>();
 builder.Services.AddScoped<ILanguageService, LanguageService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<AiOrchestrator>();

@@ -391,3 +391,442 @@ ALTER TABLE user
 ADD COLUMN target_industry VARCHAR(100) NULL AFTER skills;
 
 /* --- */
+
+
+/* 4.54pm 18/11/2025 ZiHern */
+
+-- Adds ai_resume_evaluation.date_evaluated if missing,
+-- then creates an index on it if missing.
+
+-- Use the current database automatically
+SET @schema := DATABASE();
+SET @table  := 'ai_resume_evaluation';
+SET @column := 'date_evaluated';
+SET @index  := 'idx_ai_eval_date';
+
+-- 1) Add column if it does not exist
+SELECT COUNT(*) INTO @col_exists
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = @schema
+  AND TABLE_NAME   = @table
+  AND COLUMN_NAME  = @column;
+
+SET @sql := IF(
+  @col_exists = 0,
+  CONCAT('ALTER TABLE `', @table, '` ',
+         'ADD COLUMN `', @column, '` DATETIME NOT NULL ',
+         'DEFAULT CURRENT_TIMESTAMP AFTER `match_score`'),
+  'SELECT 1'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 2) Create index if it does not exist
+SELECT COUNT(*) INTO @idx_exists
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = @schema
+  AND TABLE_NAME   = @table
+  AND INDEX_NAME   = @index;
+
+SET @sql := IF(
+  @idx_exists = 0,
+  CONCAT('CREATE INDEX `', @index, '` ON `', @table, '` (`', @column, '`)'),
+  'SELECT 1'
+);
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+/* ------------------------------------------------------------------------------------------- */
+
+-- =========================================================
+-- AI CONTROL TABLES FOR RECRUITER-CENTRIC WORKFLOW (MySQL)
+-- Idempotent: INFORMATION_SCHEMA + dynamic SQL guards.
+-- =========================================================ai_parsed_resumes
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ---------------------------------------------------------
+-- Helper: queue & run DDL statements
+-- ---------------------------------------------------------
+DROP TEMPORARY TABLE IF EXISTS _ddl_queue;
+CREATE TEMPORARY TABLE _ddl_queue(stmt LONGTEXT);
+
+DROP PROCEDURE IF EXISTS run_ddls;
+DELIMITER $$
+CREATE PROCEDURE run_ddls()
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE s LONGTEXT;
+  DECLARE cur CURSOR FOR SELECT stmt FROM _ddl_queue;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO s;
+    IF done = 1 THEN LEAVE read_loop; END IF;
+    IF s IS NOT NULL AND LENGTH(s) > 0 THEN
+      SET @sql := s;
+      PREPARE x FROM @sql; EXECUTE x; DEALLOCATE PREPARE x;
+    END IF;
+  END LOOP;
+  CLOSE cur;
+  TRUNCATE TABLE _ddl_queue;
+END$$
+DELIMITER ;
+
+-- ---------------------------------------------------------
+-- 0) Ensure resume evaluation table has date_evaluated
+--    (supports singular/plural)
+-- ---------------------------------------------------------
+-- plural
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_resume_evaluations ADD COLUMN date_evaluated DATETIME NULL'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_resume_evaluations')
+  AND NOT EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_resume_evaluations'
+                     AND COLUMN_NAME='date_evaluated');
+
+-- singular
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_resume_evaluation ADD COLUMN date_evaluated DATETIME NULL'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ai_resume_evaluation')
+  AND NOT EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_resume_evaluation'
+                     AND COLUMN_NAME='date_evaluated');
+
+CALL run_ddls();
+
+-- ---------------------------------------------------------
+-- 1) ai_parsed_resumes  (latest parsed JSON recruiters can correct)
+--    Create the table first WITHOUT FKs, then add FKs guarded.
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_parsed_resumes (
+  parsed_id      INT AUTO_INCREMENT PRIMARY KEY,
+  resume_id      INT NOT NULL,
+  user_id        INT NOT NULL,
+  job_listing_id INT NULL,
+  parsed_json    LONGTEXT NOT NULL,
+  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- indexes
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE INDEX idx_ai_parsed_resumes_user ON ai_parsed_resumes (user_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_parsed_resumes'
+    AND INDEX_NAME   = 'idx_ai_parsed_resumes_user'
+);
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE INDEX idx_ai_parsed_resumes_job ON ai_parsed_resumes (job_listing_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_parsed_resumes'
+    AND INDEX_NAME   = 'idx_ai_parsed_resumes_job'
+);
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE UNIQUE INDEX ux_ai_parsed_resumes_latest ON ai_parsed_resumes (resume_id, job_listing_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_parsed_resumes'
+    AND INDEX_NAME   = 'ux_ai_parsed_resumes_latest'
+);
+
+-- FK: resume_id -> resume/resumes(resume_id)
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_resume
+        FOREIGN KEY (resume_id) REFERENCES resume(resume_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='resume')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_resume'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_resume
+        FOREIGN KEY (resume_id) REFERENCES resumes(resume_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='resumes')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_resume'
+  );
+
+-- FK: user_id -> user/users(user_id)
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_user
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='user')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_user'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='users')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_user'
+  );
+
+-- FK: job_listing_id -> job_listing/job_listings(job_listing_id)
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listing(job_listing_id)
+        ON DELETE SET NULL ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listing')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_job'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_parsed_resumes ADD CONSTRAINT fk_parsed_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listings(job_listing_id)
+        ON DELETE SET NULL ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listings')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_parsed_resumes'
+        AND CONSTRAINT_NAME='fk_parsed_job'
+  );
+
+CALL run_ddls();
+
+-- ---------------------------------------------------------
+-- 2) ai_scoring_rules  (per-recruiter, per-job weights JSON)
+--    Create without FKs, then add guarded FKs + unique index.
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_scoring_rules (
+  rule_id        INT AUTO_INCREMENT PRIMARY KEY,
+  user_id        INT NOT NULL,
+  job_listing_id INT NOT NULL,
+  rule_json      JSON NOT NULL,
+  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- UNIQUE(user_id, job_listing_id)
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE UNIQUE INDEX ux_ai_scoring_rules_owner_job ON ai_scoring_rules (user_id, job_listing_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_scoring_rules'
+    AND INDEX_NAME   = 'ux_ai_scoring_rules_owner_job'
+);
+
+-- FK: user_id
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_scoring_rules ADD CONSTRAINT fk_rules_user
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='user')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_scoring_rules'
+        AND CONSTRAINT_NAME='fk_rules_user'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_scoring_rules ADD CONSTRAINT fk_rules_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='users')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_scoring_rules'
+        AND CONSTRAINT_NAME='fk_rules_user'
+  );
+
+-- FK: job_listing_id
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_scoring_rules ADD CONSTRAINT fk_rules_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listing(job_listing_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listing')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_scoring_rules'
+        AND CONSTRAINT_NAME='fk_rules_job'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_scoring_rules ADD CONSTRAINT fk_rules_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listings(job_listing_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listings')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_scoring_rules'
+        AND CONSTRAINT_NAME='fk_rules_job'
+  );
+
+CALL run_ddls();
+
+-- ---------------------------------------------------------
+-- 3) ai_rank_overrides  (manual nudge with reason)
+--    Create without FKs, then add guarded FKs + indexes.
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_rank_overrides (
+  override_id     INT AUTO_INCREMENT PRIMARY KEY,
+  application_id  INT NOT NULL,
+  job_listing_id  INT NOT NULL,
+  user_id         INT NOT NULL,
+  direction       TINYINT NOT NULL,               -- +1 up, -1 down
+  reason          VARCHAR(300) NOT NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- indexes
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE INDEX idx_ai_overrides_job ON ai_rank_overrides (job_listing_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_rank_overrides'
+    AND INDEX_NAME   = 'idx_ai_overrides_job'
+);
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE INDEX idx_ai_overrides_user ON ai_rank_overrides (user_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_rank_overrides'
+    AND INDEX_NAME   = 'idx_ai_overrides_user'
+);
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'CREATE INDEX idx_ai_overrides_app ON ai_rank_overrides (application_id)'
+FROM DUAL
+WHERE NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME   = 'ai_rank_overrides'
+    AND INDEX_NAME   = 'idx_ai_overrides_app'
+);
+
+-- FKs: app, job, user
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_rank_overrides ADD CONSTRAINT fk_override_app
+        FOREIGN KEY (application_id) REFERENCES job_applications(application_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_applications')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_rank_overrides'
+        AND CONSTRAINT_NAME='fk_override_app'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_rank_overrides ADD CONSTRAINT fk_override_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listing(job_listing_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listing')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_rank_overrides'
+        AND CONSTRAINT_NAME='fk_override_job'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_rank_overrides ADD CONSTRAINT fk_override_job
+        FOREIGN KEY (job_listing_id) REFERENCES job_listings(job_listing_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='job_listings')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_rank_overrides'
+        AND CONSTRAINT_NAME='fk_override_job'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_rank_overrides ADD CONSTRAINT fk_override_user
+        FOREIGN KEY (user_id) REFERENCES user(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='user')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_rank_overrides'
+        AND CONSTRAINT_NAME='fk_override_user'
+  );
+
+INSERT INTO _ddl_queue(stmt)
+SELECT 'ALTER TABLE ai_rank_overrides ADD CONSTRAINT fk_override_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE'
+FROM DUAL
+WHERE EXISTS ( SELECT 1 FROM INFORMATION_SCHEMA.TABLES
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='users')
+  AND NOT EXISTS (
+      SELECT 1 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='ai_rank_overrides'
+        AND CONSTRAINT_NAME='fk_override_user'
+  );
+
+CALL run_ddls();
+
+-- ---------------------------------------------------------
+-- Cleanup helper objects
+-- ---------------------------------------------------------
+DROP PROCEDURE IF EXISTS run_ddls;
+DROP TEMPORARY TABLE IF EXISTS _ddl_queue;
+
+/* ------------------------------------------------------------------------------------------- */
