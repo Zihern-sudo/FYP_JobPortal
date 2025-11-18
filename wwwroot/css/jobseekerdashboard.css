@@ -36,6 +36,17 @@ body, html {
     overflow: hidden;
 }
 
+/* Remove link underline and make text bold */
+.sidebar-logo-text {
+    color: #0d6efd; /* Bootstrap primary color */
+    transition: all 0.3s ease;
+}
+
+/* Hide full text when collapsed */
+.sidebar.collapsed .sidebar-logo-text {
+    font-size: 0;
+}
+
 .sidebar.collapsed {
     width: 60px;
 }
@@ -1358,3 +1369,13 @@ input[type="file"]::file-selector-button:hover {
     cursor: pointer;
     color: #0d6efd; /* blue clickable text */
 }
+
+#loadingSpinner {
+    display: none;
+    margin-top: 20px;
+}
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+

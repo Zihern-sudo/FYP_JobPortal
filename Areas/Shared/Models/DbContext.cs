@@ -51,6 +51,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<resume> resumes { get; set; }
 
+    public virtual DbSet<resume_feedback_history> resume_feedback_histories { get; set; }
+
     public virtual DbSet<template> templates { get; set; }
 
     public virtual DbSet<user> users { get; set; }
@@ -284,6 +286,17 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.upload_date).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.user).WithMany(p => p.resumes).HasConstraintName("fk_resume_user");
+        });
+
+        modelBuilder.Entity<resume_feedback_history>(entity =>
+        {
+            entity.HasKey(e => e.feedback_id).HasName("PRIMARY");
+
+            entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.resume).WithMany(p => p.resume_feedback_histories).HasConstraintName("fk_feedback_resume");
+
+            entity.HasOne(d => d.user).WithMany(p => p.resume_feedback_histories).HasConstraintName("fk_feedback_user");
         });
 
         modelBuilder.Entity<template>(entity =>

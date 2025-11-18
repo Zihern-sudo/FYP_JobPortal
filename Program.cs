@@ -3,8 +3,6 @@ using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
 using JobPortal.Areas.Shared.Models.Extensions; // AddAreaRoleGuards()
 using QuestPDF.Infrastructure;
-using OpenAI;
-
 
 // AI namespaces
 using JobPortal.Areas.Shared.Options;
@@ -37,7 +35,7 @@ builder.Services
     .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "OpenAI:ApiKey is required.")
     .ValidateOnStart();
 
-builder.Services.AddHttpClient<IOpenAIClient, IOpenAIClient>();
+builder.Services.AddHttpClient<IOpenAIClient, OpenAIClient>();
 builder.Services.AddScoped<ILanguageService, LanguageService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<AiOrchestrator>();
@@ -49,8 +47,6 @@ builder.Services.AddScoped<AiOrchestrator>();
 builder.Services.AddScoped<OpenAIResumeParser>();
 
 builder.Services.AddScoped<JobPortal.Services.ChatbotService>();
-
-
 
 var app = builder.Build();
 

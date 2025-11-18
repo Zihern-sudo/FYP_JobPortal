@@ -33,6 +33,7 @@ out/
 *.pubxml.user
 appsettings.Development.json
 appsettings.*.local.json
+appsettings.json
 .env
 
 # Logs & test results

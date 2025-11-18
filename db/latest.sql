@@ -830,3 +830,22 @@ DROP PROCEDURE IF EXISTS run_ddls;
 DROP TEMPORARY TABLE IF EXISTS _ddl_queue;
 
 /* ------------------------------------------------------------------------------------------- */
+
+/* 8:12pm 18/11/2025 eason */
+
+CREATE TABLE `resume_feedback_history` (
+    `feedback_id` INT NOT NULL AUTO_INCREMENT,
+    `resume_id` INT NOT NULL,
+    `user_id` INT NOT NULL,
+    `feedback_text` TEXT NOT NULL,
+    `score` DECIMAL(5,2) DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`feedback_id`),
+    KEY `ix_feedback_resume` (`resume_id`),
+    KEY `ix_feedback_user` (`user_id`),
+    CONSTRAINT `fk_feedback_resume` FOREIGN KEY (`resume_id`)
+        REFERENCES `resume` (`resume_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_feedback_user` FOREIGN KEY (`user_id`)
+        REFERENCES `user` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/* ---- */

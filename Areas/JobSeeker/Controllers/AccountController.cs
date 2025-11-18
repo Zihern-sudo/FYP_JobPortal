@@ -9,6 +9,7 @@ using System.Net.Mime;
 using JobPortal.Services;
 using Microsoft.AspNetCore.Identity;
 using JobPortal.Areas.JobSeeker.Models;
+using System.Text.RegularExpressions;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -52,6 +53,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return View("Login");
             }
 
+            // Validate email format
+            if (!Regex.IsMatch(email, @"^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$"))
+            {
+                TempData["Message"] = "Please enter a valid email address.";
+                ViewBag.Email = email;
+                return View();
+            }
+
             // ✅ Status checks first
             if (user.user_status == "Unverified")
             {
@@ -64,6 +73,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 TempData["Message"] = "Your account is inactive. Please contact support.";
                 return View("Login");
             }
+            if (user.user_status == "Suspended")
+            {
+                TempData["Message"] = "Your account has been suspended. Please contact support for assistance.";
+                return View("Login");
+            }
+
 
             // ✅ Restrict main login page to JobSeekers only
             if (user.user_role != "JobSeeker")
@@ -136,6 +151,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpPost]
         public async Task<IActionResult> Register(string firstName, string lastName, string email, string password, string confirmPassword, RegisterViewModel model)
         {
+            if (!ModelState.IsValid)
+            {
+                // TempData message for SweetAlert
+                TempData["Message"] = string.Join("\\n", ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage));
+                ViewBag.ActiveTab = "register"; // activate the register tab
+                return View("Login", model);    // render the Login view (which contains both tabs)
+            }
+
             // Basic required field check
             if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(email) ||
                 string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword))
@@ -281,6 +306,26 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 ViewBag.Email = email;
                 return View();
             }
+
+            // ✅ Status checks
+            if (user.user_status == "Unverified")
+            {
+                TempData["Message"] = "Please verify your email before logging in.";
+                return View("StaffLogin");
+            }
+
+            if (user.user_status == "Inactive")
+            {
+                TempData["Message"] = "Your account is inactive. Please contact support.";
+                return View("StaffLogin");
+            }
+
+            if (user.user_status == "Suspended")
+            {
+                TempData["Message"] = "Your account has been suspended. Please contact support for assistance.";
+                return View("StaffLogin");
+            }
+
 
             var hasher = new PasswordHasher<object>();
             var result = hasher.VerifyHashedPassword(null, user.password_hash, password);

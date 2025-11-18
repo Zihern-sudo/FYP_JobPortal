@@ -24,13 +24,16 @@
     <div class="dashboard-container">
 
         <!-- ☰ Sidebar Toggle Button -->
-        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>   
 
         <!-- === Sidebar === -->
         <aside class="sidebar" id="sidebar">
+            <!-- Joboria Logo / Text -->
+            <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Index"
+                class="sidebar-brand d-flex align-items-center justify-content-center pt-5 py-4 mb-4 text-center text-decoration-none">
+                <h1 class="m-0 fw-bold sidebar-logo-text">Joboria</h1>
+            </a>
             <vc:user-sidebar></vc:user-sidebar>
-
-
 
             <nav class="nav-menu">
                 <a asp-controller="Dashboard" asp-action="Index"
@@ -91,7 +94,7 @@
     </div>
 
     <footer class="text-center py-3">
-        &copy; 2025 JobPortal System. All rights reserved.
+        &copy; 2025 Joboria. All rights reserved.
     </footer>
 
     @RenderSection("Scripts", required: false)

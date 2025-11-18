@@ -119,9 +119,71 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // ============================
             double overallScore = Math.Round((eduScore + expScore + skillScore + certScore) / 4.0, 2);
 
-            // RETURN
-            // ======== AI FEEDBACK (Gemini) ========
-            var aiFeedback = await _chatbot.GenerateResumeFeedbackAI(extractedText, overallScore);
+            // ✅ Get session once and parse
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return Json(new { success = false, message = "User session expired." });
+
+            int userId = int.Parse(userIdStr); // use this for everything below
+
+            string aiFeedback = "";
+
+            try
+            {
+                // ======== AI FEEDBACK (Gemini) ========
+                aiFeedback = await _chatbot.GenerateResumeFeedbackAI(extractedText, overallScore);
+
+                // ===============================
+                // 📌 Save uploaded resume to folder
+                // ===============================
+                var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "feedback");
+                Directory.CreateDirectory(folderPath);
+
+                // Use a GUID to avoid file name conflicts
+                var fileName = $"{Guid.NewGuid()}_resume.pdf"; // or get original file extension
+                var filePath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await resumeFile.CopyToAsync(stream);
+                }
+
+                // ===============================
+                // 📌 Create new resume record
+                // ===============================
+                var newResume = new resume
+                {
+                    user_id = userId,
+                    file_path = fileName,
+                    upload_date = DateTime.Now
+                };
+
+                _db.resumes.Add(newResume);
+                await _db.SaveChangesAsync();
+
+                // ===============================
+                // 📌 Save feedback history linked to new resume
+                // ===============================
+                var history = new resume_feedback_history
+                {
+                    resume_id = newResume.resume_id,
+                    user_id = userId,
+                    feedback_text = aiFeedback,
+                    score = (decimal)overallScore,
+                    created_at = DateTime.Now
+                };
+
+                _db.resume_feedback_histories.Add(history);
+                await _db.SaveChangesAsync();
+            }
+            catch (Google.GenAI.ServerError)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "The server is currently busy. Please try again later."
+                });
+            }
 
             // RETURN BOTH SCORE + AI FEEDBACK
             return Json(new
@@ -132,8 +194,46 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 skills = $"{skillScore}/10",
                 certifications = $"{certScore}/10",
                 overallScore = overallScore,
-                aiFeedback = aiFeedback   // << NEW
+                aiFeedback = aiFeedback
             });
+
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "The server is currently busy. Please try again later."
+                });
+            }
+
+            return Json(new
+            {
+                success = true,
+                education = $"{eduScore}/10",
+                experience = $"{expScore}/10",
+                skills = $"{skillScore}/10",
+                certifications = $"{certScore}/10",
+                overallScore = overallScore,
+                aiFeedback = aiFeedback
+            });
+        }
+
+        public async Task<IActionResult> FeedbackHistory()
+        {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
+
+            // Use userId directly; no need for f.resume.user_id
+            var feedbackList = await _db.resume_feedback_histories
+                .Where(f => f.user_id == userId)
+                .OrderByDescending(f => f.created_at)
+                .ToListAsync();
+
+            ViewBag.FileName = "All Resumes";
+
+            return View(feedbackList);
         }
     }
 }
