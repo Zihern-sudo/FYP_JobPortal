@@ -194,9 +194,6 @@ public sealed class PdfReportViewModel
     public DateTime ReportDate { get; init; } = DateTime.UtcNow;
 }
 
-
-
-
 public sealed class AdminNotificationSettingsViewModel
 {
     [Display(Name = "New application received")]
@@ -208,7 +205,6 @@ public sealed class AdminNotificationSettingsViewModel
     [Display(Name = "Message with flagged terms")]
     public bool NotifyOnFlaggedMessage { get; set; }
 }
-
 
 // --- Companies (NEW) ---
 public sealed class CompanyRow
@@ -296,7 +292,6 @@ public sealed class RecruiterPreviewViewModel
     public bool HasCompany => CompanyId.HasValue;
 }
 
-
 // ---- Admin Settings VMs (NEW) ----
 public sealed class BrandingSettingsViewModel
 {
@@ -315,7 +310,6 @@ public sealed class LegalSettingsViewModel
     [Display(Name = "Privacy Policy")]
     public string Privacy { get; set; } = string.Empty;
 }
-
 
 // Compact item used in dropdown & list
 public sealed class NotificationListItemViewModel
@@ -338,4 +332,58 @@ public sealed class NotificationsIndexViewModel
     public string Filter { get; init; } = "all";      // "all" | "unread"
     public string? Type { get; init; }                // exact type match
     public List<string> AvailableTypes { get; init; } = new(); // for dropdown
+}
+
+/* ===========================
+ * ======== AI VMs ===========
+ * ===========================
+ */
+
+// Templates list item
+public sealed class AiTemplate
+{
+    [Required] public string Name { get; set; } = string.Empty;
+    public string RoleExample { get; set; } = "—";
+    public DateTime Updated { get; set; } = DateTime.Now;
+    public int JobId { get; set; }
+    public string Requirements { get; set; } = string.Empty;
+}
+
+// Admin Dry-Run form/result
+public sealed class AiDryRunVM
+{
+    [Required] public string JobTitle { get; set; } = "Backend Developer";
+    [Required] public string JobRequirements { get; set; } = string.Empty; // newline-separated
+    [Required] public string ResumeJson { get; set; } = "{}";
+    public byte? Score { get; set; }
+    public string? Explanation { get; set; }
+    public string? Error { get; set; }
+}
+
+// Health page VM
+public sealed class AiHealthVM
+{
+    // Config
+    public string ModelText { get; set; } = string.Empty;
+    public string ModelEmbed { get; set; } = string.Empty;
+
+    // Text model
+    public bool TextOk { get; set; }
+    public long TextLatencyMs { get; set; }
+    public string TextMessage { get; set; } = string.Empty;
+
+    // NEW: raw HTTP/status/debug for text model
+    public int? TextStatus { get; set; }           // e.g., 200
+    public string? TextRequestId { get; set; }     // e.g., req_abc123
+
+    // Embedding model
+    public bool EmbedOk { get; set; }
+    public long EmbedLatencyMs { get; set; }
+    public string EmbedMessage { get; set; } = string.Empty;
+
+    // NEW: raw HTTP/status/debug for embedding model
+    public int? EmbedStatus { get; set; }          // e.g., 200
+    public string? EmbedRequestId { get; set; }    // e.g., req_def456
+
+    public bool OverallOk { get; set; }
 }

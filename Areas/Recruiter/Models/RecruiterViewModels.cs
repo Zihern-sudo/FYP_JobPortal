@@ -14,6 +14,13 @@ namespace JobPortal.Areas.Recruiter.Models
             "Full Time", "Part Time", "Contract", "Temporary", "Internship"
         };
 
+        // New domain categories for job_category
+        public static readonly string[] JobCategories = new[]
+ {
+    "Marketing", "Customer Service", "Information Technology", "Accounting", "Finance"
+};
+
+
         public static readonly string[] WorkModes = new[]
         {
             "On-site", "Hybrid", "Remote"
@@ -43,11 +50,14 @@ namespace JobPortal.Areas.Recruiter.Models
         [DataType(DataType.Currency)]
         public decimal? salary_max { get; set; }
 
-        [Required, Display(Name = "Job Category")]
-        public string job_type { get; set; } = "Full Time"; // DB default is 'Full Time' :contentReference[oaicite:2]{index=2}
+        [Required, Display(Name = "Employment Type")]
+        public string job_type { get; set; } = "Full Time";
 
         [Required, Display(Name = "Work Mode")]
-        public string work_mode { get; set; } = "On-site"; // DB default is 'On-site' :contentReference[oaicite:3]{index=3}
+        public string work_mode { get; set; } = "On-site";
+
+        [Required, Display(Name = "Job Category")]
+        public string job_category { get; set; } = "Marketing";  // <-- NEW
 
         [DataType(DataType.Date), Display(Name = "Application Deadline")]
         public DateTime? expiry_date { get; set; }
@@ -55,22 +65,29 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Status")]
         public JobStatus job_status { get; set; } = JobStatus.Open;
 
-        // Cross-field validation
         public IEnumerable<ValidationResult> Validate(ValidationContext context)
         {
             if (salary_min.HasValue && salary_max.HasValue && salary_min.Value > salary_max.Value)
                 yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
 
             if (!JobCatalog.Categories.Contains(job_type))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_type) });
+                yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(job_type) });
 
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
+
+            if (!JobCatalog.JobCategories.Contains(job_category))
+                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+
+            if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
+                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
         }
     }
 
+
     public class JobEditVm : IValidatableObject
     {
+
         [HiddenInput]
         public int job_listing_id { get; set; }
 
@@ -98,6 +115,9 @@ namespace JobPortal.Areas.Recruiter.Models
         [Required, Display(Name = "Work Mode")]
         public string work_mode { get; set; } = "On-site";
 
+        [Required, Display(Name = "Job Category")]
+        public string job_category { get; set; } = "Marketing";
+
         public DateTime? date_posted { get; set; }
 
         [DataType(DataType.Date), Display(Name = "Application Deadline")]
@@ -113,6 +133,12 @@ namespace JobPortal.Areas.Recruiter.Models
 
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
+
+            if (!JobCatalog.JobCategories.Contains(job_category))
+                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+
+            if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
+                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
         }
     }
 
@@ -207,6 +233,7 @@ namespace JobPortal.Areas.Recruiter.Models
         [Required, Display(Name = "Template Name")]
         public string Name { get; set; } = "";
 
+        // Match job listing fields
         [Required, Display(Name = "Job Title")]
         public string Title { get; set; } = "";
 
@@ -219,10 +246,27 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Nice-to-have Requirements")]
         public string? NiceToHaves { get; set; }
 
-        [Display(Name = "Status")]
-        public JobStatus Status { get; set; } = JobStatus.Open;
-    }
+        [Required, Display(Name = "Employment Type")]
+        public string JobType { get; set; } = "Full Time";
 
+        [Required, Display(Name = "Work Mode")]
+        public string WorkMode { get; set; } = "On-site";
+
+        [Required, Display(Name = "Job Category")]
+        public string JobCategory { get; set; } = "Marketing";
+
+        [Display(Name = "Salary Min"), DataType(DataType.Currency)]
+        public decimal? SalaryMin { get; set; }
+
+        [Display(Name = "Salary Max"), DataType(DataType.Currency)]
+        public decimal? SalaryMax { get; set; }
+
+        [Display(Name = "Application Deadline"), DataType(DataType.Date)]
+        public DateTime? ExpiryDate { get; set; }
+
+        // Template metadata (kept)
+        public string Status { get; set; } = "Active";
+    }
     public record TemplateRowVM(int Id, string Name, string Snippet);
 
     public record TemplateModalVM(

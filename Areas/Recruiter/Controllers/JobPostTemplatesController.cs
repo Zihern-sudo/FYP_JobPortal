@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http; // session
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
@@ -23,20 +23,28 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private const int RECENT_LIMIT = 5;
         private const string TEMP_APPLY_KEY = "tpl_apply_payload";
 
-        // MODIFIED: Added pagination constants
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
+        // EXTENDED: carry all job-listing aligned fields
         private sealed class JobTplDto
         {
             public string? title { get; set; }
             public string? description { get; set; }
             public string? must { get; set; }
             public string? nice { get; set; }
+
+            public string? job_type { get; set; }              // Employment Type
+            public string? work_mode { get; set; }
+            public string? job_category { get; set; }
+            public decimal? salary_min { get; set; }
+            public decimal? salary_max { get; set; }
+            public DateTime? expiry_date { get; set; }
+
+            // kept for backward-compat in stored templates; not shown/edited in UI
             public string? status { get; set; }
         }
 
-        // ===== RECENTS (session) =====
         private string RecentKey(int recruiterId) => $"recent_job_tpl_ids_{recruiterId}";
 
         private List<int> GetRecentIds(int recruiterId)
@@ -57,7 +65,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             HttpContext.Session.SetString(RecentKey(recruiterId), string.Join(",", list));
         }
 
-        // ===== MODAL (with Recents) =====
         [HttpGet]
         public async Task<IActionResult> Modal(int jobId, string? q = null)
         {
@@ -70,13 +77,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
                             && t.template_status == "Active"
                             && t.template_name.StartsWith(JOB_PREFIX));
 
-            // Recents
             var recentIds = GetRecentIds(recruiterId);
             var recentRows = recentIds.Count == 0
                 ? new List<template>()
                 : await baseQuery.Where(t => recentIds.Contains(t.template_id)).ToListAsync();
 
-            // keep original recency order
             var recents = recentRows
                 .OrderBy(t => recentIds.IndexOf(t.template_id))
                 .Select(t => new TemplateRowVM(
@@ -85,7 +90,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     BuildSnippet(t.template_body)))
                 .ToList();
 
-            // Main list (filter, exclude recents)
             var qTrim = (q ?? "").Trim();
             var mainQuery = baseQuery;
             if (!string.IsNullOrEmpty(qTrim))
@@ -146,16 +150,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var dto = JsonSerializer.Deserialize<JobTplDto>(row.template_body ?? "{}") ?? new JobTplDto();
 
-            // Stash payload in TempData (safer than long querystrings)
             TempData[TEMP_APPLY_KEY] = JsonSerializer.Serialize(dto);
 
             if (jobId <= 0)
-            {
-                // Create NEW job from template
                 return RedirectToAction("Add", "Jobs", new { area = "Recruiter", fromTemplate = true });
-            }
 
-            // Apply to EXISTING job
             return RedirectToAction("Edit", "Jobs", new { area = "Recruiter", id = jobId, fromTemplate = true });
         }
 
@@ -175,9 +174,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Description = dto.description ?? "";
             ViewBag.Must = dto.must ?? "";
             ViewBag.Nice = dto.nice ?? "";
-            ViewBag.Status = dto.status ?? "Open";
 
-            // Show current job values when jobId is valid
+            // aligned fields
+            ViewBag.JobType = dto.job_type ?? "Full Time";
+            ViewBag.WorkMode = dto.work_mode ?? "On-site";
+            ViewBag.JobCategory = dto.job_category ?? "Marketing";
+            ViewBag.SalaryMin = dto.salary_min;
+            ViewBag.SalaryMax = dto.salary_max;
+            ViewBag.ExpiryDate = dto.expiry_date;
+
             if (jobId.HasValue && jobId.Value > 0)
             {
                 var job = await _db.job_listings.AsNoTracking()
@@ -188,7 +193,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     ViewBag.CurDescription = job.job_description ?? "";
                     ViewBag.CurMust = job.job_requirements ?? "";
                     ViewBag.CurNice = job.job_requirements_nice ?? "";
-                    ViewBag.CurStatus = job.job_status ?? "Open";
+                    ViewBag.CurJobType = job.job_type ?? "Full Time";
+                    ViewBag.CurWorkMode = job.work_mode ?? "On-site";
+                    ViewBag.CurJobCategory = job.job_category ?? "Marketing";
+                    ViewBag.CurSalaryMin = job.salary_min;
+                    ViewBag.CurSalaryMax = job.salary_max;
+                    ViewBag.CurExpiryDate = job.expiry_date;
                     ViewBag.JobId = jobId.Value;
                 }
                 else
@@ -210,7 +220,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             ViewData["Title"] = "Job Post Templates";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
 
@@ -219,7 +228,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                             && t.template_status == "Active"
                             && t.template_name.StartsWith(JOB_PREFIX));
 
-            // Apply search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -265,7 +273,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Query = q ?? string.Empty,
                 IsArchivedList = false,
                 IsJobPost = true,
-                ThreadId = jobId // Using ThreadId to store JobId
+                ThreadId = jobId
             };
 
             return View(vm);
@@ -277,7 +285,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
             ViewData["Title"] = "Archived Job Post Templates";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
 
@@ -286,7 +293,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                             && t.template_status == "Archived"
                             && t.template_name.StartsWith(JOB_PREFIX));
 
-            // Apply search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -332,7 +338,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Query = q ?? string.Empty,
                 IsArchivedList = true,
                 IsJobPost = true,
-                ThreadId = null // No JobId context in archived list
+                ThreadId = null
             };
 
             return View("Index", vm);
@@ -343,7 +349,12 @@ namespace JobPortal.Areas.Recruiter.Controllers
         {
             if (!this.TryGetUserId(out _, out var early)) return early!;
             ViewData["Title"] = "New Job Template";
-            return View(new JobTemplateFormVM());
+            return View(new JobTemplateFormVM
+            {
+                JobType = "Full Time",
+                WorkMode = "On-site",
+                JobCategory = "Marketing"
+            });
         }
 
         [HttpPost]
@@ -359,8 +370,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 description = vm.Description,
                 must = vm.MustHaves,
                 nice = vm.NiceToHaves,
-                status = vm.Status.ToString()
+
+                job_type = vm.JobType,
+                work_mode = vm.WorkMode,
+                job_category = vm.JobCategory,
+                salary_min = vm.SalaryMin,
+                salary_max = vm.SalaryMax,
+                expiry_date = vm.ExpiryDate,
+
+                status = null // hidden in UI
             };
+
             var row = new template
             {
                 user_id = recruiterId,
@@ -390,11 +410,18 @@ namespace JobPortal.Areas.Recruiter.Controllers
             {
                 TemplateId = row.template_id,
                 Name = row.template_name.Substring(JOB_PREFIX.Length),
+
                 Title = dto.title ?? "",
                 Description = dto.description,
                 MustHaves = dto.must,
                 NiceToHaves = dto.nice,
-                Status = Enum.TryParse<JobStatus>(dto.status ?? "", true, out var s) ? s : JobStatus.Open
+
+                JobType = dto.job_type ?? "Full Time",
+                WorkMode = dto.work_mode ?? "On-site",
+                JobCategory = dto.job_category ?? "Marketing",
+                SalaryMin = dto.salary_min,
+                SalaryMax = dto.salary_max,
+                ExpiryDate = dto.expiry_date
             };
 
             ViewData["Title"] = "Edit Job Template";
@@ -419,7 +446,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 description = vm.Description,
                 must = vm.MustHaves,
                 nice = vm.NiceToHaves,
-                status = vm.Status.ToString()
+
+                job_type = vm.JobType,
+                work_mode = vm.WorkMode,
+                job_category = vm.JobCategory,
+                salary_min = vm.SalaryMin,
+                salary_max = vm.SalaryMax,
+                expiry_date = vm.ExpiryDate,
+
+                status = null
             };
 
             row.template_name = JOB_PREFIX + vm.Name.Trim();
@@ -459,7 +494,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Archived));
         }
 
-        // Convenience: build a new job from a template via querystring (kept)
         [HttpGet]
         public async Task<IActionResult> Fill(int id)
         {
@@ -476,7 +510,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 description = dto.description,
                 must = dto.must,
                 nice = dto.nice,
-                status = dto.status
+                status = dto.status // ignored by UI; kept for compat
             });
         }
     }

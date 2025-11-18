@@ -6,6 +6,11 @@
   string[] cols = new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" };
   var by = cols.ToDictionary(c => c, c => cands.Where(x => string.Equals(x.Stage ?? "", c,
   StringComparison.OrdinalIgnoreCase)).ToList());
+
+  // NEW: requirements (if controller populated ViewBag.Reqs)
+  var reqs = ViewBag.Reqs as string[] ?? Array.Empty<string>();
+
+  // NOTE: We no longer disable "AI Evaluate All" even if there are AI-Screened cards.
 }
 
 @if (ViewBag.DebugAppsCount != null)
@@ -18,14 +23,87 @@
     background: #f1f5ff;
     border-color: #9ec5fe;
   }
+
+  .btn-xxs {
+    padding: 2px 6px;
+    font-size: .72rem;
+  }
+
+  /* ===== Progress overlay (AI evaluation) ===== */
+  #aiProgressOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, .7);
+    backdrop-filter: blur(2px);
+    display: none;
+    z-index: 2000;
+  }
+
+  #aiProgressOverlay .box {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: .75rem;
+    padding: 1rem 1.25rem;
+    min-width: 260px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .08);
+  }
 </style>
 
 <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
   &leftarrow; Back to Jobs
 </a>
 
-<div class="mb-2">
+<div class="mb-2 d-flex align-items-center gap-2">
   <span class="chip">@job.Title</span> • <span class="chip">@job.Location</span>
+
+  @* ==== AI: Evaluate All candidates for this job + Scoring Rules ==== *@
+  @if (job.Id > 0)
+  {
+    <form id="evalAllForm" method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateJob"
+      class="ms-2">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="jobId" value="@job.Id" />
+      <div class="dropdown d-inline">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          Scoring Rules
+        </button>
+        <div class="dropdown-menu p-3" style="min-width:320px; max-height:300px; overflow:auto;">
+          <div class="small text-muted mb-2">Tick items to count them <strong>x2</strong> during scoring.</div>
+          @if (reqs.Length == 0)
+          {
+            <div class="text-muted small">No requirements found.</div>
+          }
+          else
+          {
+            foreach (var r in reqs)
+            {
+              var id = "w_" + r.GetHashCode();
+              <div class="form-check">
+                <input class="form-check-input weight2" type="checkbox" id="@id" name="weight2" value="@r">
+                <label class="form-check-label" for="@id">@r</label>
+              </div>
+            }
+          }
+          <div class="d-flex justify-content-end mt-2">
+            <button type="button" id="btnSaveRules" class="btn btn-sm btn-outline-secondary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      @* Always enabled now *@
+      <button type="submit" class="btn btn-sm btn-outline-primary" title="Run AI scoring for all applicants">
+        AI Evaluate All
+      </button>
+
+      <button type="button" id="btnRescore" class="btn btn-sm btn-primary" title="Re-score using saved rules">
+        Re-score
+      </button>
+    </form>
+  }
 </div>
 
 @* Needed by JS when posting *@
@@ -39,9 +117,27 @@
       @foreach (var x in by[col])
       {
         <div class="candidate-card" draggable="true" data-id="@x.Id" data-stage="@col">
-          <div class="d-flex justify-content-between">
+          <div class="d-flex justify-content-between align-items-center">
             <div>@x.Name</div>
-            <div class="score">@x.Score</div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="score">@x.Score</div>
+
+              @* ==== AI: Evaluate this single candidate; inherits weights from Scoring Rules ==== *@
+              <form method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne"
+                class="m-0 p-0 eval-one-form">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="applicationId" value="@x.Id" />
+                <button type="submit" class="btn btn-xxs btn-outline-secondary" title="AI Evaluate this candidate">
+                  AI
+                </button>
+              </form>
+
+              @* ==== Manual rank note (up/down) ==== *@
+              <button type="button" class="btn btn-xxs btn-outline-dark" title="Boost (note required)"
+                onclick="openRank('@x.Id','up')">▲</button>
+              <button type="button" class="btn btn-xxs btn-outline-dark" title="Demote (note required)"
+                onclick="openRank('@x.Id','down')">▼</button>
+            </div>
           </div>
           <div class="small text-muted">@x.AppliedAt</div>
           <div class="mt-1">
@@ -57,9 +153,8 @@
           <div class="mt-2 d-flex gap-2">
             <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail"
               asp-route-id="@x.Id">Open</a>
-            <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Screening" asp-action="Parsing"
-              asp-route-candidateId="@x.Id">Parse</a>
           </div>
+
         </div>
       }
     </div>
@@ -91,11 +186,7 @@
 
         <div class="modal-header">
           <h5 class="modal-title">Send Offer</h5>
-          <!-- Move the close button INTO the header and pin it top-right -->
           <button type="button" class="btn-close" aria-label="Close" onclick="OfferUI.close()"></button>
-          <!-- If you prefer the × icon instead, use:
-          <button type="button" class="close" aria-label="Close" onclick="OfferUI.close()">&times;</button>
-          -->
         </div>
 
         <div class="modal-body">
@@ -140,24 +231,195 @@
   </div>
 </div>
 
+@* --- Rank Note Modal (wired for AJAX to Jobs/OverrideRank) --- *@
+<div class="modal fade" id="rankModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      @* keep asp-route (unchanged), JS intercepts submit to call Jobs/OverrideRank *@
+      <form id="rankForm" method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="RankNote">
+        @Html.AntiForgeryToken()
+        <input type="hidden" id="rankAppId" name="applicationId" />
+        <input type="hidden" id="rankDir" name="direction" />
+        <div class="modal-header">
+          <h5 class="modal-title">Add ranking note</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <textarea class="form-control" id="rankReason" name="reason" rows="3" placeholder="e.g. Good culture fit"
+            required></textarea>
+          <small class="text-muted">This note is saved to the candidate’s thread.</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-link" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+@* ===== AI progress overlay ===== *@
+<div id="aiProgressOverlay" role="dialog" aria-live="polite" aria-busy="true">
+  <div class="box">
+    <div class="d-flex align-items-center gap-2">
+      <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+      <div><strong>AI evaluation in progress…</strong></div>
+    </div>
+    <div class="small text-muted mt-2">Please keep this tab open. This may take a few seconds.</div>
+  </div>
+</div>
 
 @section Scripts {
   <script>
     (function () {
-      // IMPORTANT: only ONE Scripts section; removed the earlier basic DnD block to avoid conflicts.
-
       function antiForgery() {
         const input = document.querySelector('input[name="__RequestVerificationToken"]');
         return input ? input.value : '';
       }
 
+      function showOverlay() { const el = document.getElementById('aiProgressOverlay'); if (el) el.style.display = 'block'; }
+      function hideOverlay() { const el = document.getElementById('aiProgressOverlay'); if (el) el.style.display = 'none'; }
+
+      function toast(msg, isError) {
+        if (window.toastr) { isError ? toastr.error(msg) : toastr.success(msg); return; }
+        console[isError ? 'error' : 'log'](msg);
+      }
+
+      // ===== Scoring Rules: auto-save (debounced) + Save button =====
+      const jobId = document.getElementById('jobId')?.value || '0';
+      const ruleBoxes = Array.from(document.querySelectorAll('#evalAllForm input.weight2'));
+      let saveTimer = null;
+
+      async function saveRules(explicitClick) {
+        const payload = new URLSearchParams();
+        ruleBoxes.filter(b => b.checked).forEach(b => payload.append('weight2', b.value));
+        const res = await fetch(`@Url.Action("ScoringRules", "Jobs", new { area = "Recruiter" })/${jobId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'RequestVerificationToken': antiForgery()
+          },
+          body: payload.toString()
+        });
+        const json = await res.json().catch(() => ({}));
+        if (json && json.ok) {
+          if (explicitClick) toast('Scoring Rules saved.');
+        } else if (explicitClick) {
+          toast(json?.error || 'Failed to save rules', true);
+        }
+      }
+
+      ruleBoxes.forEach(b => {
+        b.addEventListener('change', function () {
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(saveRules, 500);
+        });
+      });
+
+      document.getElementById('btnSaveRules')?.addEventListener('click', function () { saveRules(true); });
+
+      // ===== Evaluate All: show overlay during submit =====
+      const evalForm = document.getElementById('evalAllForm');
+      if (evalForm) {
+        evalForm.addEventListener('submit', function () {
+          // ensure single-candidate forms inherit latest checks
+          document.querySelectorAll('.eval-one-form').forEach(function (f) {
+            f.querySelectorAll('input[name="weight2"]').forEach(x => x.remove());
+            ruleBoxes.filter(b => b.checked).forEach(function (src) {
+              const h = document.createElement('input');
+              h.type = 'hidden'; h.name = 'weight2'; h.value = src.value;
+              f.appendChild(h);
+            });
+          });
+          showOverlay();
+        });
+      }
+
+      // ===== Re-score: uses saved rules =====
+      const btnRescore = document.getElementById('btnRescore');
+      if (btnRescore) {
+        btnRescore.addEventListener('click', async function () {
+          showOverlay();
+          try {
+            const res = await fetch(`@Url.Action("ReScore", "Jobs", new { area = "Recruiter" })/${jobId}`, {
+              method: 'POST',
+              headers: { 'RequestVerificationToken': antiForgery() }
+            });
+            const json = await res.json();
+            if (!json.ok) { hideOverlay(); toast(json.error || 'Failed to load saved rules', true); return; }
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `@Url.Action("EvaluateJob", "AiEvaluation", new { area = "Recruiter" })`;
+            const tok = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+            const t = document.createElement('input'); t.type = 'hidden'; t.name = '__RequestVerificationToken'; t.value = tok; form.appendChild(t);
+            const j = document.createElement('input'); j.type = 'hidden'; j.name = 'jobId'; j.value = jobId; form.appendChild(j);
+            (json.weight2 || []).forEach(function (w) { const h = document.createElement('input'); h.type = 'hidden'; h.name = 'weight2'; h.value = w; form.appendChild(h); });
+            document.body.appendChild(form);
+            form.submit();
+          } catch (e) {
+            hideOverlay();
+            toast('Re-score failed.', true);
+          }
+        });
+      }
+
+      // ===== Manual Ranking Override (AJAX) =====
+      window.openRank = function (appId, dir) {
+        document.getElementById('rankAppId').value = appId;
+        document.getElementById('rankDir').value = dir;
+        document.getElementById('rankReason').value = '';
+        const m = new bootstrap.Modal(document.getElementById('rankModal'));
+        m.show();
+      };
+
+      document.getElementById('rankForm')?.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const appId = document.getElementById('rankAppId').value;
+        const dir = document.getElementById('rankDir').value;
+        const reason = document.getElementById('rankReason').value.trim();
+        const jobId = document.getElementById('jobId').value;
+        if (!reason) { toast('Reason is required.', true); return; }
+
+        const payload = new URLSearchParams();
+        payload.append('id', jobId);
+        payload.append('applicationId', appId);
+        payload.append('direction', dir);
+        payload.append('reason', reason);
+
+        try {
+          const res = await fetch(`@Url.Action("OverrideRank", "Jobs", new { area = "Recruiter" })/${jobId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'RequestVerificationToken': antiForgery()
+            },
+            body: payload.toString()
+          });
+          const json = await res.json();
+          if (!json.ok) { toast(json.error || 'Failed to update ranking', true); return; }
+
+          const card = document.querySelector(`.candidate-card[data-id="${appId}"]`);
+          if (card) {
+            const col = card.closest('.kanban-col');
+            const siblings = Array.from(col.querySelectorAll('.candidate-card'));
+            const idx = siblings.indexOf(card);
+            if (dir === 'up' && idx > 0) col.insertBefore(card, siblings[idx - 1]);
+            else if (dir === 'down' && idx < siblings.length - 1) col.insertBefore(siblings[idx + 1], card);
+          }
+
+          toast('Ranking updated…');
+          bootstrap.Modal.getInstance(document.getElementById('rankModal'))?.hide();
+        } catch (e) {
+          toast('Failed to update ranking', true);
+        }
+      });
+
+      // ===== Drag & drop (existing) =====
       const stages = ["AI-Screened", "Shortlisted", "Interview", "Offer"];
       const nextStage = { "AI-Screened": "Shortlisted", "Shortlisted": "Interview", "Interview": "Offer" };
 
-      // Ensure drag works and cards carry a stage
       document.querySelectorAll('.candidate-card').forEach(card => {
         card.addEventListener('dragstart', e => {
-          // If missing, infer from its current column
           if (!card.dataset.stage) {
             const col = card.closest('.kanban-col');
             if (col) card.dataset.stage = (col.dataset.stage || '').trim();
@@ -167,7 +429,6 @@
         });
       });
 
-      // Attach drop listeners to .kanban-col (not .kanban-column)
       document.querySelectorAll('.kanban-col').forEach(col => {
         col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drop-hover'); });
         col.addEventListener('dragleave', () => col.classList.remove('drop-hover'));
@@ -180,15 +441,13 @@
         column.classList.remove('drop-hover');
 
         const toStage = (column.dataset.stage || '').trim();
-        if (!stages.includes(toStage)) { return; } // ignore New/Hired-Rejected for now
+        if (!stages.includes(toStage)) { return; }
 
         const appId = e.dataTransfer.getData('text/plain');
         const card = document.querySelector(`.candidate-card[data-id="${appId}"]`);
         if (!card) return;
 
         const fromStage = (card.dataset.stage || '').trim();
-
-        // Enforce single-step forward
         if (!nextStage[fromStage] || nextStage[fromStage] !== toStage) {
           toast(`Invalid move: ${fromStage || 'Unknown'} → ${toStage}`, true);
           return;
@@ -211,7 +470,6 @@
           return;
         }
 
-        // AI-Screened -> Shortlisted, Shortlisted -> Interview
         const payload = new URLSearchParams();
         payload.append('jobId', jobId);
         payload.append('applicationId', appId);
@@ -233,8 +491,8 @@
       }
 
       function moveCard(card, column, toStage) {
-        column.appendChild(card);        // append directly; no .kanban-list exists
-        card.dataset.stage = toStage;    // keep card state in sync
+        column.appendChild(card);
+        card.dataset.stage = toStage;
       }
 
       // Simple Offer modal helper
@@ -247,7 +505,7 @@
           const handler = async function (ev) {
             ev.preventDefault();
             const fd = new FormData(form);
-            await onSubmit(fd);          // server creates offer & moves status
+            await onSubmit(fd);
             form.removeEventListener('submit', handler);
             OfferUI.close();
           };
@@ -256,11 +514,6 @@
         },
         close() { document.getElementById('offer-modal').style.display = 'none'; }
       };
-
-      function toast(msg, isError) {
-        if (window.toastr) { isError ? toastr.error(msg) : toastr.success(msg); return; }
-        console[isError ? 'error' : 'log'](msg);
-      }
     })();
   </script>
 }

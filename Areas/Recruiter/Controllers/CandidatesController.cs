@@ -1,3 +1,4 @@
+// File: Areas/Recruiter/Controllers/CandidatesController.cs
 using System;
 using System.Linq;
 using System.Text;
@@ -8,6 +9,7 @@ using JobPortal.Areas.Shared.Models;      // AppDbContext, entities
 using JobPortal.Areas.Recruiter.Models;   // CandidateItemVM, CandidateVM, NoteVM, OfferFormVM, CandidatesIndexVM
 using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -38,7 +40,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var skip = (page - 1) * pageSize;
 
-            // two-step projection to avoid provider ToString translation issues
+            // include job & user ids for score lookup
             var rows = await baseQuery
                 .OrderByDescending(a => a.date_updated)
                 .Skip(skip)
@@ -46,6 +48,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Select(a => new
                 {
                     a.application_id,
+                    a.user_id,
+                    a.job_listing_id,
                     CandidateName = (a.user.first_name + " " + a.user.last_name).Trim(),
                     a.application_status,
                     JobTitle = a.job_listing.job_title,
@@ -54,11 +58,45 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .AsNoTracking()
                 .ToListAsync();
 
+            // Build score map: for each application, get candidate's latest resume
+            // then the evaluation row for (that resume, that job).
+            var userIds = rows.Select(r => r.user_id).Distinct().ToList();
+            var jobIds = rows.Select(r => r.job_listing_id).Distinct().ToList();
+
+            // latest resume per user
+            var latestResumes = await _db.resumes
+                .Where(r => userIds.Contains(r.user_id))
+                .GroupBy(r => r.user_id)
+                .Select(g => g.OrderByDescending(x => x.upload_date)
+                              .Select(x => new { x.user_id, x.resume_id, x.upload_date })
+                              .FirstOrDefault()!)
+                .ToListAsync();
+
+            var latestResumeByUser = latestResumes
+                .Where(x => x != null)
+                .ToDictionary(x => x.user_id, x => x.resume_id);
+
+            // evaluations for those (resume, job) pairs
+            var evals = await _db.ai_resume_evaluations
+                .Where(ev => jobIds.Contains(ev.job_listing_id))
+                .ToListAsync();
+
+            // build map: (userId, jobId) -> score
+            var scoreMap = new Dictionary<(int userId, int jobId), int>();
+            foreach (var r in rows)
+            {
+                if (latestResumeByUser.TryGetValue(r.user_id, out var resumeId))
+                {
+                    var ev = evals.FirstOrDefault(e => e.resume_id == resumeId && e.job_listing_id == r.job_listing_id);
+                    if (ev != null) scoreMap[(r.user_id, r.job_listing_id)] = ev.match_score ?? 0;
+                }
+            }
+
             var items = rows.Select(r => new CandidateItemVM(
                 Id: r.application_id,
                 Name: string.IsNullOrWhiteSpace(r.CandidateName) ? $"User" : r.CandidateName,
                 Stage: r.application_status ?? "Submitted",
-                Score: 0, // hook for AI
+                Score: scoreMap.TryGetValue((r.user_id, r.job_listing_id), out var sc) ? sc : 0,
                 AppliedAt: r.date_updated.ToString("yyyy-MM-dd"),
                 LowConfidence: false,
                 Override: false
@@ -121,9 +159,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return File(bytes, "text/csv", fileName);
         }
 
-        // ---------------- existing actions below (unchanged except formatting) ----------------
+        // ---------------- existing actions below (unchanged) ----------------
 
-        // GET: /Recruiter/Candidates/Detail/{id}
         [HttpGet]
         public async Task<IActionResult> Detail(int id)
         {
@@ -135,6 +172,30 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync(a => a.application_id == id);
 
             if (app == null) return NotFound();
+
+            int? aiScore = null;
+            DateTime? aiWhen = null;
+            {
+                var latestResumeId = await _db.resumes
+                    .Where(r => r.user_id == app.user_id)
+                    .OrderByDescending(r => r.upload_date)
+                    .Select(r => (int?)r.resume_id)
+                    .FirstOrDefaultAsync();
+
+                if (latestResumeId.HasValue)
+                {
+                    var ev = await _db.ai_resume_evaluations
+                        .Where(e => e.resume_id == latestResumeId.Value && e.job_listing_id == app.job_listing_id)
+                        .Select(e => new { e.match_score, e.date_evaluated })
+                        .FirstOrDefaultAsync();
+
+                    if (ev != null)
+                    {
+                        aiScore = ev.match_score ?? 0;
+                        aiWhen = ev.date_evaluated;
+                    }
+                }
+            }
 
             var fullName = $"{app.user.first_name} {app.user.last_name}".Trim();
             var vm = new CandidateVM(
@@ -192,6 +253,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 ContractType = "Full-time"
             };
 
+            ViewBag.AiScore = aiScore;
+            ViewBag.AiEvaluated = aiWhen;
+
             return View();
         }
 
@@ -202,7 +266,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
             return SetStatus(id, "Shortlisted");
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public Task<IActionResult> Interview(int id)
@@ -210,7 +273,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
             return SetStatus(id, "Interview");
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public Task<IActionResult> Reject(int id)
@@ -218,7 +280,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (!this.TryGetUserId(out _, out var early)) return Task.FromResult(early!);
             return SetStatus(id, "Rejected");
         }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public Task<IActionResult> Hire(int id)
@@ -239,17 +300,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
             }
 
-            var app = await _db.job_applications
-                .FirstOrDefaultAsync(a => a.application_id == vm.ApplicationId);
-
+            var app = await _db.job_applications.FirstOrDefaultAsync(a => a.application_id == vm.ApplicationId);
             if (app == null) return NotFound();
 
             var token = Guid.NewGuid();
             var now = DateTime.Now;
 
-            DateOnly? startDate = vm.StartDate.HasValue
-                ? DateOnly.FromDateTime(vm.StartDate.Value)
-                : (DateOnly?)null;
+            DateOnly? startDate = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value) : (DateOnly?)null;
 
             await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -295,6 +352,166 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
         }
 
+        // ---------------- AI recruiter controls (NEW) ----------------
+
+        // View the latest parsed resume JSON for this application (so recruiters can inspect/fix it)
+        // GET: /Recruiter/Candidates/ParsedResume/123
+        [HttpGet]
+        public async Task<IActionResult> ParsedResume(int id)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == id);
+
+            if (app == null) return NotFound();
+            if (app.job_listing?.user_id != recruiterId) return Forbid();
+
+            // Latest resume for that user
+            var resume = await _db.resumes
+                .Where(r => r.user_id == app.user_id)
+                .OrderByDescending(r => r.upload_date)
+                .FirstOrDefaultAsync();
+
+            if (resume == null) return NotFound();
+
+            var parsed = await _db.ai_parsed_resumes
+                .Where(p => p.resume_id == resume.resume_id && (p.job_listing_id == app.job_listing_id || p.job_listing_id == null))
+                .OrderByDescending(p => p.updated_at)
+                .FirstOrDefaultAsync();
+
+            var payload = new
+            {
+                ok = parsed != null,
+                resumeId = resume.resume_id,
+                jobId = app.job_listing_id,
+                updatedAt = parsed?.updated_at,
+                json = parsed?.parsed_json ?? "{}"
+            };
+            return Json(payload);
+        }
+
+        // Save corrected parsed resume JSON
+        // POST: /Recruiter/Candidates/SaveParsedResume
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveParsedResume(int id, string json)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == id);
+
+            if (app == null) return NotFound();
+            if (app.job_listing?.user_id != recruiterId) return Forbid();
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                TempData["Message"] = "Parsed JSON is empty.";
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+
+            // Validate JSON
+            try { using var _ = JsonDocument.Parse(json); }
+            catch (Exception ex)
+            {
+                TempData["Message"] = "Invalid JSON: " + ex.Message;
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+
+            var resume = await _db.resumes
+                .Where(r => r.user_id == app.user_id)
+                .OrderByDescending(r => r.upload_date)
+                .FirstOrDefaultAsync();
+
+            if (resume == null)
+            {
+                TempData["Message"] = "No resume found for this candidate.";
+                return RedirectToAction(nameof(Detail), new { id });
+            }
+
+            var row = await _db.ai_parsed_resumes
+                .FirstOrDefaultAsync(p => p.resume_id == resume.resume_id && (p.job_listing_id == app.job_listing_id || p.job_listing_id == null));
+
+            if (row == null)
+            {
+                row = new ai_parsed_resume
+                {
+                    resume_id = resume.resume_id,
+                    user_id = app.user_id,
+                    job_listing_id = app.job_listing_id,
+                    parsed_json = json,
+                    updated_at = DateTime.Now
+                };
+                _db.ai_parsed_resumes.Add(row);
+            }
+            else
+            {
+                row.parsed_json = json;
+                row.updated_at = DateTime.Now;
+            }
+
+            // Leave an audit note
+            _db.job_seeker_notes.Add(new job_seeker_note
+            {
+                application_id = app.application_id,
+                job_recruiter_id = recruiterId,
+                job_seeker_id = app.user_id,
+                note_text = "[AI] Parsed resume corrected by recruiter.",
+                created_at = DateTime.Now
+            });
+
+            await _db.SaveChangesAsync();
+            TempData["Message"] = "Parsed resume saved.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
+        // Nudge a candidate up/down in ranking with a reason (audit)
+        // POST: /Recruiter/Candidates/NudgeRank
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> NudgeRank(int id, int direction, string reason)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == id);
+
+            if (app == null) return NotFound();
+            if (app.job_listing?.user_id != recruiterId) return Forbid();
+
+            var dir = Math.Sign(direction);
+            if (dir == 0) { TempData["Message"] = "No change applied."; return RedirectToAction(nameof(Detail), new { id }); }
+            if (string.IsNullOrWhiteSpace(reason)) { TempData["Message"] = "Please provide a short reason."; return RedirectToAction(nameof(Detail), new { id }); }
+
+            _db.ai_rank_overrides.Add(new ai_rank_override
+            {
+                application_id = app.application_id,
+                job_listing_id = app.job_listing_id,
+                user_id = recruiterId,
+                direction = (sbyte)dir,
+                reason = reason.Trim(),
+                created_at = DateTime.Now
+            });
+
+            // Keep an inline note for quick visibility
+            _db.job_seeker_notes.Add(new job_seeker_note
+            {
+                application_id = app.application_id,
+                job_recruiter_id = recruiterId,
+                job_seeker_id = app.user_id,
+                note_text = $"[AI] Manual rank nudge {(dir > 0 ? "↑ up" : "↓ down")}: {reason}".Trim(),
+                created_at = DateTime.Now
+            });
+
+            await _db.SaveChangesAsync();
+            TempData["Message"] = "Rank override recorded.";
+            return RedirectToAction(nameof(Detail), new { id });
+        }
+
         // ---------------- helpers ----------------
 
         private IQueryable<job_application> BuildQuery(int recruiterId, string? q, string? stage)
@@ -309,7 +526,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Include(a => a.job_listing)
                 .AsQueryable();
 
-            // MODIFIED: Per requirement, do not display "Hired" candidates on this list.
             apps = apps.Where(a => a.application_status != "Hired");
 
             if (!string.IsNullOrWhiteSpace(stage))
@@ -330,7 +546,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private static string Csv(string? s)
         {
             if (s == null) return "";
-            // why: minimal RFC4180 escaping
             var needsQuote = s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r');
             s = s.Replace("\"", "\"\"");
             return needsQuote ? $"\"{s}\"" : s;
@@ -338,12 +553,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         private async Task<IActionResult> SetStatus(int applicationId, string nextStatus)
         {
-            var app = await _db.job_applications
-                .FirstOrDefaultAsync(a => a.application_id == applicationId);
-
+            var app = await _db.job_applications.FirstOrDefaultAsync(a => a.application_id == applicationId);
             if (app == null) return NotFound();
 
-            // MODIFIED: Prevent Hired -> Shortlisted
             if (app.application_status == "Hired" && nextStatus == "Shortlisted")
             {
                 TempData["Message"] = "A Hired candidate cannot be moved back to Shortlisted.";
@@ -371,8 +583,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return RedirectToAction(nameof(Detail), new { id });
             }
 
-            var app = await _db.job_applications
-                .FirstOrDefaultAsync(a => a.application_id == id);
+            var app = await _db.job_applications.FirstOrDefaultAsync(a => a.application_id == id);
             if (app == null) return NotFound();
 
             var note = new job_seeker_note

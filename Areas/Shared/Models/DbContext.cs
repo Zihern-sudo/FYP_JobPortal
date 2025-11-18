@@ -13,9 +13,15 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<admin_log> admin_logs { get; set; }
 
+    public virtual DbSet<ai_parsed_resume> ai_parsed_resumes { get; set; }
+
+    public virtual DbSet<ai_rank_override> ai_rank_overrides { get; set; }
+
     public virtual DbSet<ai_resume_analysis> ai_resume_analyses { get; set; }
 
     public virtual DbSet<ai_resume_evaluation> ai_resume_evaluations { get; set; }
+
+    public virtual DbSet<ai_scoring_rule> ai_scoring_rules { get; set; }
 
     public virtual DbSet<company> companies { get; set; }
 
@@ -64,6 +70,34 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.user).WithMany(p => p.admin_logs).HasConstraintName("fk_adminlog_user");
         });
 
+        modelBuilder.Entity<ai_parsed_resume>(entity =>
+        {
+            entity.HasKey(e => e.parsed_id).HasName("PRIMARY");
+
+            entity.Property(e => e.updated_at)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.job_listing).WithMany(p => p.ai_parsed_resumes)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_parsed_job");
+
+            entity.HasOne(d => d.resume).WithMany(p => p.ai_parsed_resumes).HasConstraintName("fk_parsed_resume");
+
+            entity.HasOne(d => d.user).WithMany(p => p.ai_parsed_resumes).HasConstraintName("fk_parsed_user");
+        });
+
+        modelBuilder.Entity<ai_rank_override>(entity =>
+        {
+            entity.HasKey(e => e.override_id).HasName("PRIMARY");
+
+            entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.job_listing).WithMany(p => p.ai_rank_overrides).HasConstraintName("fk_override_job");
+
+            entity.HasOne(d => d.user).WithMany(p => p.ai_rank_overrides).HasConstraintName("fk_override_user");
+        });
+
         modelBuilder.Entity<ai_resume_analysis>(entity =>
         {
             entity.HasKey(e => e.analysis_id).HasName("PRIMARY");
@@ -75,9 +109,24 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.evaluation_id).HasName("PRIMARY");
 
+            entity.Property(e => e.date_evaluated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
             entity.HasOne(d => d.job_listing).WithMany(p => p.ai_resume_evaluations).HasConstraintName("fk_eval_job");
 
             entity.HasOne(d => d.resume).WithMany(p => p.ai_resume_evaluations).HasConstraintName("fk_eval_resume");
+        });
+
+        modelBuilder.Entity<ai_scoring_rule>(entity =>
+        {
+            entity.HasKey(e => e.rule_id).HasName("PRIMARY");
+
+            entity.Property(e => e.updated_at)
+                .ValueGeneratedOnAddOrUpdate()
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.job_listing).WithMany(p => p.ai_scoring_rules).HasConstraintName("fk_rules_job");
+
+            entity.HasOne(d => d.user).WithMany(p => p.ai_scoring_rules).HasConstraintName("fk_rules_user");
         });
 
         modelBuilder.Entity<company>(entity =>

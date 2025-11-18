@@ -1,0 +1,99 @@
+@* File: Areas/Admin/Views/AI/Health.cshtml *@
+@model JobPortal.Areas.Admin.Models.AiHealthVM
+@{
+    ViewData["Title"] = "AI Health";
+    string Badge(bool ok) => ok ? "bg-success" : "bg-danger";
+}
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span>Configuration</span>
+
+                @* Tiny toggle to reveal raw API details *@
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="showRawToggle">
+                    <label class="form-check-label small text-muted" for="showRawToggle">Show raw API details</label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">Text model: <span class="badge bg-secondary">@Model.ModelText</span></div>
+                <div>Embedding model: <span class="badge bg-secondary">@Model.ModelEmbed</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Overall</div>
+            <div class="card-body">
+                <span class="badge @(Badge(Model.OverallOk))">@((Model.OverallOk ? "Healthy" : "Issue"))</span>
+                <div class="text-muted mt-2">Both checks must be green.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Text Model Ping</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    Status:
+                    <span class="badge @(Badge(Model.TextOk))">@((Model.TextOk ? "OK" : "Error"))</span>
+                    <span class="ms-2 text-muted">~ @Model.TextLatencyMs ms</span>
+                </div>
+
+                @* Raw HTTP + request id (hidden until toggled) *@
+                <div class="raw-details d-none small text-muted mb-2">
+                    HTTP: @(Model.TextStatus?.ToString() ?? "—")
+                    @if (!string.IsNullOrWhiteSpace(Model.TextRequestId))
+                    {
+                        <span class="ms-2">req_id: @Model.TextRequestId</span>
+                    }
+                </div>
+
+                <pre class="mb-0" style="white-space:pre-wrap">@Model.TextMessage</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-semibold">Embedding Model Ping</div>
+            <div class="card-body">
+                <div class="mb-2">
+                    Status:
+                    <span class="badge @(Badge(Model.EmbedOk))">@((Model.EmbedOk ? "OK" : "Error"))</span>
+                    <span class="ms-2 text-muted">~ @Model.EmbedLatencyMs ms</span>
+                </div>
+
+                @* Raw HTTP + request id (hidden until toggled) *@
+                <div class="raw-details d-none small text-muted mb-2">
+                    HTTP: @(Model.EmbedStatus?.ToString() ?? "—")
+                    @if (!string.IsNullOrWhiteSpace(Model.EmbedRequestId))
+                    {
+                        <span class="ms-2">req_id: @Model.EmbedRequestId</span>
+                    }
+                </div>
+
+                <pre class="mb-0" style="white-space:pre-wrap">@Model.EmbedMessage</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const toggle = document.getElementById('showRawToggle');
+            const apply = () => {
+                document.querySelectorAll('.raw-details').forEach(el => {
+                    el.classList.toggle('d-none', !toggle.checked);
+                });
+            };
+            toggle?.addEventListener('change', apply);
+            apply(); // initial
+        })();
+    </script>
+}

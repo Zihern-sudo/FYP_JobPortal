@@ -222,6 +222,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_status = "Draft", // recruiter cannot open directly
                 job_type = vm.job_type,
                 work_mode = vm.work_mode,
+                job_category = vm.job_category,
                 user_id = recruiterId,
                 company_id = gate.CompanyId.Value,
                 date_posted = DateTime.Now,
@@ -257,6 +258,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 salary_max = job.salary_max,
                 job_type = job.job_type,
                 work_mode = job.work_mode,
+                job_category = job.job_category,
                 job_status = statusEnum,
                 date_posted = job.date_posted,
                 expiry_date = job.expiry_date
@@ -340,6 +342,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             job.salary_max = vm.salary_max;
             job.job_type = vm.job_type;
             job.work_mode = vm.work_mode;
+            job.job_category = vm.job_category;
             job.expiry_date = vm.expiry_date;
             job.job_status = "Draft";
 
@@ -417,7 +420,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Desc = job.job_description;
             ViewBag.SalaryMin = job.salary_min;
             ViewBag.SalaryMax = job.salary_max;
-            ViewBag.JobCategory = job.job_type;
+            ViewBag.JobCategory = job.job_category;
             ViewBag.WorkMode = job.work_mode;
             ViewBag.Company = job.company?.company_name;
             ViewBag.ExpiryDate = job.expiry_date;
@@ -460,6 +463,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .ToListAsync();
 
             var applicantIds = apps.Select(a => a.user_id).Distinct().ToList();
+            var appIds = apps.Select(a => a.application_id).ToList();
 
             var scoreLookup = await _db.ai_resume_evaluations
                 .Where(ev => ev.job_listing_id == id)
@@ -483,6 +487,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Distinct()
                 .ToListAsync();
 
+            // === NEW: latest manual override per application (for recency sort) ===
+            var latestOverrideAt = await _db.ai_rank_overrides
+                .Where(o => o.job_listing_id == id && appIds.Contains(o.application_id))
+                .GroupBy(o => o.application_id)
+                .Select(g => new { application_id = g.Key, at = g.Max(x => x.created_at) })
+                .ToDictionaryAsync(x => x.application_id, x => (DateTime?)x.at);
+
             string MapStage(string dbStatusRaw)
             {
                 var dbStatus = (dbStatusRaw ?? "").Trim();
@@ -496,18 +507,48 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return "New";
             }
 
-            var cands = apps.Select(a => new CandidateItemVM(
-                Id: a.application_id,
-                Name: (a.user != null ? $"{a.user.first_name} {a.user.last_name}" : $"User #{a.user_id}").Trim(),
-                Stage: MapStage(a.application_status),
-                Score: scoreLookup.TryGetValue(a.user_id, out var sc) ? sc : 0,
-                AppliedAt: a.date_updated.ToString("yyyy-MM-dd HH:mm"),
-                LowConfidence: false,
-                Override: formerIds.Contains(a.user_id)
-            )).ToList();
+            var composed = apps.Select(a => new
+            {
+                VM = new CandidateItemVM(
+                    Id: a.application_id,
+                    Name: (a.user != null ? $"{a.user.first_name} {a.user.last_name}" : $"User #{a.user_id}").Trim(),
+                    Stage: MapStage(a.application_status),
+                    Score: scoreLookup.TryGetValue(a.user_id, out var sc) ? sc : 0,
+                    AppliedAt: a.date_updated.ToString("yyyy-MM-dd HH:mm"),
+                    LowConfidence: false,
+                    Override: formerIds.Contains(a.user_id)
+                ),
+                OverrideAt = latestOverrideAt.TryGetValue(a.application_id, out var at) ? at : (DateTime?)null,
+                Score = scoreLookup.TryGetValue(a.user_id, out var sc2) ? sc2 : 0,
+                Applied = a.date_updated
+            });
+
+            // === NEW: sort by override recency → score → applied date ===
+            var cands = composed
+                .OrderByDescending(x => x.OverrideAt ?? DateTime.MinValue)
+                .ThenByDescending(x => x.Score)
+                .ThenByDescending(x => x.Applied)
+                .Select(x => x.VM)
+                .ToList();
 
             ViewBag.Job = item;
             ViewBag.Cands = cands;
+
+            // NEW: supply requirement lines to the view for Scoring Rules
+            static string[] SplitLines(string? s) =>
+                string.IsNullOrWhiteSpace(s)
+                    ? Array.Empty<string>()
+                    : s.Replace("\r", "\n")
+                       .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var must = SplitLines(job.job_requirements);
+            var nice = SplitLines(job.job_requirements_nice);
+            var reqs = must.Concat(nice)
+                           .Where(x => !string.IsNullOrWhiteSpace(x))
+                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                           .Take(20)
+                           .ToArray();
+            ViewBag.Reqs = reqs;
 
             return View();
         }
@@ -660,6 +701,159 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 comments = a?.comments,
                 updatedAt = a?.date_approved
             });
+        }
+
+        // ===========================
+        // ===== SCORING RULES =======
+        // ===========================
+
+        /// <summary>
+        /// Upsert Scoring Rules for this job (owner = current recruiter).
+        /// Body: weight2=... (multiple) from form.
+        /// Stores JSON: { "weight2": [ ... ] }
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ScoringRules(int id, [FromForm] string[]? weight2)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var job = await _db.job_listings
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .Select(j => new { j.job_listing_id })
+                .FirstOrDefaultAsync();
+
+            if (job is null) return NotFound(new { ok = false, error = "Job not found" });
+
+            var norms = (weight2 ?? Array.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(30)
+                .ToArray();
+
+            var json = JsonSerializer.Serialize(new { weight2 = norms });
+
+            var row = await _db.ai_scoring_rules
+                .FirstOrDefaultAsync(r => r.user_id == recruiterId && r.job_listing_id == id);
+
+            if (row == null)
+            {
+                row = new ai_scoring_rule
+                {
+                    user_id = recruiterId,
+                    job_listing_id = id,
+                    rule_json = json,
+                    updated_at = DateTime.Now
+                };
+                _db.ai_scoring_rules.Add(row);
+            }
+            else
+            {
+                row.rule_json = json;
+                row.updated_at = DateTime.Now;
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Json(new { ok = true, saved = norms.Length });
+        }
+
+        /// <summary>
+        /// Read saved rules for job and return weight2 list.
+        /// Front-end will pass weight2 into AiEvaluation/EvaluateJob and show progress overlay.
+        /// </summary>
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ReScore(int id)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var owns = await _db.job_listings
+                .AnyAsync(j => j.user_id == recruiterId && j.job_listing_id == id);
+            if (!owns) return NotFound(new { ok = false, error = "Job not found" });
+
+            var row = await _db.ai_scoring_rules
+                .Where(r => r.user_id == recruiterId && r.job_listing_id == id)
+                .OrderByDescending(r => r.updated_at)
+                .FirstOrDefaultAsync();
+
+            string[] weight2 = Array.Empty<string>();
+            if (row != null)
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(row.rule_json ?? "{}");
+                    if (doc.RootElement.TryGetProperty("weight2", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                        weight2 = arr.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+                }
+                catch
+                {
+                    weight2 = Array.Empty<string>();
+                }
+            }
+
+            return Json(new { ok = true, weight2 });
+        }
+
+        // =====================================
+        // ===== Manual Ranking: OverrideRank ==
+        // =====================================
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> OverrideRank(int id, int applicationId, string direction, string reason)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            reason = (reason ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(direction))
+                return BadRequest(new { ok = false, error = "Missing direction." });
+
+            var dir = direction.Trim().ToLowerInvariant();
+            var delta = dir == "down" ? -1 : 1; // default to up
+
+            // Validate job ownership
+            var job = await _db.job_listings
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .Select(j => new { j.job_listing_id })
+                .FirstOrDefaultAsync();
+            if (job is null) return NotFound(new { ok = false, error = "Job not found." });
+
+            // Validate application belongs to job
+            var app = await _db.job_applications
+                .Where(a => a.job_listing_id == id && a.application_id == applicationId)
+                .FirstOrDefaultAsync();
+            if (app is null) return NotFound(new { ok = false, error = "Application not found." });
+
+            var now = DateTime.Now;
+
+            // Persist override (recency drives sort)
+            _db.ai_rank_overrides.Add(new ai_rank_override
+            {
+                job_listing_id = id,
+                application_id = applicationId,
+                user_id = recruiterId,
+                direction = (sbyte)delta,
+                reason = string.IsNullOrWhiteSpace(reason) ? "-" : reason,
+                created_at = now
+            });
+
+            // Optional: audit trail inside candidate notes
+            if (!string.IsNullOrWhiteSpace(reason))
+            {
+                _db.job_seeker_notes.Add(new job_seeker_note
+                {
+                    application_id = applicationId,
+                    job_recruiter_id = recruiterId,
+                    job_seeker_id = app.user_id,
+                    note_text = $"[Rank {(delta > 0 ? "UP" : "DOWN")}] {reason}",
+                    created_at = now
+                });
+            }
+
+            await _db.SaveChangesAsync();
+
+            return Json(new { ok = true, applicationId, dir = (delta > 0 ? "up" : "down"), at = now.ToString("s") });
         }
     }
 }

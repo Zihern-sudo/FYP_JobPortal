@@ -77,6 +77,15 @@
                 </select>
                 <span asp-validation-for="work_mode" class="text-danger"></span>
             </div>
+            <!-- Job Category (Domain) -->
+            <div class="col-md-6">
+                <label asp-for="job_category" class="form-label">Job Category</label>
+                <select asp-for="job_category" class="form-select"
+                    asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.JobCategories)">
+                </select>
+                <span asp-validation-for="job_category" class="text-danger"></span>
+            </div>
+
         </div>
     </div>
 

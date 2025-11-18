@@ -13,8 +13,6 @@
   bool isCompanies = ctrl.Equals("Company", StringComparison.OrdinalIgnoreCase);
   bool isCandidates = ctrl.Equals("Candidates", StringComparison.OrdinalIgnoreCase);
   bool isInbox = ctrl.Equals("Inbox", StringComparison.OrdinalIgnoreCase);
-  bool isScreen = ctrl.Equals("Screening", StringComparison.OrdinalIgnoreCase)
-  || ctrl.Equals("ScreeningQueue", StringComparison.OrdinalIgnoreCase);
   bool isMsgTpl = ctrl.Equals("Templates", StringComparison.OrdinalIgnoreCase);
   bool isJobTpl = ctrl.Equals("JobPostTemplates", StringComparison.OrdinalIgnoreCase);
   bool expandT = isMsgTpl || isJobTpl;
@@ -200,7 +198,7 @@
       transform: rotate(180deg);
     }
 
-    /* ===== Notifications UI (kept) ===== */
+    /* ===== Notifications UI (improved) ===== */
     .notif-btn {
       position: relative;
       display: inline-flex;
@@ -211,6 +209,14 @@
       line-height: 1;
       border-radius: .5rem;
       padding: 0;
+      cursor: pointer;
+      transition: background-color .15s ease, box-shadow .15s ease;
+    }
+
+    .notif-btn:hover,
+    .notif-btn:focus-visible {
+      background-color: #f1f5ff;
+      box-shadow: inset 0 0 0 1px #dbe4ff;
     }
 
     .notif-badge {
@@ -300,6 +306,18 @@
       color: #6c757d;
     }
 
+    /* Avatar link affordance */
+    .rk-avatar-link img {
+      transition: box-shadow .15s ease, transform .06s ease;
+      cursor: pointer;
+    }
+
+    .rk-avatar-link:hover img,
+    .rk-avatar-link:focus-visible img {
+      box-shadow: 0 0 0 2px #0d6efd44;
+      transform: translateY(-1px);
+    }
+
     /* ===== Responsive ===== */
     @@media (max-width: 992px) {
       .rk-layout {
@@ -358,7 +376,13 @@
         <div class="dropdown">
           <button id="notifDropdownBtn" class="btn btn-link notif-btn text-decoration-none" type="button"
             data-bs-toggle="dropdown" aria-expanded="false" title="Notifications" aria-label="Notifications">
-            <span class="fs-5">🔔</span>
+            <span class="fs-5" aria-hidden="true">
+              <!-- SVG bell for better rendering/hover -->
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 22a2 2 0 0 0 1.985-1.75L14 20h-4a2 2 0 0 0 1.85 1.995L12 22Zm0-20a1 1 0 0 1 1 1v.278a7 7 0 0 1 5 6.722v4l2 2v1H4v-1l2-2v-4a7 7 0 0 1 5-6.722V3a1 1 0 0 1 1-1Z" />
+              </svg>
+            </span>
             <span id="notifBadge" class="badge rounded-pill bg-danger notif-badge d-none">0</span>
           </button>
 
@@ -382,8 +406,12 @@
         </div>
         @* ===== end notifications block ===== *@
 
-        <img src="@photoUrl" alt="Company" class="rounded-circle border"
-          style="width:36px;height:36px;object-fit:cover;" />
+        @* Avatar now links to Company Manage and looks clickable *@
+        <a asp-area="Recruiter" asp-controller="Company" asp-action="Manage" class="rk-avatar-link"
+          title="Manage company profile" aria-label="Manage company profile">
+          <img src="@photoUrl" alt="Company" class="rounded-circle border"
+            style="width:36px;height:36px;object-fit:cover;" />
+        </a>
         <span class="rk-chip">@displayName</span>
         <a class="btn btn-outline-danger btn-sm" asp-area="Recruiter" asp-controller="Account"
           asp-action="Logout">Logout</a>
@@ -405,8 +433,6 @@
             asp-action="Manage">Companies</a></li>
         <li><a class="rk-link @(isCandidates ? "active" : "")" asp-area="Recruiter" asp-controller="Candidates"
             asp-action="Index">Candidates</a></li>
-        <li><a class="rk-link @(isScreen ? "active" : "")" asp-area="Recruiter" asp-controller="Screening"
-            asp-action="Queue">Screening Queue</a></li>
         <li><a class="rk-link @(isInbox ? "active" : "")" asp-area="Recruiter" asp-controller="Inbox"
             asp-action="Index">Inbox</a></li>
 
@@ -428,6 +454,10 @@
 
         <li class="mt-2"><a class="rk-link" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index">Bulk Tools</a>
         </li>
+
+        <!-- Small pointer to where AI controls live (Jobs/Pipeline & Candidates/Detail) -->
+        <li class="mt-2"><a class="rk-link @(isJobs ? "active" : "")" asp-area="Recruiter" asp-controller="Jobs"
+            asp-action="Index">AI Controls (Jobs)</a></li>
       </ul>
     </aside>
 
@@ -448,8 +478,6 @@
               asp-action="Manage" data-bs-dismiss="offcanvas">Companies</a></li>
           <li><a class="rk-link text-white @(isCandidates ? "active" : "")" asp-area="Recruiter"
               asp-controller="Candidates" asp-action="Index" data-bs-dismiss="offcanvas">Candidates</a></li>
-          <li><a class="rk-link text-white @(isScreen ? "active" : "")" asp-area="Recruiter" asp-controller="Screening"
-              asp-action="Queue" data-bs-dismiss="offcanvas">Screening Queue</a></li>
           <li><a class="rk-link text-white @(isInbox ? "active" : "")" asp-area="Recruiter" asp-controller="Inbox"
               asp-action="Index" data-bs-dismiss="offcanvas">Inbox</a></li>
           <li class="mt-2">
@@ -469,6 +497,8 @@
           </li>
           <li class="mt-2"><a class="rk-link text-white" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index"
               data-bs-dismiss="offcanvas">Bulk Tools</a></li>
+          <li class="mt-2"><a class="rk-link text-white @(isJobs ? "active" : "")" asp-area="Recruiter"
+              asp-controller="Jobs" asp-action="Index" data-bs-dismiss="offcanvas">AI Controls (Jobs)</a></li>
         </ul>
       </div>
     </div>

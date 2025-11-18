@@ -1,0 +1,25 @@
+@* File: Areas/Recruiter/Views/Shared/_AiEvaluateButtons.cshtml *@
+@{
+    var jobId = (int?)(ViewData["JobId"] ?? (ViewBag.JobId as int?)) ?? 0;
+    var applicationId = (int?)(ViewData["ApplicationId"] ?? (ViewBag.ApplicationId as int?)) ?? 0;
+}
+<div class="d-flex gap-2 my-2">
+    @if (jobId > 0)
+    {
+        <form method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateJob"
+            asp-route-jobId="@jobId">
+            <button type="submit" class="btn btn-outline-primary btn-sm">AI Evaluate All for Job</button>
+        </form>
+    }
+    @if (applicationId > 0)
+    {
+        <form method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne"
+            asp-route-applicationId="@applicationId">
+            <button type="submit" class="btn btn-primary btn-sm">AI Evaluate This Candidate</button>
+        </form>
+    }
+</div>
+@if (TempData["Message"] is string msg && !string.IsNullOrWhiteSpace(msg))
+{
+    <div class="alert alert-success my-2" role="alert">@msg</div>
+}

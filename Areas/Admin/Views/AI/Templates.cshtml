@@ -1,25 +1,50 @@
 @{
-    var list = ViewBag.Templates as List<AiTemplate>;
+  ViewData["Title"] = "AI Criteria Templates";
+  var list = ViewBag.Templates as List<JobPortal.Areas.Admin.Models.AiTemplate>;
 }
+
+@await Html.PartialAsync("~/Areas/Admin/Views/Shared/_Toasts.cshtml")
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <div class="fw-semibold">Reusable requirement templates</div>
-  <button class="btn btn-primary btn-sm" disabled>Create new (mock)</button>
+  <div class="fw-semibold">Reusable requirement templates (latest jobs)</div>
+  <a class="btn btn-outline-secondary btn-sm" asp-area="Admin" asp-controller="AI" asp-action="Health">OpenAI Health</a>
 </div>
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <table class="table mb-0">
-      <thead><tr><th>Name</th><th>Example role fit</th><th>Updated</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Example role fit</th>
+          <th>Updated</th>
+          <th>Preview</th>
+        </tr>
+      </thead>
       <tbody>
-        @foreach (var t in list!)
+        @if (list is { Count: > 0 })
+        {
+          foreach (var t in list)
+          {
+            <tr>
+              <td>@t.Name</td>
+              <td class="text-muted">@t.RoleExample</td>
+              <td>@t.Updated.ToString("yyyy-MM-dd")</td>
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse"
+                  data-bs-target="#r@t.JobId">View requirements</button>
+              </td>
+            </tr>
+            <tr class="collapse" id="r@t.JobId">
+              <td colspan="4">
+                <pre class="mb-0">@t.Requirements</pre>
+              </td>
+            </tr>
+          }
+        }
+        else
         {
           <tr>
-            <td>@t.Name</td>
-            <td class="text-muted">@t.RoleExample</td>
-            <td>@t.Updated</td>
-            <td class="text-end">
-              <button class="btn btn-sm btn-outline-secondary" disabled>Duplicate</button>
-              <button class="btn btn-sm btn-outline-primary" disabled>Edit</button>
-            </td>
+            <td colspan="4" class="text-muted">No recent jobs found.</td>
           </tr>
         }
       </tbody>

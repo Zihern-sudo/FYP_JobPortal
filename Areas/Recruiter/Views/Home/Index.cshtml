@@ -1,4 +1,5 @@
-﻿@model JobPortal.Areas.Recruiter.Models.DashboardVm
+﻿@* File: Areas/Recruiter/Views/Home/Index.cshtml *@
+@model JobPortal.Areas.Recruiter.Models.DashboardVm
 @{
     ViewData["Title"] = "Recruiter Dashboard";
 }
@@ -8,47 +9,191 @@
     <div class="alert alert-success">@TempData["Message"]</div>
 }
 
+<style>
+    /* ---- Stat cards ---- */
+    .stat-card {
+        position: relative;
+        border: 0;
+        background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+        box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 1px rgba(16, 24, 40, .02);
+        transition: transform .08s ease, box-shadow .12s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(16, 24, 40, .10);
+    }
+
+    .stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #e8f1ff;
+        color: #0d6efd;
+    }
+
+    .stat-title {
+        font-weight: 600;
+        color: #344054;
+    }
+
+    .stat-value {
+        font-size: 2.25rem;
+        line-height: 1.1;
+        font-weight: 700;
+        color: #101828;
+    }
+
+    .stat-foot {
+        font-size: .85rem;
+        color: #667085;
+    }
+
+    .stat-divider {
+        height: 1px;
+        background: rgba(13, 110, 253, .08);
+        margin: .5rem 0 0.75rem;
+    }
+
+    .progress-slim {
+        height: 6px;
+        background: #eef2ff;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .progress-slim>span {
+        display: block;
+        height: 100%;
+        background: #0d6efd;
+    }
+
+    /* Small utility to align footer link */
+    .stat-foot .link-underline {
+        text-decoration: none;
+        border-bottom: 1px dashed #94b2ff;
+    }
+
+    .stat-foot .link-underline:hover {
+        border-bottom-style: solid;
+    }
+</style>
 
 <div class="row g-3">
     <div class="col-md-3">
-        <div class="card h-100">
+        <div class="card stat-card h-100">
             <div class="card-body">
-                <div class="fw-bold">Total Jobs</div>
-                <div class="display-6">@Model.JobsCount</div>
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <div class="stat-title">Total Jobs</div>
+                        <div class="stat-value mt-1">@Model.JobsCount</div>
+                    </div>
+                    <div class="stat-icon" aria-hidden="true">
+                        <!-- briefcase -->
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M10 6V5a2 2 0 1 1 4 0v1h4a2 2 0 0 1 2 2v3H2V8a2 2 0 0 1 2-2h6Zm2-1a1 1 0 0 0-1 1v1h2V6a1 1 0 0 0-1-1ZM2 12h20v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6Zm9 2v2h2v-2h-2Z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="mt-2">
+                    <div class="progress-slim"><span
+                            style="width:@(Model.JobsCount == 0 ? 0 : Math.Min(100, (int)Math.Round(100.0 * Model.OpenJobs / Math.Max(1, Model.JobsCount))))%"></span>
+                    </div>
+                    <div class="stat-foot mt-1">
+                        @Model.OpenJobs of @Model.JobsCount open
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
     <div class="col-md-3">
-        <div class="card h-100">
+        <div class="card stat-card h-100">
             <div class="card-body">
-                <div class="fw-bold">Open Jobs</div>
-                <div class="display-6">@Model.OpenJobs</div>
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <div class="stat-title">Open Jobs</div>
+                        <div class="stat-value mt-1">@Model.OpenJobs</div>
+                    </div>
+                    <div class="stat-icon" aria-hidden="true">
+                        <!-- pin -->
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M14 2a1 1 0 0 1 1 1v5l3.293 3.293A1 1 0 0 1 17.586 13H13l-2 8-2-8H6.414a1 1 0 0 1-.707-1.707L9 8V3a1 1 0 0 1 1-1h4Z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-foot mt-2">
+                    <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="link-underline">Manage
+                        jobs</a>
+                </div>
             </div>
         </div>
     </div>
+
     <div class="col-md-3">
-        <div class="card h-100">
+        <div class="card stat-card h-100">
             <div class="card-body">
-                <div class="fw-bold">Applications</div>
-                <div class="display-6">@Model.ApplicationsCount</div>
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <div class="stat-title">Applications</div>
+                        <div class="stat-value mt-1">@Model.ApplicationsCount</div>
+                    </div>
+                    <div class="stat-icon" aria-hidden="true">
+                        <!-- chart -->
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 3h2v18H3V3Zm16 6h2v12h-2V9ZM11 13h2v8h-2v-8Zm-4-4h2v12H7V9Zm8-6h2v18h-2V3Z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-foot mt-2">
+                    <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index" class="link-underline">View
+                        candidates</a>
+                </div>
             </div>
         </div>
     </div>
+
     <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="fw-bold">Unread Threads</div>
-                <div class="display-6">@Model.UnreadThreads</div>
+        <div class="card stat-card h-100">
+            <div class="card-body position-relative">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <div class="stat-title">Unread Threads</div>
+                        <div class="stat-value mt-1">@Model.UnreadThreads</div>
+                    </div>
+                    <div class="stat-icon" aria-hidden="true">
+                        <!-- inbox -->
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 4h18l-2 12h-4l-2 3-2-3H5L3 4Zm3.2 10h3.7l1.6 2.4L13.1 14h3.7l1.3-8H5.9l.3 8Z" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-foot mt-2">Jump to inbox</div>
+                <a asp-area="Recruiter" asp-controller="Inbox" asp-action="Index" class="stretched-link"
+                    title="Open Inbox"></a>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-3 mt-2">
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-header">Latest Jobs</div>
-            <div class="card-body p-0">
+<div class="row g-3 mt-1">
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Latest Jobs</h6>
+                    <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
+                        class="btn btn-sm btn-outline-secondary">View all jobs</a>
+                </div>
                 <table class="table mb-0">
                     <thead class="table-light">
                         <tr>
@@ -71,10 +216,8 @@
                             {
                                 <tr>
                                     <td>@j.Id</td>
-                                    <td>
-                                        <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
-                                            asp-route-id="@j.Id">@j.Title</a>
-                                    </td>
+                                    <td><a asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
+                                            asp-route-id="@j.Id">@j.Title</a></td>
                                     <td>@j.Status</td>
                                     <td>@j.CreatedAt</td>
                                 </tr>
@@ -82,20 +225,25 @@
                         }
                     </tbody>
                 </table>
-            </div>
-            <div class="card-footer text-end">
-                <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
-                    class="btn btn-sm btn-outline-secondary">View all jobs</a>
-                <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" class="btn btn-sm btn-primary">Post new
-                    job</a>
+                <div class="mt-2">
+                    <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
+                        class="btn btn-sm btn-outline-secondary">View all jobs</a>
+                    <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" class="btn btn-sm btn-primary">Post
+                        new job</a>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-6">
-        <div class="card h-100">
-            <div class="card-header">Latest Applications</div>
-            <div class="card-body p-0">
+    <div class="col-md-6">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Latest Applications</h6>
+                    <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index"
+                        class="btn btn-sm btn-outline-secondary">Open candidates</a>
+                </div>
+
                 <table class="table mb-0">
                     <thead class="table-light">
                         <tr>
@@ -128,10 +276,41 @@
                         }
                     </tbody>
                 </table>
-            </div>
-            <div class="card-footer text-end">
                 <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index"
-                    class="btn btn-sm btn-outline-secondary">Open candidates</a>
+                    class="btn btn-sm btn-outline-secondary mt-2">Open candidates</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Jobs Status</h6>
+                </div>
+                <canvas id="jobsStatusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Applications (last 5 updates)</h6>
+                </div>
+                <canvas id="appsTrendChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Applications by Job</h6>
+                </div>
+                <canvas id="appsByJobChart" height="200"></canvas>
             </div>
         </div>
     </div>
@@ -144,4 +323,63 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        (function () {
+            const jobsCount = @Model.JobsCount;
+            const openJobs = @Model.OpenJobs;
+            const otherJobs = Math.max(0, jobsCount - openJobs);
+            const latestApps = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                                    Model.LatestApplications.Select(a => new { updatedAt = a.UpdatedAt, jobTitle = a.JobTitle })));
+
+        function groupBy(arr, keyFn) {
+            const m = new Map();
+            for (const it of arr) {
+                const k = keyFn(it);
+                m.set(k, (m.get(k) || 0) + 1);
+            }
+            return Array.from(m.entries()).sort();
+        }
+
+            // Trend by date from LatestApplications. UpdatedAt -> yyyy-MM-dd
+            const dateCounts = groupBy(latestApps, a => (a.updatedAt || '').slice(0, 10));
+            const trendLabels = dateCounts.map(x => x[0]);
+            const trendValues = dateCounts.map(x => x[1]);
+
+            // By Job Title from LatestApplications
+            const jobCounts = groupBy(latestApps, a => a.jobTitle || '(unknown)');
+            const byJobLabels = jobCounts.map(x => x[0]);
+            const byJobValues = jobCounts.map(x => x[1]);
+
+            const d1 = document.getElementById('jobsStatusChart');
+            if (d1) {
+                new Chart(d1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Open', 'Other'],
+                        datasets: [{ data: [openJobs, otherJobs] }]
+                    },
+                    options: { plugins: { legend: { position: 'bottom' } }, cutout: '55%' }
+                });
+            }
+
+            const d2 = document.getElementById('appsTrendChart');
+            if (d2) {
+                new Chart(d2, {
+                    type: 'line',
+                    data: { labels: trendLabels, datasets: [{ label: 'Applications', data: trendValues, tension: .3, fill: false }] },
+                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+                });
+            }
+
+            const d3 = document.getElementById('appsByJobChart');
+            if (d3) {
+                new Chart(d3, {
+                    type: 'bar',
+                    data: { labels: byJobLabels, datasets: [{ label: 'Apps', data: byJobValues }] },
+                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+                });
+            }
+        })();
+    </script>
 }

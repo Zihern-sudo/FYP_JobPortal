@@ -1,18 +1,26 @@
 @* File: Areas/Recruiter/Views/JobPostTemplates/Index.cshtml *@
 @model JobPortal.Areas.Recruiter.Models.TemplatesIndexVM
 @{
-
     var items = Model.Items;
     bool isArchived = Model.IsArchivedList;
     int? jobId = Model.ThreadId; // Using ThreadId to hold JobId from VM
     var q = Model.Query;
+
+    // --- Sorting by ID (default: latest on top -> DESC) ---
+    var order = (Context.Request.Query["order"].ToString() ?? "").ToLowerInvariant();
+    bool asc = order == "asc";
+    // Sort locally to avoid controller change
+    items = (asc ? items.OrderBy(t => t.Id) : items.OrderByDescending(t => t.Id)).ToList();
+    string NextOrder() => asc ? "desc" : "asc";
+    string Arrow() => asc ? "▲" : "▼";
 
     string RoutePreserve(int page) => Url.Action(isArchived ? "Archived" : "Index", new
     {
         q = q,
         page = page,
         pageSize = Model.PageSize,
-        jobId = jobId
+        jobId = jobId,
+        order = order
     })!;
 }
 
@@ -23,15 +31,11 @@
             <strong class="me-auto">Notification</strong>
             <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
-        <div class="toast-body" id="toast-message">
-            </div>
+        <div class="toast-body" id="toast-message"></div>
     </div>
 </div>
 
-
 <div class="d-flex justify-content-between align-items-center mb-3">
-  
-
     <div class="d-flex gap-2">
         <a class="btn btn-primary" asp-area="Recruiter" asp-controller="JobPostTemplates" asp-action="Create">
             Create
@@ -58,6 +62,7 @@
     {
         <input type="hidden" name="jobId" value="@jobId" />
     }
+    <input type="hidden" name="order" value="@order" />
     <div class="col-md-9">
         <input type="text" name="q" value="@q" class="form-control" placeholder="Search name or content..." />
     </div>
@@ -77,6 +82,21 @@ else
         <table class="table align-middle jobtpl-table">
             <thead>
                 <tr>
+                    @* NEW: ID sortable with arrow *@
+                    <th style="width:90px;">
+                        <a asp-area="Recruiter"
+                           asp-controller="JobPostTemplates"
+                           asp-action="@(isArchived ? "Archived" : "Index")"
+                           asp-route-q="@q"
+                           asp-route-page="@Model.Page"
+                           asp-route-pageSize="@Model.PageSize"
+                           asp-route-jobId="@jobId"
+                           asp-route-order="@NextOrder()"
+                           class="text-decoration-none text-body" title="Toggle sort by ID">
+                            <span class="me-1">ID</span>
+                            <span class="small">@Arrow()</span>
+                        </a>
+                    </th>
                     <th style="width:26%">Name</th>
                     <th>Snippet</th>
                     <th class="text-end actions-col" style="width:360px">Actions</th>
@@ -86,6 +106,7 @@ else
                 @foreach (var t in items)
                 {
                     <tr>
+                        <td>@t.Id</td>
                         <td>@t.Name</td>
                         <td>@t.Snippet</td>
 
@@ -171,14 +192,10 @@ else
 @section Scripts {
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            // Check for TempData message
             var message = '@(TempData["Message"] as string)';
             if (message) {
-                // Get toast elements
                 var toastEl = document.getElementById('toast-notify');
                 var toastBody = document.getElementById('toast-message');
-
-                // Set message and show toast
                 toastBody.textContent = message;
                 var toast = new bootstrap.Toast(toastEl);
                 toast.show();
