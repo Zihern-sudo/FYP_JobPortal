@@ -1,25 +1,51 @@
 @{
     ViewData["Title"] = "Recover Account";
-    Layout = null;
 }
 
 <link rel="stylesheet" href="~/css/auth.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<div class="auth-container">
-    <h1>Recover Locked Account</h1>
-    <p>Enter your email to receive an unlock link.</p>
+<style>
+    .auth-page-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 85vh;
+    }
 
-    <form asp-area="JobSeeker" asp-controller="Account" asp-action="RecoverAccount" method="post" class="auth-form">
-        <label>Email</label>
-        <input type="email" name="email" placeholder="example@email.com" required />
+    .auth-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
 
-        <button type="submit" class="login-btn">Send Recovery Link</button>
+    .auth-form input,
+    .auth-form button {
+        width: 320px !important;
+        max-width: 100%;
+    }
+</style>
 
-        <p class="switch-text">
-            <a href="/JobSeeker/Account/Login">Back to Login</a>
-        </p>
-    </form>
+<div class="auth-page-wrapper">
+    <div class="auth-container">
+        <h1>Recover Locked Account</h1>
+        <p>Enter your email to receive an unlock link.</p>
+
+        <form asp-area="JobSeeker" asp-controller="Account" asp-action="RecoverAccount"
+              method="post" class="auth-form active">
+
+            <label>Email</label>
+            <input type="email" name="email" placeholder="example@email.com" required />
+
+            <button type="submit" class="login-btn">Send Recovery Link</button>
+
+            <p class="switch-text">
+                <a href="/JobSeeker/Account/Login">Back to Login</a>
+            </p>
+        </form>
+    </div>
 </div>
 
 @section Scripts {
@@ -27,8 +53,7 @@
         const message = '@TempData["Message"]';
         if (message && message.length > 0) {
             Swal.fire({
-                icon: message.includes("sent") ? "success" :
-                      message.includes("unlocked") ? "success" : "info",
+                icon: message.toLowerCase().includes("sent") ? "success" : "info",
                 title: "Notification",
                 text: message,
                 confirmButtonColor: "#007bff"

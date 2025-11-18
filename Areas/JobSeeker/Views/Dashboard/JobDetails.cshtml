@@ -68,9 +68,15 @@
                 @(ViewBag.IsFavourite ? "⭐" : "☆")
             </button>
 
-            <!-- Apply button -->
-            <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
-                class="btn btn-success">Apply Now</a>
+            @if (ViewBag.HasApplied)
+            {
+                <button class="btn btn-secondary" disabled>Applied</button>
+            }
+            else
+            {
+                <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="Apply" asp-route-id="@Model.job_listing_id"
+                    class="btn btn-success">Apply Now</a>
+            }
         </div>
     </div>
 

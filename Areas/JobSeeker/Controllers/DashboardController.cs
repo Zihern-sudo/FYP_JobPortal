@@ -479,16 +479,28 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpGet]
         public async Task<IActionResult> Apply(int id)
         {
-            var userId = HttpContext.Session.GetString("UserId");
-            if (string.IsNullOrEmpty(userId))
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
+
+            int userId = int.Parse(userIdStr);
 
             var job = await _db.job_listings.FirstOrDefaultAsync(j => j.job_listing_id == id);
             if (job == null) return NotFound();
 
-            var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == int.Parse(userId));
+            // Check if user has already applied
+            bool hasApplied = await _db.job_applications
+                .AnyAsync(a => a.user_id == userId && a.job_listing_id == id);
+
+            if (hasApplied)
+            {
+                TempData["Error"] = "You have already applied for this job.";
+                return View("AlreadyApplied"); // or you can reuse Apply view with a message
+            }
+
+            var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == userId);
             var userResumes = await _db.resumes
-                .Where(r => r.user_id == int.Parse(userId))
+                .Where(r => r.user_id == userId)
                 .OrderByDescending(r => r.upload_date)
                 .ToListAsync();
 
@@ -503,6 +515,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             return View(model);
         }
+
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -574,7 +588,9 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 job_listing_id = model.JobId,
                 application_status = "Submitted",
                 date_updated = DateTime.Now,
-                resume_path = relativePath
+                resume_path = relativePath,
+                expected_salary = model.ExpectedSalary,
+                description = model.Description
             };
 
             _db.job_applications.Add(application);
@@ -776,8 +792,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // 🧭 Filter by salary range
             if (minSalary.HasValue && maxSalary.HasValue)
             {
-                jobsQuery = jobsQuery.Where(j => j.salary_min >= minSalary.Value && j.salary_min <= maxSalary.Value);
+                jobsQuery = jobsQuery.Where(j =>
+                    j.salary_max >= minSalary.Value && j.salary_min <= maxSalary.Value);
             }
+
 
             // 🏠 Work Mode
             if (!string.IsNullOrEmpty(workMode))
@@ -917,8 +935,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // Check if this job is favourited by the user
             bool isFavourite = await _db.job_favourites
                 .AnyAsync(f => f.user_id == userId && f.job_listing_id == id);
-
             ViewBag.IsFavourite = isFavourite;
+
+            // ✅ Check if the user has already applied to this job
+            bool hasApplied = await _db.job_applications
+                .AnyAsync(a => a.user_id == userId && a.job_listing_id == id);
+            ViewBag.HasApplied = hasApplied;
 
             return View(job);
         }
@@ -952,7 +974,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
 
         private byte[] GenerateClassicResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
-            string summary, string education, string experience, string skills, string certifications)
+            string summary, string education, string experience, string skills, string certifications, string projects)
         {
             var document = Document.Create(container =>
             {
@@ -1022,6 +1044,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             }
                         }
 
+                        // Projects
+                        if (!string.IsNullOrWhiteSpace(projects))
+                        {
+                            column.Item().Text("Projects:").Bold();
+                            foreach (var proj in projects.Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries))
+                                column.Item().PaddingLeft(10).Text(proj.Trim());
+                        }
+
                         // Skills
                         if (!string.IsNullOrWhiteSpace(skills))
                         {
@@ -1062,7 +1092,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         private byte[] GenerateModernResumePDF(byte[]? profileImage, string fullName, string email, string phone, string address,
-      string summary, string education, string experience, string skills, string certifications)
+      string summary, string education, string experience, string skills, string certifications, string projects)
         {
             var document = Document.Create(container =>
             {
@@ -1147,6 +1177,20 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
                                 right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
+
+                            // 🧩 Projects
+                            if (!string.IsNullOrWhiteSpace(projects))
+                            {
+                                right.Item().PaddingTop(10).Text("Projects").Bold().FontSize(14);
+
+                                foreach (var proj in projects.Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    right.Item().PaddingLeft(10).Text("• " + proj.Replace("\n", " — ").Trim());
+                                }
+
+                                right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
+                            }
+
                         });
                     });
                 });
@@ -1162,7 +1206,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         public async Task<IActionResult> SaveResumePDF(
             IFormFile? profilePic, string fullName, string email, string phone,
             string address, string summary, string education, string experience,
-            string skills, string certifications, string template)
+            string skills, string certifications, string projects, string template)
         {
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
@@ -1182,8 +1226,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // Generate PDF
             var pdfBytes = template switch
             {
-                "modern" => GenerateModernResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
-                "classic" => GenerateClassicResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications),
+                "modern" => GenerateModernResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications, projects),
+                "classic" => GenerateClassicResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications, projects),
                 _ => throw new Exception("Invalid template selected")
             };
 

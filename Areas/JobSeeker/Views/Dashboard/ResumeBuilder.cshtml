@@ -72,6 +72,26 @@
         <!-- Add new experience button -->
         <button type="button" id="addExperienceBtn" style="margin-top:10px;">+ Add Another Experience</button>
 
+        <h3>Projects</h3>
+        <div id="projectContainer">
+            <div class="project-entry">
+                <label>Project Title</label>
+                <input type="text" name="projectTitle" placeholder="Hospital Appointment System" />
+
+                <label>Tech Stack</label>
+                <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure" />
+
+                <label>Description / Achievements</label>
+                <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..."
+                    rows="3"></textarea>
+            </div>
+        </div>
+
+        <button type="button" id="addProjectBtn" style="margin-top:10px;">+ Add Another Project</button>
+
+        <input type="hidden" id="projects" name="projects" />
+
+
 
 
         <h3>Skills & Certifications</h3>
@@ -129,7 +149,35 @@
         newEntry.querySelector(".removeExperienceBtn").addEventListener("click", function () {
             container.removeChild(newEntry);
         });
-    }); // ✅ <- this closing brace was missing before
+    });
+    document.getElementById("addProjectBtn").addEventListener("click", function () {
+        const container = document.getElementById("projectContainer");
+
+        const newEntry = document.createElement("div");
+        newEntry.classList.add("project-entry");
+        newEntry.style.marginTop = "15px";
+
+        newEntry.innerHTML = `
+        <hr style="margin:10px 0;">
+        <button type="button" class="removeProjectBtn" style="margin-bottom:10px;">Remove</button>
+
+        <label>Project Title</label>
+        <input type="text" name="projectTitle" placeholder="Project Name" />
+
+        <label>Tech Stack</label>
+        <input type="text" name="projectTech" placeholder="Tools / Languages Used" />
+
+        <label>Description / Achievements</label>
+        <textarea name="projectDesc" placeholder="Describe what you built..." rows="3"></textarea>
+    `;
+
+        container.appendChild(newEntry);
+
+        newEntry.querySelector(".removeProjectBtn").addEventListener("click", function () {
+            container.removeChild(newEntry);
+        });
+    });
+
 
 
     // 🧩 Combine for submission (for PDF generation)
@@ -166,5 +214,18 @@
 
         // Combine all experiences into one hidden field
         document.getElementById("experience").value = experiences.join("\n");
+
+        const projects = [];
+        document.querySelectorAll(".project-entry").forEach(entry => {
+            const title = entry.querySelector('[name="projectTitle"]').value.trim();
+            const tech = entry.querySelector('[name="projectTech"]').value.trim();
+            const desc = entry.querySelector('[name="projectDesc"]').value.trim();
+
+            if (title || tech || desc) {
+                projects.push(`${title} — ${tech}\n${desc}`);
+            }
+        });
+
+        document.getElementById("projects").value = projects.join("\n\n");
     });
 </script>

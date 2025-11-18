@@ -21,8 +21,8 @@ namespace JobPortal.Services
         // Optional: pass priorMessages to keep context (each entry like "User: ...", "Assistant: ...")
         public async Task<string> AskAsync(string userMessage, IEnumerable<string>? priorMessages = null)
         {
-var systemPrompt =
-@"You are the HR assistant for Joboria, the Job Seeker Application Portal.
+            var systemPrompt =
+            @"You are the HR assistant for Joboria, the Job Seeker Application Portal.
 Answer ONLY based on the features that exist in our system.
 
 Strict rules:
@@ -85,6 +85,38 @@ Additional guidelines:
             }
 
             return "Sorry, I couldn't generate a response.";
+        }
+        public async Task<string> GenerateResumeFeedbackAI(string resumeText, double score)
+        {
+            string prompt = $@"
+You are an HR resume analyst for Joboria.
+
+Evaluate the following resume text and provide feedback.
+- No need to greet the user or address them by name.
+- Use a friendly and helpful tone
+- Never invent work experience or certificates that are not mentioned
+- Give 3 to 6 clear improvement suggestions
+- Try to keep explanations short.
+- NO markdown, NO bullet symbols, NO asterisks
+- DO NOT mention email provider, name formatting, or system-generated footer text
+- DO NOT explain how scoring works
+
+- Resume score: {score}/10
+
+- (No need to mention their score again when doing this) If received score is lower than 5, suggest they can use the Resume Builder on sidebar to improve this resume.
+
+Resume Content:
+----------------
+{resumeText}
+";
+
+            var response = await _client.Models.GenerateContentAsync(
+                model: _modelName,
+                contents: prompt
+            );
+
+            return response?.Candidates?[0]?.Content?.Parts?[0]?.Text
+                   ?? "Unable to generate feedback.";
         }
     }
 }

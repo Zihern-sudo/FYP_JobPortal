@@ -23,9 +23,11 @@ namespace JobPortal.Areas.JobSeeker.Controllers
     public class ResumeController : Controller
     {
         private readonly AppDbContext _db;
+        private readonly ChatbotService _chatbot;
 
-        public ResumeController(AppDbContext db)
+        public ResumeController(ChatbotService chatbot, AppDbContext db)
         {
+            _chatbot = chatbot;
             _db = db;
         }
         [HttpPost]
@@ -118,6 +120,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             double overallScore = Math.Round((eduScore + expScore + skillScore + certScore) / 4.0, 2);
 
             // RETURN
+            // ======== AI FEEDBACK (Gemini) ========
+            var aiFeedback = await _chatbot.GenerateResumeFeedbackAI(extractedText, overallScore);
+
+            // RETURN BOTH SCORE + AI FEEDBACK
             return Json(new
             {
                 success = true,
@@ -125,7 +131,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 experience = $"{expScore}/10",
                 skills = $"{skillScore}/10",
                 certifications = $"{certScore}/10",
-                overallScore = overallScore
+                overallScore = overallScore,
+                aiFeedback = aiFeedback   // << NEW
             });
         }
     }

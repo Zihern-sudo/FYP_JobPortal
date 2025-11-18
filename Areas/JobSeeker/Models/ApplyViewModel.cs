@@ -21,14 +21,18 @@ namespace JobPortal.Areas.JobSeeker.Models
         [Display(Name = "Email Address")]
         public string Email { get; set; } = string.Empty;
 
-        // 🔹 The applicant's information
-        [Display(Name = "Skills")]
-        public string Skills { get; set; } = string.Empty;
+        [Display(Name = "Expected Salary")]
+        [Range(0, int.MaxValue, ErrorMessage = "Expected salary must be positive.")]
+        public int? ExpectedSalary { get; set; }
+        [Display(Name = "Describe Yourself")]
+        [StringLength(2000, ErrorMessage = "Description is too long.")]
+        public string? Description { get; set; }
         // 🆕 Resume selection
         public int? SelectedResumeId { get; set; } // selected from dropdown
         [Display(Name = "Upload Resume")]
         public IFormFile? ResumeFile { get; set; }
         public List<resume>? ExistingResumes { get; set; } // populate from DB
+        public bool HasApplied { get; set; }
 
         // 🔹 Optional feedback/result fields for viewing application later
         public string? ApplicationStatus { get; set; }

@@ -31,13 +31,14 @@ namespace JobPortal.Areas.Public.Controllers
         public async Task<IActionResult> Index()
         {
             var categoryCounts = await _db.job_listings
+                .Where(j => j.job_status == "Open") // optional filter
                 .GroupBy(j => j.job_category)
                 .Select(g => new
                 {
                     Category = g.Key,
                     Count = g.Count()
                 })
-                .ToDictionaryAsync(g => g.Category, g => g.Count);
+                .ToDictionaryAsync(g => g.Category!, g => g.Count);
 
             ViewBag.CategoryCounts = categoryCounts;
 
@@ -50,7 +51,18 @@ namespace JobPortal.Areas.Public.Controllers
 
         // GET: /Public/Home/Category
         [HttpGet]
-        public IActionResult Category() => View();
+        public async Task<IActionResult> Category()
+        {
+            var categoryCounts = await _db.job_listings
+                .Where(j => j.job_status == "Open")
+                .GroupBy(j => j.job_category ?? "Uncategorized")
+                .ToDictionaryAsync(g => g.Key!, g => g.Count());
+
+            ViewBag.CategoryCounts = categoryCounts;
+
+            return View();
+        }
+
 
         // GET: /Public/Home/Testimonial
         [HttpGet]

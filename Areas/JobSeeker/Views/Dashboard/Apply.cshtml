@@ -10,56 +10,73 @@
 <section class="apply-job-section">
     <h2 class="page-title">Apply for @Model.JobTitle</h2>
 
-    <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post"
-        enctype="multipart/form-data" class="card shadow-sm p-4">
-        @Html.AntiForgeryToken()
-        <input type="hidden" asp-for="JobId" />
-
-        <div class="mb-3">
-            <label class="form-label">Full Name</label>
-            <input asp-for="FullName" class="form-control" readonly />
+    @* ✅ Show warning if user already applied *@
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-warning text-center mt-3">
+            @TempData["Error"]
         </div>
+    }
+    else
+    {
+        <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post"
+            enctype="multipart/form-data" class="card shadow-sm p-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="JobId" />
 
-        <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input asp-for="Email" class="form-control" readonly />
-        </div>
+            <div class="mb-3">
+                <label class="form-label">Full Name</label>
+                <input asp-for="FullName" class="form-control" readonly />
+            </div>
 
-        <div class="mb-3">
-            <label class="form-label">Position Applying For</label>
-            <input asp-for="JobTitle" class="form-control" readonly />
-        </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input asp-for="Email" class="form-control" readonly />
+            </div>
 
-        <div class="mb-3">
-            <label class="form-label">Skills</label>
-            <textarea asp-for="Skills" class="form-control"
-                placeholder="List relevant skills or experiences"></textarea>
-        </div>
+            <div class="mb-3">
+                <label class="form-label">Position Applying For</label>
+                <input asp-for="JobTitle" class="form-control" readonly />
+            </div>
 
-        <div class="mb-3">
-            <label class="form-label">Resume</label>
-            <select asp-for="SelectedResumeId" id="resumeSelect" class="form-select">
-                <option value="">-- Upload New Resume --</option>
-                @if (Model.ExistingResumes != null && Model.ExistingResumes.Any())
-                {
-                    foreach (var resume in Model.ExistingResumes)
+            <div class="mb-3">
+                <label class="form-label">Expected Salary</label>
+                <input asp-for="ExpectedSalary" type="number" class="form-control" placeholder="Enter your expected salary"
+                    min="0" step="100" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Describe Yourself</label>
+                <textarea asp-for="Description" class="form-control" placeholder="Tell us a bit about yourself..."
+                    rows="4"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Resume</label>
+                <select asp-for="SelectedResumeId" id="resumeSelect" class="form-select">
+                    <option value="">-- Upload New Resume --</option>
+                    @if (Model.ExistingResumes != null && Model.ExistingResumes.Any())
                     {
-                        <option value="@resume.resume_id">
-                            @System.IO.Path.GetFileName(resume.file_path) (@resume.upload_date.ToString("yyyy-MM-dd HH:mm"))
-                        </option>
+                        foreach (var resume in Model.ExistingResumes)
+                        {
+                            <option value="@resume.resume_id">
+                                @System.IO.Path.GetFileName(resume.file_path) (@resume.upload_date.ToString("yyyy-MM-dd HH:mm"))
+                            </option>
+                        }
                     }
-                }
-            </select>
-        </div>
+                </select>
+            </div>
 
-        <div class="mb-3" id="uploadDiv">
-            <label class="form-label">Choose File</label>
-            <input asp-for="ResumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx" />
-        </div>
+            <div class="mb-3" id="uploadDiv">
+                <label class="form-label">Choose File</label>
+                <input asp-for="ResumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx" />
+            </div>
 
-        <button type="submit" class="btn btn-primary w-100">Submit Application</button>
-    </form>
+            <button type="submit" class="btn btn-primary w-100">Submit Application</button>
+        </form>
+    }
 </section>
+
 <script>
     const resumeSelect = document.getElementById('resumeSelect');
     const uploadDiv = document.getElementById('uploadDiv');

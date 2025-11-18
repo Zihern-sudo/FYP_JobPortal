@@ -8,6 +8,7 @@ using System.Net.Mail;
 using System.Net.Mime;
 using JobPortal.Services;
 using Microsoft.AspNetCore.Identity;
+using JobPortal.Areas.JobSeeker.Models;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -130,10 +131,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
         // ===============================
-        // ✅ REGISTER (NEW)
+        // REGISTER
         // ===============================
         [HttpPost]
-        public async Task<IActionResult> Register(string firstName, string lastName, string email, string password, string confirmPassword)
+        public async Task<IActionResult> Register(string firstName, string lastName, string email, string password, string confirmPassword, RegisterViewModel model)
         {
             // Basic required field check
             if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(email) ||
@@ -147,20 +148,9 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (firstName.Length > 40 || lastName.Length > 40)
             {
                 TempData["Message"] = "First and Last Name cannot exceed 40 characters.";
-                return RedirectToAction("Login", new { tab = "register" });
-            }
-
-            // ✅ Password max 20 chars and min 6 chars (recommended)
-            if (password.Length > 20)
-            {
-                TempData["Message"] = "Password cannot exceed 20 characters.";
-                return RedirectToAction("Login", new { tab = "register" });
-            }
-
-            if (password.Length < 6)
-            {
-                TempData["Message"] = "Password must be at least 6 characters long.";
-                return RedirectToAction("Login", new { tab = "register" });
+                ModelState.AddModelError("", "Names may not exceed 40 characters");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
             }
 
             // ✅ Email format validation using System.ComponentModel.DataAnnotations
@@ -168,13 +158,41 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (!System.Text.RegularExpressions.Regex.IsMatch(email, emailRegex))
             {
                 TempData["Message"] = "Please enter a valid email address.";
-                return RedirectToAction("Login", new { tab = "register" });
+                ModelState.AddModelError("", "Please enter a valid email address");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
             }
 
             if (password != confirmPassword)
             {
                 TempData["Message"] = "Passwords do not match.";
-                return RedirectToAction("Login");
+                ModelState.AddModelError("", "Passwords do not match");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
+            }
+            var errors = new List<string>();
+
+            // ✅ Detailed password validation
+            var passwordErrors = new List<string>();
+
+            if (password.Length < 6 || password.Length > 20)
+                passwordErrors.Add("Password must be 6 to 20 characters long.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[A-Z]"))
+                passwordErrors.Add("At least one uppercase letter required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[a-z]"))
+                passwordErrors.Add("At least one lowercase letter required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"\d"))
+                passwordErrors.Add("At least one number required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, @"[@$!%*?&.,]"))
+                passwordErrors.Add("At least one special character required.");
+
+            // If there are any errors, show them
+            if (passwordErrors.Count > 0)
+            {
+                TempData["Message"] = string.Join(" ", passwordErrors); // Shows all issues
+                ModelState.AddModelError("", "Password must be strong");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
             }
 
             var existingUser = await _db.users.FirstOrDefaultAsync(u => u.email == email);

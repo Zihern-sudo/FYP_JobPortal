@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         content.innerHTML += `<div><strong>You:</strong> ${message}</div>`;
         input.value = "";
-        content.innerHTML += `<div id="typingIndicator"><em>AI is typing...</em></div>`;
+        content.innerHTML += `<div id="typingIndicator"><em>AI Assistant is typing...</em></div>`;
         content.scrollTop = content.scrollHeight;
 
         try {
@@ -221,10 +221,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
             const data = await response.json();
             document.getElementById("typingIndicator")?.remove();
-            content.innerHTML += `<div><strong>AI:</strong> ${data.reply}</div>`;
+            content.innerHTML += `<div><strong>AI Assistant:</strong> ${data.reply}</div>`;
         } catch {
             document.getElementById("typingIndicator")?.remove();
-            content.innerHTML += `<div><strong>AI:</strong> Sorry, something went wrong.</div>`;
+            content.innerHTML += `<div><strong>AI Assistant:</strong> Sorry, something went wrong.</div>`;
         }
 
         content.scrollTop = content.scrollHeight;

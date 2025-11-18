@@ -33,6 +33,8 @@ namespace JobPortal.Areas.JobSeeker.Models
 
         [Display(Name = "Certifications")]
         public string? Certifications { get; set; }
+        public string? Projects { get; set; }
+
 
         [Display(Name = "Profile Picture")]
         public IFormFile? ProfilePic { get; set; }
