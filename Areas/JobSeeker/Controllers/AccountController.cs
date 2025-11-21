@@ -87,36 +87,54 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("StaffLogin");
             }
 
-            // Track failed attempts using session
-            string sessionKey = $"FailedLogin_{email}";
-            int failedAttempts = HttpContext.Session.GetInt32(sessionKey) ?? 0;
+            // -------------------------------
+            // SAFE SESSION-BASED LOGIN LIMIT
+            // -------------------------------
+            // -------------------------------
+            // DB-BACKED SUSPENSION (SAFE)
+            // -------------------------------
+            string lastLoginEmail = HttpContext.Session.GetString("LastLoginEmail");
 
-            // Existing password verification, 2FA, and session setup
+            // Reset attempts when switching to a different email
+            if (lastLoginEmail != email)
+            {
+                HttpContext.Session.SetInt32("FailedAttempts", 0);
+                HttpContext.Session.SetString("LastLoginEmail", email);
+            }
+
+            // Load failed attempts from session
+            int failedAttempts = HttpContext.Session.GetInt32("FailedAttempts") ?? 0;
+
             var hasher = new PasswordHasher<object>();
             var result = hasher.VerifyHashedPassword(null, user.password_hash, password);
+
             if (result == PasswordVerificationResult.Failed)
             {
                 failedAttempts++;
-                HttpContext.Session.SetInt32(sessionKey, failedAttempts);
+                HttpContext.Session.SetInt32("FailedAttempts", failedAttempts);
 
                 if (failedAttempts >= 5)
                 {
-                    user.user_status = "Suspended"; // still suspend in DB
+                    // 🔥 Suspend properly in the database
+                    user.user_status = "Suspended";
                     await _db.SaveChangesAsync();
 
-                    TempData["Message"] = "Too many failed login attempts. Your account has been suspended.";
-                }
-                else
-                {
-                    TempData["Message"] = $"Invalid email or password. Attempt {failedAttempts}/5.";
+                    TempData["Message"] = "Your account has been suspended due to too many failed attempts.";
+                    return View("Login");
                 }
 
+                TempData["Message"] = $"Invalid email or password. Attempt {failedAttempts}/5.";
                 ViewBag.Email = email;
                 return View("Login");
             }
 
-            // Successful login → reset session counter
-            HttpContext.Session.Remove(sessionKey);
+            // -------------------------------
+            // SUCCESSFUL LOGIN → RESET COUNT
+            // -------------------------------
+            HttpContext.Session.SetInt32("FailedAttempts", 0);
+            HttpContext.Session.SetString("LastLoginEmail", email);
+
+
 
             if (user.user_2FA)
             {
@@ -174,6 +192,24 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             {
                 TempData["Message"] = "First and Last Name cannot exceed 40 characters.";
                 ModelState.AddModelError("", "Names may not exceed 40 characters");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
+            }
+
+            // ✅ First & Last name content validation (letters and spaces only)
+            var nameRegex = @"^[A-Za-z\s]+$";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(firstName, nameRegex))
+            {
+                TempData["Message"] = "First name can only contain letters and spaces.";
+                ModelState.AddModelError("", "Invalid first name");
+                ViewBag.ActiveTab = "register";
+                return View("Login", model);
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(lastName, nameRegex))
+            {
+                TempData["Message"] = "Last name can only contain letters and spaces.";
+                ModelState.AddModelError("", "Invalid last name");
                 ViewBag.ActiveTab = "register";
                 return View("Login", model);
             }
@@ -652,6 +688,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpPost]
         public async Task<IActionResult> ResetPassword(string email, string token, string newPassword, string confirmPassword)
         {
+            // 1️⃣ Check required fields
+            if (string.IsNullOrWhiteSpace(newPassword) || string.IsNullOrWhiteSpace(confirmPassword))
+            {
+                TempData["Message"] = "Both password fields are required.";
+                ViewBag.Email = email;
+                ViewBag.Token = token;
+                return View();
+            }
+
+            // 2️⃣ Check if passwords match
             if (newPassword != confirmPassword)
             {
                 TempData["Message"] = "Passwords do not match.";
@@ -660,13 +706,34 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return View();
             }
 
+            // 3️⃣ Password complexity checks (like registration)
+            var passwordErrors = new List<string>();
+            if (newPassword.Length < 6 || newPassword.Length > 20)
+                passwordErrors.Add("Password must be 6 to 20 characters long.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(newPassword, @"[A-Z]"))
+                passwordErrors.Add("At least one uppercase letter required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(newPassword, @"[a-z]"))
+                passwordErrors.Add("At least one lowercase letter required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(newPassword, @"\d"))
+                passwordErrors.Add("At least one number required.");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(newPassword, @"[@$!%*?&.,]"))
+                passwordErrors.Add("At least one special character required.");
+
+            if (passwordErrors.Count > 0)
+            {
+                TempData["Message"] = string.Join(" ", passwordErrors);
+                ViewBag.Email = email;
+                ViewBag.Token = token;
+                return View();
+            }
+
+            // 4️⃣ Validate token
             if (!Guid.TryParse(token, out var guidToken))
             {
                 TempData["Message"] = "Invalid password reset token format.";
                 return RedirectToAction("Login");
             }
 
-            // ✅ Find token record in DB
             var record = await _db.email_verifications
                 .FirstOrDefaultAsync(v =>
                     v.email == email &&
@@ -681,7 +748,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            // ✅ Find the user
+            // 5️⃣ Find the user
             var user = await _db.users.FirstOrDefaultAsync(u => u.email == email);
             if (user == null)
             {
@@ -689,20 +756,20 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login");
             }
 
-            // ✅ Hash new password
+            // 6️⃣ Hash new password
             var hasher = new PasswordHasher<object>();
             user.password_hash = hasher.HashPassword(null, newPassword);
 
-            // ✅ Mark token as used
-            record.used = true;
+            // ✅ Set user_status to Active
+            user.user_status = "Active";
 
+            // 7️⃣ Mark token as used
+            record.used = true;
             await _db.SaveChangesAsync();
 
             TempData["Message"] = "Password reset successfully! You can now log in.";
             return RedirectToAction("Login");
         }
-
-
 
         [HttpGet]
         public IActionResult RecoverAccount()

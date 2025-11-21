@@ -15,6 +15,8 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
+using System.Text.RegularExpressions;
+
 
 
 namespace JobPortal.Areas.JobSeeker.Controllers
@@ -29,41 +31,50 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             _db = db;
             _webHostEnvironment = webHostEnvironment;
         }
-        public async Task<IActionResult> Index(string? search)
+public async Task<IActionResult> Index(string? search)
+{
+    var recentJobsQuery = _db.job_listings
+        .Include(j => j.company)
+        .Where(j => j.job_status == "Open")
+        .OrderByDescending(j => j.date_posted)
+        .Take(4);
+
+    if (!string.IsNullOrEmpty(search))
+    {
+        recentJobsQuery = recentJobsQuery.Where(j =>
+            j.job_title.Contains(search) ||
+            j.company.company_name.Contains(search) ||
+            j.company.company_industry.Contains(search) ||
+            j.company.company_location.Contains(search) ||              // ⭐ NEW searchable info
+            j.job_type.Contains(search)
+        );
+    }
+
+    var recentJobs = await recentJobsQuery
+        .Select(j => new RecentJobViewModel
         {
-            // Fetch 4 most recent open jobs
-            var recentJobsQuery = _db.job_listings
-                .Include(j => j.company)
-                .Where(j => j.job_status == "Open")
-                .OrderByDescending(j => j.date_posted)
-                .Take(4);
+            JobId = j.job_listing_id,
+            JobTitle = j.job_title,
+            CompanyName = j.company.company_name,
+            Industry = j.company.company_industry,
 
-            if (!string.IsNullOrEmpty(search))
-            {
-                recentJobsQuery = recentJobsQuery.Where(j =>
-                    j.job_title.Contains(search) ||
-                    j.company.company_name.Contains(search) ||
-                    j.company.company_industry.Contains(search));
-            }
+            // ⭐ New fields
+            Location = j.company.company_location,
+            MinSalary = j.salary_min,
+            MaxSalary = j.salary_max,
+            JobType = j.job_type
+        })
+        .ToListAsync();
 
-            var recentJobs = await recentJobsQuery
-                .Select(j => new RecentJobViewModel
-                {
-                    JobId = j.job_listing_id,
-                    JobTitle = j.job_title,
-                    CompanyName = j.company.company_name,
-                    Industry = j.company.company_industry
-                })
-                .ToListAsync();
+    var model = new DashboardIndexViewModel
+    {
+        SearchKeyword = search,
+        RecentJobs = recentJobs
+    };
 
-            var model = new DashboardIndexViewModel
-            {
-                SearchKeyword = search,
-                RecentJobs = recentJobs
-            };
+    return View(model);
+}
 
-            return View(model);
-        }
 
         public IActionResult Feedback() => View();
 
@@ -89,7 +100,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 pref = new notification_preference
                 {
                     user_id = userId,
-                    allow_email = false,
                     allow_inApp = false
                 };
                 _db.notification_preferences.Add(pref);
@@ -120,7 +130,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
 
                 // now load from notification_preference table
-                notif_email = pref.allow_email,
                 notif_inapp = pref.allow_inApp,
                 notif_job_updates = pref.notif_job_updates,
                 notif_messages = pref.notif_messages,
@@ -141,6 +150,38 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             var user = await _db.users.FirstOrDefaultAsync(u => u.user_id == vm.UserId);
             if (user == null)
                 return NotFound("User not found.");
+
+            // ---------------- VALIDATION ----------------
+
+            // Validate First Name
+            if (!Regex.IsMatch(vm.FirstName ?? "", @"^[A-Za-z\s]+$"))
+            {
+                ModelState.AddModelError("FirstName", "First name can only contain letters and spaces.");
+            }
+
+            // Validate Last Name
+            if (!Regex.IsMatch(vm.LastName ?? "", @"^[A-Za-z\s]+$"))
+            {
+                ModelState.AddModelError("LastName", "Last name can only contain letters and spaces.");
+            }
+
+            // Validate Email format
+            if (!Regex.IsMatch(vm.Email ?? "", @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            {
+                ModelState.AddModelError("Email", "Invalid email format.");
+            }
+
+            // Validate Phone (optional +, digits only, length 7–15)
+            if (!Regex.IsMatch(vm.Phone ?? "", @"^\+?\d{7,15}$"))
+            {
+                ModelState.AddModelError("Phone", "Phone must contain only digits and be 7 to 15 characters long.");
+            }
+
+            // If validation fails, return view 
+            if (!ModelState.IsValid)
+            {
+                return View(vm);
+            }
 
             // --- Handle profile picture upload ---
             if (vm.ProfileImage != null && vm.ProfileImage.Length > 0)
@@ -205,7 +246,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
             // ✅ Update preferences based on view model
-            pref.allow_email = vm.notif_email;
             pref.allow_inApp = vm.notif_inapp;
             pref.notif_job_updates = vm.notif_job_updates;
             pref.notif_messages = vm.notif_messages;
@@ -228,29 +268,48 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         {
             var userId = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userId))
-                return Unauthorized();
+                return Unauthorized("User not logged in.");
 
             var user = await _db.users.FindAsync(int.Parse(userId));
             if (user == null)
-                return NotFound();
+                return NotFound("User not found.");
 
-            // ✅ Use PasswordHasher to verify the current password
+            // Verify current password
             var hasher = new PasswordHasher<object>();
             var verificationResult = hasher.VerifyHashedPassword(null, user.password_hash, currentPassword);
-
             if (verificationResult == PasswordVerificationResult.Failed)
                 return BadRequest("Current password is incorrect.");
 
+            // Confirm new password matches
             if (newPassword != confirmPassword)
                 return BadRequest("New password and confirmation do not match.");
 
-            // ✅ Hash and update new password
+            // ✅ Apply your existing password strength rules
+            var passwordErrors = new List<string>();
+            if (newPassword.Length < 6 || newPassword.Length > 20)
+                passwordErrors.Add("Password must be 6 to 20 characters long.");
+            if (!Regex.IsMatch(newPassword, @"[A-Z]"))
+                passwordErrors.Add("At least one uppercase letter required.");
+            if (!Regex.IsMatch(newPassword, @"[a-z]"))
+                passwordErrors.Add("At least one lowercase letter required.");
+            if (!Regex.IsMatch(newPassword, @"\d"))
+                passwordErrors.Add("At least one number required.");
+            if (!Regex.IsMatch(newPassword, @"[@$!%*?&.,]"))
+                passwordErrors.Add("At least one special character required.");
+
+            if (passwordErrors.Any())
+                return BadRequest(string.Join(" ", passwordErrors));
+
+            // After verifying current password
+            if (hasher.VerifyHashedPassword(null, user.password_hash, newPassword) == PasswordVerificationResult.Success)
+                return BadRequest("New password cannot be the same as your current password.");
+
+            // Hash and save
             user.password_hash = hasher.HashPassword(null, newPassword);
             await _db.SaveChangesAsync();
 
             return Ok("Password updated successfully!");
         }
-
 
         // ==============================
         // ❌ Delete Account (Soft Delete)
@@ -537,6 +596,33 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             int userId = int.Parse(userIdString);
 
+            // VALIDATION: Expected Salary must not be null or 0
+            if (!model.ExpectedSalary.HasValue || model.ExpectedSalary <= 0)
+            {
+                TempData["SalaryError"] = "Please enter a positive expected salary.";
+
+                model.ExistingResumes = await _db.resumes
+                    .Where(r => r.user_id == userId)
+                    .ToListAsync();
+
+                return View("Apply", model);
+            }
+
+            // ---------------------------
+            // VALIDATION: Must provide a resume
+            // ---------------------------
+            if (!model.SelectedResumeId.HasValue && (model.ResumeFile == null || model.ResumeFile.Length == 0))
+            {
+                TempData["SalaryError"] = "Please select an existing resume or upload a new one.";
+
+                // Reload existing resumes for the form
+                model.ExistingResumes = await _db.resumes
+                    .Where(r => r.user_id == userId)
+                    .ToListAsync();
+
+                return View("Apply", model);
+            }
+
             string? relativePath = null;
 
             // CASE 1: Existing resume selected
@@ -595,6 +681,25 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             _db.job_applications.Add(application);
             await _db.SaveChangesAsync();
+
+            // <-- Place the notification logic here
+            var preferences = await _db.notification_preferences
+                .FirstOrDefaultAsync(p => p.user_id == userId);
+
+            if (preferences != null && preferences.allow_inApp && preferences.notif_job_updates)
+            {
+                var notification = new notification
+                {
+                    user_id = userId,
+                    notification_title = "Application Update",
+                    notification_msg = "Your application has been received.",
+                    notification_type = "Application",
+                    notification_date_created = DateTime.Now,
+                    notification_read_status = false
+                };
+                _db.notifications.Add(notification);
+                await _db.SaveChangesAsync();
+            }
 
             TempData["Success"] = "Your application has been submitted successfully!";
             return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
@@ -1268,14 +1373,19 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
         public IActionResult GetRecentNotifications()
         {
-            var userId = HttpContext.Session.GetString("UserId");
-            if (string.IsNullOrEmpty(userId))
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
                 return Json(new { success = false, message = "User not logged in." });
 
-            int parsedId = int.Parse(userId);
+            int userId = int.Parse(userIdStr);
 
+            // Total unread count
+            int unreadCount = _db.notifications
+                .Count(n => n.user_id == userId && !n.notification_read_status);
+
+            // Latest 3 unread notifications
             var notifications = _db.notifications
-                .Where(n => n.user_id == parsedId && !n.notification_read_status)
+                .Where(n => n.user_id == userId && !n.notification_read_status)
                 .OrderByDescending(n => n.notification_date_created)
                 .Take(3)
                 .Select(n => new
@@ -1287,10 +1397,16 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 })
                 .ToList();
 
-            return Json(new { success = true, data = notifications });
+            return Json(new
+            {
+                success = true,
+                data = notifications,
+                totalUnread = unreadCount
+            });
         }
 
-        public IActionResult Notifications()
+
+        public IActionResult Notifications(int page = 1, int pageSize = 20)
         {
             var userId = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userId))
@@ -1298,10 +1414,20 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             int parsedId = int.Parse(userId);
 
+            var totalNotifications = _db.notifications
+    .Where(n => n.user_id == parsedId)
+    .Count();
+
             var notifications = _db.notifications
                 .Where(n => n.user_id == parsedId)
                 .OrderByDescending(n => n.notification_date_created)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToList();
+
+            ViewBag.CurrentPage = page;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalNotifications = totalNotifications;
 
             return View(notifications);
         }

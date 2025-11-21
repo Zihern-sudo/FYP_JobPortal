@@ -21,7 +21,11 @@
     {
         <form asp-action="SubmitApplication" asp-controller="Dashboard" asp-area="JobSeeker" method="post"
             enctype="multipart/form-data" class="card shadow-sm p-4">
+
             @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="All" class="text-danger mb-3" data-valmsg-summary="true" style="display:block;">
+            </div>
             <input type="hidden" asp-for="JobId" />
 
             <div class="mb-3">
@@ -42,7 +46,7 @@
             <div class="mb-3">
                 <label class="form-label">Expected Salary</label>
                 <input asp-for="ExpectedSalary" type="number" class="form-control" placeholder="Enter your expected salary"
-                    min="0" step="100" />
+                     />
             </div>
 
             <div class="mb-3">
@@ -76,25 +80,45 @@
         </form>
     }
 </section>
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
 
-<script>
-    const resumeSelect = document.getElementById('resumeSelect');
-    const uploadDiv = document.getElementById('uploadDiv');
+            // Check TempData errors from controller
+            const tempError = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Error"]));
+            const salaryError = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["SalaryError"]));
+            const resumeError = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["ResumeError"]));
 
-    resumeSelect.addEventListener('change', function () {
-        if (resumeSelect.value === "") {
-            // Upload new resume selected → show file input
-            uploadDiv.style.display = 'block';
-        } else {
-            // Existing resume selected → hide file input
-            uploadDiv.style.display = 'none';
-        }
-    });
+            const combinedError = tempError || salaryError || resumeError;
 
-    // Initialize on page load
-    if (resumeSelect.value === "") {
-        uploadDiv.style.display = 'block';
-    } else {
-        uploadDiv.style.display = 'none';
-    }
-</script>
+            if (combinedError) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: combinedError,
+                    confirmButtonColor: "#007bff"
+                });
+            }
+
+            // Optional: hide the validation summary div to prevent static red error box
+            const validationSummary = document.querySelector("[data-valmsg-summary='true']");
+            if (validationSummary) {
+                validationSummary.style.display = "none";
+            }
+
+            // Handle resume select toggle
+            const resumeSelect = document.getElementById('resumeSelect');
+            const uploadDiv = document.getElementById('uploadDiv');
+
+            function toggleUploadDiv() {
+                uploadDiv.style.display = resumeSelect.value === "" ? 'block' : 'none';
+            }
+
+            resumeSelect.addEventListener('change', toggleUploadDiv);
+
+            // Initialize on page load
+            toggleUploadDiv();
+        });
+    </script>
+}

@@ -22,7 +22,6 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string Email { get; set; } = string.Empty;
 
         [Display(Name = "Expected Salary")]
-        [Range(0, int.MaxValue, ErrorMessage = "Expected salary must be positive.")]
         public int? ExpectedSalary { get; set; }
         [Display(Name = "Describe Yourself")]
         [StringLength(2000, ErrorMessage = "Description is too long.")]

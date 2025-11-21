@@ -45,37 +45,67 @@
             }
         </tbody>
     </table>
+    @{
+        int totalPages = (int)Math.Ceiling((double)ViewBag.TotalNotifications / ViewBag.PageSize);
+        int currentPage = ViewBag.CurrentPage;
+    }
+
+    @if (totalPages > 1)
+    {
+        <nav>
+            <ul class="pagination justify-content-center">
+                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                    <a class="page-link" href="@Url.Action("Notifications", new { page = currentPage - 1 })">Previous</a>
+                </li>
+
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    <li class="page-item @(i == currentPage ? "active" : "")">
+                        <a class="page-link" href="@Url.Action("Notifications", new { page = i })">@i</a>
+                    </li>
+                }
+
+                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                    <a class="page-link" href="@Url.Action("Notifications", new { page = currentPage + 1 })">Next</a>
+                </li>
+            </ul>
+        </nav>
+    }
+
 </form>
 
 @section Scripts {
     <script>
-        // ✅ Enable/Disable "Mark Selected" button based on selection
-        const checkboxes = document.querySelectorAll(".notif-checkbox");
         const markBtn = document.getElementById("markSelectedBtn");
         const selectAll = document.getElementById("selectAll");
 
         function updateButtonState() {
-            const anyChecked = [...checkboxes].some(cb => cb.checked);
-            markBtn.disabled = !anyChecked;
+            const checkboxes = document.querySelectorAll(".notif-checkbox:not([disabled])");
+            markBtn.disabled = ![...checkboxes].some(cb => cb.checked);
         }
 
-        checkboxes.forEach(cb => cb.addEventListener("change", updateButtonState));
+        // Handle individual checkbox change via delegation
+        document.addEventListener("change", function (e) {
+            if (e.target.classList.contains("notif-checkbox")) {
+                updateButtonState();
 
-        // ✅ Select all toggle
-        selectAll.addEventListener("change", (e) => {
-            checkboxes.forEach(cb => {
-                if (!cb.disabled) cb.checked = e.target.checked;
-            });
+                const checkboxes = document.querySelectorAll(".notif-checkbox:not([disabled])");
+                selectAll.checked = [...checkboxes].every(cb => cb.checked);
+            }
+        });
+
+        // Select all toggle
+        selectAll.addEventListener("change", function (e) {
+            const checkboxes = document.querySelectorAll(".notif-checkbox:not([disabled])");
+            checkboxes.forEach(cb => cb.checked = e.target.checked);
             updateButtonState();
         });
 
-        // ✅ Handle "Mark Selected" button click
-        markBtn.addEventListener("click", () => {
-            const selectedIds = [...checkboxes]
-                .filter(cb => cb.checked)
-                .map(cb => cb.value);
-
-            if (selectedIds.length === 0) return;
+        // Mark Selected click
+        markBtn.addEventListener("click", function () {
+            const checkboxes = document.querySelectorAll(".notif-checkbox:not([disabled])");
+            const selectedIds = [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
+            if (!selectedIds.length) return;
 
             fetch('@Url.Action("MarkSelectedAsRead", "Dashboard")', {
                 method: "POST",
@@ -85,15 +115,15 @@
                 },
                 body: JSON.stringify(selectedIds)
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert("Something went wrong.");
-                    }
-                })
-                .catch(err => console.error(err));
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) location.reload();
+                else alert("Something went wrong.");
+            })
+            .catch(console.error);
         });
+
+        // Initial button state
+        updateButtonState();
     </script>
 }

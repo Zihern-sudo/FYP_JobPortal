@@ -306,7 +306,7 @@ ADD COLUMN notif_reminders BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE notification_preference 
 CHANGE COLUMN `allow_inApp` `allow_inApp` TINYINT(1) NOT NULL DEFAULT '0' ;
-CHANGE COLUMN `allow_email` `allow_email` TINYINT(1) NOT NULL DEFAULT '0' ;
+CHANGE COLUMN `` `allow_email` TINYINT(1) NOT NULL DEFAULT '0' ;
 
 ALTER TABLE user
 ADD COLUMN profile_picture VARCHAR(255) NULL;

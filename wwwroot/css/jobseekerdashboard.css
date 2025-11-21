@@ -1379,3 +1379,9 @@ input[type="file"]::file-selector-button:hover {
     height: 3rem;
 }
 
+.dashboard-footer {
+    font-size: 0.9rem;
+}
+.dashboard-footer a:hover {
+    text-decoration: underline;
+}

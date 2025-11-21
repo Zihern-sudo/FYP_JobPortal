@@ -38,13 +38,13 @@ Strict rules:
   • Building resumes with templates using Resume Builder
   • Viewing application status (Submitted, AI-Screened, Shortlisted, Interview, Offer, Hired, Rejected)
   • Viewing total applications and status summary on applications page
-  • Basic resume feedback based on keyword matching (education level, experience years, skills)
+  • Basic resume feedback based on keyword matching (education level, experience years, skills), also saves the feedback history on the feedback page
   • Resume builder is available from the sidebar. Allows to build and customize own resume
   • Receiving system notifications
   • Updating personal profile
 
 - Unsupported features:
-  • Messaging recruiters inside the portal
+  • Messaging recruiters inside the portal (only possible if offer accepted and will be automatically approached by recruiter)
   • In-app chat with employers
   • Scheduling interviews inside the portal
   • Advanced AI resume analysis (we only provide simple keyword-based scoring)

@@ -217,23 +217,31 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             });
         }
 
-        public async Task<IActionResult> FeedbackHistory()
+        public async Task<IActionResult> FeedbackHistory(int page = 1)
         {
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
 
             int userId = int.Parse(userIdStr);
+            int pageSize = 5; // 5 records per page
 
-            // Use userId directly; no need for f.resume.user_id
-            var feedbackList = await _db.resume_feedback_histories
+            var query = _db.resume_feedback_histories
                 .Where(f => f.user_id == userId)
-                .OrderByDescending(f => f.created_at)
+                .OrderByDescending(f => f.created_at);
+
+            int totalCount = await query.CountAsync();
+            var feedbackList = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             ViewBag.FileName = "All Resumes";
+            ViewBag.CurrentPage = page;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
             return View(feedbackList);
         }
+
     }
 }

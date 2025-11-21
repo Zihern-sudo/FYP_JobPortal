@@ -3,10 +3,13 @@ using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
 using JobPortal.Areas.Shared.Models.Extensions; // AddAreaRoleGuards()
 using QuestPDF.Infrastructure;
+using JobPortal.Areas.Services;
 
 // AI namespaces
 using JobPortal.Areas.Shared.Options;
 using JobPortal.Areas.Shared.AI;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +42,9 @@ builder.Services.AddHttpClient<IOpenAIClient, OpenAIClient>();
 builder.Services.AddScoped<ILanguageService, LanguageService>();
 builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<AiOrchestrator>();
+builder.Services.AddScoped<JobSeekerNotificationService>();
+builder.Services.AddHostedService<JobSeekerNotificationBackgroundService>();
+
 
 // --- REMOVE Gemini ---
 // (Deleted GeminiOptions, GeminiClient, GeminiResumeParser registrations)

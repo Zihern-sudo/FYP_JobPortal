@@ -18,7 +18,6 @@ namespace JobPortal.Areas.JobSeeker.Models
         public IFormFile? ProfileImage { get; set; }
         public string? ProfilePicturePath { get; set; }
         public bool notif_inapp { get; set; }
-        public bool notif_email { get; set; }
         public bool notif_job_updates { get; set; }
         public bool notif_messages { get; set; }
         public bool notif_reminders { get; set; }

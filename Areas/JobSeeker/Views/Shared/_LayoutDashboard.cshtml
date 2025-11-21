@@ -24,7 +24,7 @@
     <div class="dashboard-container">
 
         <!-- ☰ Sidebar Toggle Button -->
-        <button class="sidebar-toggle" id="sidebarToggle">☰</button>   
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
 
         <!-- === Sidebar === -->
         <aside class="sidebar" id="sidebar">
@@ -93,9 +93,14 @@
         </main>
     </div>
 
-    <footer class="text-center py-3">
-        &copy; 2025 Joboria. All rights reserved.
-    </footer>
+<footer class="dashboard-footer text-center py-3 text-muted">
+    <span>© @DateTime.UtcNow.Year Joboria</span>
+    <span class="mx-2">•</span>
+    <a href="#" class="text-muted text-decoration-none">Privacy Policy</a>
+    <span class="mx-2">•</span>
+    <a href="#" class="text-muted text-decoration-none">Terms</a>
+</footer>
+
 
     @RenderSection("Scripts", required: false)
 
@@ -127,18 +132,18 @@
                     const list = document.querySelector("#notifDropdown ul");
                     const bell = document.getElementById("notifBell");
 
-                    list.innerHTML = ""; // Clear old items
+                    list.innerHTML = "";
 
                     if (!data.success || data.data.length === 0) {
                         list.innerHTML = `<li class="no-notif">No recent notifications</li>`;
-                        bell.removeAttribute("data-count"); // ✅ Hide badge completely
+                        bell.removeAttribute("data-count");
                         return;
                     }
 
-                    // 🟢 Update count
-                    bell.dataset.count = data.data.length;
+                    // Show total unread in badge
+                    bell.dataset.count = data.totalUnread;
 
-                    // 📰 Display notifications
+                    // Show latest 3 notifications in dropdown
                     data.data.forEach(n => {
                         const li = document.createElement("li");
                         li.innerHTML = `
@@ -151,6 +156,7 @@
                 })
                 .catch(err => console.error("Error fetching notifications:", err));
         });
+
 
 
 

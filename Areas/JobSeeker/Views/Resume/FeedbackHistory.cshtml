@@ -56,6 +56,30 @@
             </tbody>
         </table>
     }
+    @if (ViewBag.TotalPages > 1)
+    {
+        <nav aria-label="Feedback pagination">
+            <ul class="pagination justify-content-center mt-3">
+                <li class="page-item @(ViewBag.CurrentPage == 1 ? "disabled" : "")">
+                    <a class="page-link"
+                        href="@Url.Action("FeedbackHistory", new { page = ViewBag.CurrentPage - 1 })">Previous</a>
+                </li>
+
+                @for (int i = 1; i <= ViewBag.TotalPages; i++)
+                {
+                    <li class="page-item @(ViewBag.CurrentPage == i ? "active" : "")">
+                        <a class="page-link" href="@Url.Action("FeedbackHistory", new { page = i })">@i</a>
+                    </li>
+                }
+
+                <li class="page-item @(ViewBag.CurrentPage == ViewBag.TotalPages ? "disabled" : "")">
+                    <a class="page-link"
+                        href="@Url.Action("FeedbackHistory", new { page = ViewBag.CurrentPage + 1 })">Next</a>
+                </li>
+            </ul>
+        </nav>
+    }
+
 
     <a href="@Url.Action("Feedback", "Dashboard", new { area = "JobSeeker" })" class="btn btn-secondary mt-3">
         ← Back

@@ -26,17 +26,39 @@
                 @foreach (var job in Model.RecentJobs)
                 {
                     <div class="col-md-3 mb-3">
-                        <div class="card h-100">
+                        <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">@job.JobTitle</h5>
-                                <p class="card-text">@job.CompanyName</p>
-                                <p class="card-text"><small class="text-muted">@job.Industry</small></p>
+                                <h5 class="card-title fw-bold">@job.JobTitle</h5>
+
+                                <p class="text-muted mb-1">@job.CompanyName</p>
+                                <p class="text-muted small">@job.Industry</p>
+
+                                <p class="mb-1">
+                                    <i class="bi bi-geo-alt-fill text-primary"></i>
+                                    @job.Location
+                                </p>
+
+                                @if (job.MinSalary.HasValue && job.MaxSalary.HasValue)
+                                {
+                                    <p class="mb-1">
+                                        <i class="bi bi-cash text-success"></i>
+                                        RM @job.MinSalary - RM @job.MaxSalary
+                                    </p>
+                                }
+
+                                @if (!string.IsNullOrEmpty(job.JobType))
+                                {
+                                    <p class="badge bg-info text-dark w-fit">@job.JobType</p>
+                                }
+
                                 <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="JobDetails"
                                     asp-route-id="@job.JobId" class="btn btn-sm btn-primary mt-auto">
-                                    View Details</a>
+                                    View Details
+                                </a>
                             </div>
                         </div>
                     </div>
+
                 }
             </div>
         </section>
