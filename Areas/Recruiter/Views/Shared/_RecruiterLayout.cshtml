@@ -16,6 +16,7 @@
   bool isMsgTpl = ctrl.Equals("Templates", StringComparison.OrdinalIgnoreCase);
   bool isJobTpl = ctrl.Equals("JobPostTemplates", StringComparison.OrdinalIgnoreCase);
   bool expandT = isMsgTpl || isJobTpl;
+  bool isBulk = ctrl.Equals("Bulk", StringComparison.OrdinalIgnoreCase);
 
   // --- Recruiter info for navbar (reads existing session/db only) ---
   var uidStr = Context?.Session?.GetString("UserId");
@@ -452,12 +453,10 @@
           </div>
         </li>
 
-        <li class="mt-2"><a class="rk-link" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index">Bulk Tools</a>
+        <li class="mt-2"><a class="rk-link @(isBulk ? "active" : "")" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index">Bulk Tools</a>
         </li>
 
-        <!-- Small pointer to where AI controls live (Jobs/Pipeline & Candidates/Detail) -->
-        <li class="mt-2"><a class="rk-link @(isJobs ? "active" : "")" asp-area="Recruiter" asp-controller="Jobs"
-            asp-action="Index">AI Controls (Jobs)</a></li>
+
       </ul>
     </aside>
 
@@ -495,10 +494,8 @@
               </ul>
             </div>
           </li>
-          <li class="mt-2"><a class="rk-link text-white" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index"
+          <li class="mt-2"><a class="rk-link text-white @(isBulk ? "active" : "")" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index"
               data-bs-dismiss="offcanvas">Bulk Tools</a></li>
-          <li class="mt-2"><a class="rk-link text-white @(isJobs ? "active" : "")" asp-area="Recruiter"
-              asp-controller="Jobs" asp-action="Index" data-bs-dismiss="offcanvas">AI Controls (Jobs)</a></li>
         </ul>
       </div>
     </div>

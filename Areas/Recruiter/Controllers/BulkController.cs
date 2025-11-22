@@ -31,23 +31,24 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         // GET: /Recruiter/Bulk
         // MODIFIED: Added pagination, search, and filter parameters
-        public async Task<IActionResult> Index(string? q, string? stage, int page = 1, int pageSize = DefaultPageSize)
+        public async Task<IActionResult> Index(string? q, string? stage, string? sort, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Bulk Actions";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            // normalize sort (default newest on top)
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             var baseQuery = _db.job_applications
                 .Include(a => a.user)
                 .Include(a => a.job_listing)
                 .Where(a => a.job_listing.user_id == recruiterId);
 
-            // Apply stage filter
-            // Note: This maps the view's filter (e.g., "New") back to the database status
             if (!string.IsNullOrWhiteSpace(stage))
             {
                 if (stage == "New")
@@ -58,7 +59,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     baseQuery = baseQuery.Where(a => a.application_status == stage);
             }
 
-            // Apply search query
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -68,32 +68,31 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     a.job_listing.job_title.Contains(qTrim));
             }
 
-            // Get total count for pagination
             var totalCount = await baseQuery.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
-
             var skip = (page - 1) * pageSize;
 
-            // Get paginated applications
-            var apps = await baseQuery
-                .OrderByDescending(a => a.date_updated)
+            // === ID sort toggle ===
+            IOrderedQueryable<job_application> ordered = sort == "id_asc"
+                ? baseQuery.OrderBy(a => a.application_id)
+                : baseQuery.OrderByDescending(a => a.application_id);
+
+            var apps = await ordered
                 .Skip(skip)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // Fetch evals only for the candidates on the current page
             var jobIds = apps.Select(a => a.job_listing_id).Distinct().ToList();
             var userIds = apps.Select(a => a.user_id).Distinct().ToList();
 
             var evals = await _db.ai_resume_evaluations
-                // MODIFIED: Removed the incorrect user_id check.
-                .Where(ev => jobIds.Contains(ev.job_listing_id)) // Optimized query
+                .Where(ev => jobIds.Contains(ev.job_listing_id))
                 .Join(_db.resumes,
                       ev => ev.resume_id,
                       r => r.resume_id,
                       (ev, r) => new { ev.job_listing_id, r.user_id, r.upload_date, ev.match_score })
-                .Where(e => userIds.Contains(e.user_id)) // This line correctly filters by user_id
+                .Where(e => userIds.Contains(e.user_id))
                 .ToListAsync();
 
             string MapStage(string raw)
@@ -129,7 +128,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 );
             }).ToList();
 
-            // MODIFIED: Create and return the new view model
             var vm = new BulkIndexVM
             {
                 Items = items,
@@ -138,7 +136,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 TotalCount = totalCount,
                 TotalPages = totalPages,
                 Query = q ?? string.Empty,
-                Stage = stage ?? string.Empty
+                Stage = stage ?? string.Empty,
+                Sort = sort // <-- pass through to view
             };
 
             return View(vm);

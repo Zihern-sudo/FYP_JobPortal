@@ -1,210 +1,277 @@
 @* File: Areas/Admin/Views/Reports/Pdf.cshtml *@
 @model JobPortal.Areas.Admin.Models.PdfReportViewModel
 @{
-    Layout = null; // Render as standalone HTML for PDF conversion
+    Layout = null; // Standalone for PDF conversion
     string F(DateTime? d) => d.HasValue ? d.Value.ToString("yyyy-MM-dd") : "N/A";
+    string S(string? s) => string.IsNullOrWhiteSpace(s) ? "N/A" : s!;
+    // Why: pass logo as data URL from controller to avoid file path issues in PDF engines.
+    var logo = (ViewData["LogoDataUrl"] as string) ?? (ViewBag.LogoDataUrl as string);
+
+    // Optional decision-ready data injected by controller
+    var kis  = ViewData["KeyIndicators"]   as System.Collections.IEnumerable; // List<KeyIndicator>
+    var ins  = ViewData["Insights"]        as System.Collections.IEnumerable; // List<InsightItem>
+    var acts = ViewData["Recommendations"] as System.Collections.IEnumerable; // List<ActionItem>
 }
 
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta charset="utf-8" />
     <title>JobPortal — Admin Report</title>
     <style>
-        * {
-            box-sizing: border-box;
-        }
+        /* ---------- Base ---------- */
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #222; line-height: 1.45; }
 
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            color: #222;
-            margin: 0;
-            padding: 0;
-        }
+        /* ---------- Layout & Rhythm ---------- */
+        .wrap { padding: 20px 22px; }
+        .section { margin-top: 24px; page-break-inside: avoid; }
+        .muted { color: #666; }
+        .mono { font-family: Consolas, Menlo, monospace; }
+        .small { font-size: 11px; }
+        .accent { color: #111; }
 
-        .wrap {
-            padding: 8px 4px;
-        }
+        /* ---------- Header ---------- */
+        .header { display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #e5e5e5; padding: 6px 0 14px 0; }
+        .logo { width: 60px; height: 60px; object-fit: contain; }
+        .title { font-size: 22px; font-weight: 700; line-height: 1.25; }
+        .stamp { font-size: 12px; color: #555; margin-top: 4px; }
 
-        .heading {
-            font-size: 22px;
-            font-weight: 700;
-            margin-bottom: 2px;
-        }
+        /* ---------- Panels ---------- */
+        .panel { border: 1px solid #e9e9e9; border-radius: 10px; padding: 14px; background: #fff; }
+        .panel + .panel { margin-top: 14px; }
+        .panel-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; letter-spacing: .2px; }
 
-        .sub {
-            color: #666;
-            font-size: 12px;
-            margin-bottom: 12px;
-        }
+        /* ---------- Definition list (Filters) ---------- */
+        .filters { display: grid; grid-template-columns: 180px 1fr; column-gap: 22px; row-gap: 8px; }
+        .filters dt { font-weight: 600; color: #444; }
+        .filters dd { margin: 0 0 6px 0; color: #222; }
 
-        .filters {
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 10px;
-            margin: 8px 0 14px 0;
-        }
+        /* ---------- Cards (Summary Metrics) ---------- */
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 14px; background: #fff; }
+        .card .label { color: #777; font-size: 12px; margin-bottom: 6px; }
+        .card .value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+        .card .note { color: #666; font-size: 11px; margin-top: 6px; }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
+        /* ---------- Lists (Daily / Top Companies / Exec Summary rows) ---------- */
+        .list { display: flex; flex-direction: column; gap: 10px; }
+        .item { border: 1px solid #eee; border-radius: 10px; padding: 12px 14px; background: #fff; }
+        .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+        .row > div + div { text-align: right; }
+        .pill { font-size: 10px; padding: 3px 10px; border: 1px solid #ddd; border-radius: 999px; }
 
-        .card {
-            border: 1px solid #e6e6e6;
-            border-radius: 10px;
-            padding: 12px;
-        }
+        /* ---------- Badges for insight levels ---------- */
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 6px; border: 1px solid #ddd; }
+        .warn { border-color: #f3c37a; color: #8a5a00; background: #fffaf1; }
+        .critical { border-color: #f59b9b; color: #7a1f1f; background: #fff5f5; }
 
-        .label {
-            color: #777;
-            font-size: 12px;
-        }
+        /* ---------- Ranking ---------- */
+        .rank { display: inline-block; min-width: 28px; text-align: center; margin-right: 10px; }
+        .company { font-weight: 600; }
 
-        .value {
-            font-size: 22px;
-            font-weight: 700;
-            margin-top: 2px;
-        }
+        /* ---------- Section headings ---------- */
+        h3 { margin: 22px 0 10px 0; font-size: 16px; border-bottom: 1px solid #efefef; padding: 0 0 6px 0; }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 14px;
-        }
+        /* ---------- Print considerations ---------- */
+        .avoid-break { page-break-inside: avoid; }
+        .spacer-sm { height: 6px; }
+        .spacer-md { height: 10px; }
+        .spacer-lg { height: 16px; }
 
-        th,
-        td {
-            border: 1px solid #e6e6e6;
-            padding: 8px 10px;
-            font-size: 12px;
-            text-align: left;
+        /* Razor escape for @@media in CSS */
+        @@media (max-width: 980px) {
+            .grid { grid-template-columns: repeat(2, 1fr); }
+            .filters { grid-template-columns: 1fr; }
         }
-
-        th {
-            background: #fafafa;
-            font-weight: 600;
-        }
-
-        .muted {
-            color: #666;
-        }
-
-        .footer-note {
-            margin-top: 16px;
-            font-size: 11px;
-            color: #777;
-        }
-
-        h3 {
-            margin: 18px 0 6px 0;
-            font-size: 16px;
+        @@media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 
 <body>
-    <div class="wrap">
-        <div class="heading">JobPortal — Admin Report</div>
-        <div class="sub">Generated: @Model.ReportDate.ToString("yyyy-MM-dd HH:mm") UTC</div>
-
-        <div class="filters">
-            <div class="muted"><strong>Filters</strong></div>
-            <table>
-                <tr>
-                    <th style="width:35%">Date From</th>
-                    <td>@F(Model.Filters.DateFrom)</td>
-                </tr>
-                <tr>
-                    <th>Date To</th>
-                    <td>@F(Model.Filters.DateTo)</td>
-                </tr>
-                <tr>
-                    <th>Company</th>
-                    <td>@Model.CompanyName</td>
-                </tr>
-            </table>
+<div class="wrap">
+    <!-- Header -->
+    <div class="header">
+        @if (!string.IsNullOrEmpty(logo))
+        {
+            <img class="logo" src="@logo" alt="Company Logo" />
+        }
+        <div>
+            <div class="title">JobPortal — Admin Report</div>
+            <div class="stamp">Generated: @Model.ReportDate.ToString("yyyy-MM-dd HH:mm") UTC</div>
         </div>
+    </div>
 
-        <div class="grid">
-            @foreach (var c in Model.StatCards)
+    <!-- Executive Summary -->
+    <div class="section panel avoid-break">
+        <div class="panel-title">Executive Summary</div>
+        <div class="list">
+            <div class="item">
+                <div class="row">
+                    <div><strong>Scope</strong></div>
+                    <div class="muted">@S(Model.CompanyName)<span class="spacer-sm"></span> • <span class="mono">@F(Model.Filters.DateFrom)</span> → <span class="mono">@F(Model.Filters.DateTo)</span></div>
+                </div>
+            </div>
+
+            @* Key Indicators *@
+            @if (kis != null)
             {
-                <div class="card">
-                    <div class="label">@c.Label</div>
-                    <div class="value">@c.Value</div>
-                    <div class="muted">as of @Model.ReportDate.ToString("yyyy-MM-dd")</div>
+                <div class="item">
+                    <div class="row" style="align-items:flex-start;">
+                        <div style="min-width:140px;"><strong>Key Indicators</strong></div>
+                        <div style="flex:1;">
+                            <div class="list">
+                                @foreach (dynamic k in kis)
+                                {
+                                    <div class="row">
+                                        <div class="muted">@k.Label</div>
+                                        <div><span class="mono">@k.Value</span><div class="small muted">@k.Note</div></div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Insights *@
+            @if (ins != null)
+            {
+                <div class="item">
+                    <div class="row" style="align-items:flex-start;">
+                        <div style="min-width:140px;"><strong>Insights</strong></div>
+                        <div style="flex:1;">
+                            <div class="list">
+                                @foreach (dynamic z in ins)
+                                {
+                                    var cls = z.Level == "critical" ? "badge critical" : (z.Level == "warn" ? "badge warn" : "badge");
+                                    <div class="row">
+                                        <div class="@cls" style="min-width:80px; text-transform:uppercase; text-align:center;">@z.Level</div>
+                                        <div style="text-align:left;">
+                                            <div class="accent"><strong>@z.Title</strong></div>
+                                            <div class="small muted">@z.Detail</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Recommendations *@
+            @if (acts != null)
+            {
+                <div class="item">
+                    <div class="row" style="align-items:flex-start;">
+                        <div style="min-width:140px;"><strong>Recommendations</strong></div>
+                        <div style="flex:1;">
+                            <div class="list">
+                                @foreach (dynamic a in acts)
+                                {
+                                    <div class="row">
+                                        <div class="pill">Action</div>
+                                        <div style="text-align:left;">
+                                            <div class="accent"><strong>@a.Title</strong></div>
+                                            <div class="small muted">@a.Why</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
                 </div>
             }
         </div>
+    </div>
 
-        @* Daily breakdown *@
-        <h3>Daily Breakdown</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:30%">Date</th>
-                    <th style="width:35%">Job Listings</th>
-                    <th style="width:35%">Applications</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (!Model.DailyRows.Any())
-                {
-                    <tr>
-                        <td colspan="3" class="muted">No data for the selected period.</td>
-                    </tr>
-                }
-                else
-                {
-                    foreach (var r in Model.DailyRows)
-                    {
-                        <tr>
-                            <td>@r.Date.ToString("yyyy-MM-dd")</td>
-                            <td>@r.Jobs</td>
-                            <td>@r.Applications</td>
-                        </tr>
-                    }
-                }
-            </tbody>
-        </table>
+    <!-- Filters -->
+    <div class="section panel avoid-break">
+        <div class="panel-title">Filters</div>
+        <dl class="filters">
+            <dt>Date From</dt><dd>@F(Model.Filters.DateFrom)</dd>
+            <dt>Date To</dt><dd>@F(Model.Filters.DateTo)</dd>
+            <dt>Company</dt><dd>@S(Model.CompanyName)</dd>
+        </dl>
+    </div>
 
-        @* Top companies by applications *@
-        <h3>Top Companies by Applications</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width:55%">Company</th>
-                    <th style="width:20%">Applications</th>
-                    <th style="width:25%">Job Listings</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (!Model.TopCompanies.Any())
-                {
-                    <tr>
-                        <td colspan="3" class="muted">No data for the selected period.</td>
-                    </tr>
-                }
-                else
-                {
-                    foreach (var t in Model.TopCompanies)
-                    {
-                        <tr>
-                            <td>@t.CompanyName</td>
-                            <td>@t.Applications</td>
-                            <td>@t.JobListings</td>
-                        </tr>
-                    }
-                }
-            </tbody>
-        </table>
-
-        <div class="footer-note">
-            This report is confidential and intended solely for administrative use within JobPortal.
+    <!-- Summary Metrics -->
+    <div class="section">
+        <h3>Summary Metrics</h3>
+        <div class="grid">
+            @foreach (var c in Model.StatCards)
+            {
+                <div class="card avoid-break">
+                    <div class="label">@c.Label</div>
+                    <div class="value mono">@c.Value</div>
+                    <div class="note">as of @Model.ReportDate.ToString("yyyy-MM-dd")</div>
+                </div>
+            }
         </div>
     </div>
-</body>
 
+    <!-- Daily Breakdown -->
+    <div class="section">
+        <h3>Daily Breakdown</h3>
+        @if (!Model.DailyRows.Any())
+        {
+            <div class="muted">No data for the selected period.</div>
+        }
+        else
+        {
+            <div class="list">
+                @foreach (var r in Model.DailyRows)
+                {
+                    <div class="item row avoid-break">
+                        <div class="mono">@r.Date.ToString("yyyy-MM-dd")</div>
+                        <div>
+                            <span class="pill mono">Jobs: @r.Jobs</span>
+                            <span class="pill mono" style="margin-left:8px;">Applications: @r.Applications</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Top Companies -->
+    <div class="section">
+        <h3>Top Companies by Applications</h3>
+        @if (!(Model.TopCompanies?.Any() ?? false))
+        {
+            <div class="muted">No data for the selected period.</div>
+        }
+        else
+        {
+            var rank = 1;
+            <div class="list">
+                @foreach (var t in Model.TopCompanies)
+                {
+                    <div class="item avoid-break">
+                        <div class="row">
+                            <div style="text-align:left;">
+                                <span class="pill rank mono">#@rank</span>
+                                <span class="company">@t.CompanyName</span>
+                            </div>
+                            <div class="muted">
+                                <span class="mono">Apps: @t.Applications</span>
+                                <span class="mono" style="margin-left:10px;">Jobs: @t.JobListings</span>
+                            </div>
+                        </div>
+                    </div>
+                    rank++;
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Footer note -->
+    <div class="section muted small">
+        This report is confidential and intended solely for administrative use within JobPortal.
+    </div>
+</div>
+</body>
 </html>

@@ -16,10 +16,9 @@ namespace JobPortal.Areas.Recruiter.Models
 
         // New domain categories for job_category
         public static readonly string[] JobCategories = new[]
- {
-    "Marketing", "Customer Service", "Information Technology", "Accounting", "Finance"
-};
-
+        {
+            "Marketing", "Customer Service", "Information Technology", "Accounting", "Finance"
+        };
 
         public static readonly string[] WorkModes = new[]
         {
@@ -57,7 +56,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public string work_mode { get; set; } = "On-site";
 
         [Required, Display(Name = "Job Category")]
-        public string job_category { get; set; } = "Marketing";  // <-- NEW
+        public string job_category { get; set; } = "Marketing";
 
         [DataType(DataType.Date), Display(Name = "Application Deadline")]
         public DateTime? expiry_date { get; set; }
@@ -84,10 +83,8 @@ namespace JobPortal.Areas.Recruiter.Models
         }
     }
 
-
     public class JobEditVm : IValidatableObject
     {
-
         [HiddenInput]
         public int job_listing_id { get; set; }
 
@@ -109,7 +106,7 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Salary Max"), DataType(DataType.Currency)]
         public decimal? salary_max { get; set; }
 
-        [Required, Display(Name = "Job Category")]
+        [Required, Display(Name = "Employment Type")] // fixed label
         public string job_type { get; set; } = "Full Time";
 
         [Required, Display(Name = "Work Mode")]
@@ -129,7 +126,7 @@ namespace JobPortal.Areas.Recruiter.Models
                 yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
 
             if (!JobCatalog.Categories.Contains(job_type))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_type) });
+                yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(job_type) });
 
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
@@ -171,7 +168,6 @@ namespace JobPortal.Areas.Recruiter.Models
         string Name,
         string Email,
         string? Phone,
-        string Summary,
         string Status
     );
 
@@ -202,9 +198,16 @@ namespace JobPortal.Areas.Recruiter.Models
     public class TemplateFormVM
     {
         public int? TemplateId { get; set; }
+
+        [Required, Display(Name = "Template Name"), StringLength(120)]
         public string Name { get; set; } = "";
+
+        [Display(Name = "Subject"), StringLength(160)]
         public string? Subject { get; set; }
+
+        [Required, Display(Name = "Body")]
         public string Body { get; set; } = "";
+
         public string Status { get; set; } = "Active";
     }
 
@@ -226,7 +229,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public string? Notes { get; set; }
     }
 
-    public class JobTemplateFormVM
+    public class JobTemplateFormVM : IValidatableObject
     {
         public int? TemplateId { get; set; }
 
@@ -266,7 +269,27 @@ namespace JobPortal.Areas.Recruiter.Models
 
         // Template metadata (kept)
         public string Status { get; set; } = "Active";
+
+        // Why: keep template data consistent with live job validations
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (SalaryMin.HasValue && SalaryMax.HasValue && SalaryMin.Value > SalaryMax.Value)
+                yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(SalaryMin), nameof(SalaryMax) });
+
+            if (!JobCatalog.Categories.Contains(JobType))
+                yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(JobType) });
+
+            if (!JobCatalog.WorkModes.Contains(WorkMode))
+                yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(WorkMode) });
+
+            if (!JobCatalog.JobCategories.Contains(JobCategory))
+                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(JobCategory) });
+
+            if (ExpiryDate.HasValue && ExpiryDate.Value.Date < DateTime.Today)
+                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(ExpiryDate) });
+        }
     }
+
     public record TemplateRowVM(int Id, string Name, string Snippet);
 
     public record TemplateModalVM(
@@ -293,6 +316,8 @@ namespace JobPortal.Areas.Recruiter.Models
 
         [Required, DataType(DataType.Password), StringLength(20, MinimumLength = 6)]
         [Display(Name = "Password")]
+        [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$",
+            ErrorMessage = "Password must include at least 1 uppercase, 1 lowercase, 1 number, and 1 special character (e.g., Abc123@).")] // why: enforce strength
         public string password { get; set; } = "";
 
         [Required, DataType(DataType.Password), Display(Name = "Confirm Password")]
@@ -344,7 +369,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public string Stage { get; set; } = "";
     }
 
-    public class BulkMessagePostVM
+    public class BulkMessagePostVM : IValidatableObject
     {
         [Required]
         public int[] SelectedIds { get; set; } = Array.Empty<int>();
@@ -352,6 +377,18 @@ namespace JobPortal.Areas.Recruiter.Models
         public int? TemplateId { get; set; }
         public string? Date { get; set; }
         public string? Time { get; set; }
+
+        // Why: prevent empty bulk message and enforce valid scheduling input
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if ((TemplateId is null || TemplateId == 0) && string.IsNullOrWhiteSpace(Text))
+                yield return new ValidationResult("Provide a message body or choose a template.", new[] { nameof(Text), nameof(TemplateId) });
+
+            var hasDate = !string.IsNullOrWhiteSpace(Date);
+            var hasTime = !string.IsNullOrWhiteSpace(Time);
+            if (hasDate ^ hasTime)
+                yield return new ValidationResult("Scheduling requires both date and time.", new[] { nameof(Date), nameof(Time) });
+        }
     }
 
     public class InboxIndexVM
@@ -376,7 +413,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public bool IsArchivedList { get; set; }
         public bool IsJobPost { get; set; }
         public int? ThreadId { get; set; }
-
+        public string Sort { get; set; } = "id_desc";
     }
 
     public class BulkIndexVM
@@ -388,6 +425,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public int TotalPages { get; set; }
         public string Query { get; set; } = "";
         public string Stage { get; set; } = "";
+        public string Sort { get; set; } = "id_desc";
     }
 
     public class JobsIndexVM
@@ -402,7 +440,6 @@ namespace JobPortal.Areas.Recruiter.Models
         public string Order { get; set; } = "";
         public Dictionary<int, string> LatestApprovalStatuses { get; set; } = new();
     }
-
 
     // Generic pager
     public class PagedResult<T>

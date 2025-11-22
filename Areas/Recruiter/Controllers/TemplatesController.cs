@@ -21,22 +21,24 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         // GET: /Recruiter/Templates
         [HttpGet]
-        public async Task<IActionResult> Index(string? q, int page = 1, int pageSize = DefaultPageSize, int? threadId = null)
+        public async Task<IActionResult> Index(string? q, string? sort, int page = 1, int pageSize = DefaultPageSize, int? threadId = null)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Message Templates";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            // normalize sort; default newest first by ID
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             var baseQuery = _db.templates.AsNoTracking()
                 .Where(t => t.template_status == "Active"
                             && !t.template_name.StartsWith("[JOB]")
                             && t.user_id == recruiterId);
 
-            // Apply search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -50,12 +52,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var totalCount = await baseQuery.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
-
             var skip = (page - 1) * pageSize;
 
-            var raw = await baseQuery
-                .OrderByDescending(t => t.date_updated)
-                .ThenByDescending(t => t.date_created)
+            // === Order by ID per toggle ===
+            var ordered = sort == "id_asc"
+                ? baseQuery.OrderBy(t => t.template_id)
+                : baseQuery.OrderByDescending(t => t.template_id);
+
+            var raw = await ordered
                 .Skip(skip)
                 .Take(pageSize)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
@@ -78,28 +82,31 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Query = q ?? string.Empty,
                 IsArchivedList = false,
                 IsJobPost = false,
-                ThreadId = threadId
+                ThreadId = threadId,
+                Sort = sort
             };
 
             return View(vm);
         }
 
+
         // Archived list
         [HttpGet]
-        public async Task<IActionResult> Archived(string? q, int page = 1, int pageSize = DefaultPageSize)
+        public async Task<IActionResult> Archived(string? q, string? sort, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Archived Templates";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             var baseQuery = _db.templates.AsNoTracking()
                 .Where(t => t.template_status == "Archived" && t.user_id == recruiterId);
 
-            // Apply search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -113,11 +120,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var totalCount = await baseQuery.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
-
             var skip = (page - 1) * pageSize;
 
-            var raw = await baseQuery
-                .OrderByDescending(t => t.date_updated)
+            var ordered = sort == "id_asc"
+                ? baseQuery.OrderBy(t => t.template_id)
+                : baseQuery.OrderByDescending(t => t.template_id);
+
+            var raw = await ordered
                 .Skip(skip)
                 .Take(pageSize)
                 .Select(t => new { t.template_id, t.template_name, t.template_subject, t.template_body })
@@ -139,8 +148,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 TotalPages = totalPages,
                 Query = q ?? string.Empty,
                 IsArchivedList = true,
-                IsJobPost = false, // This controller is for message templates
-                ThreadId = null      // ThreadId doesn't make sense for archived list
+                IsJobPost = false,
+                ThreadId = null,
+                Sort = sort
             };
 
             return View("Index", vm);

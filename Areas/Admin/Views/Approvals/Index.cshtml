@@ -11,6 +11,9 @@
     "Pending" => "badge text-bg-secondary",
     _ => "badge text-bg-light"
   };
+
+  // NEW: approver map injected by controller (approval_id -> "First Last")
+  var approvers = ViewBag.Approvers as IDictionary<int, string> ?? new Dictionary<int, string>();
 }
 
 <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
@@ -70,6 +73,7 @@
             <th>Company</th>
             <th style="width:160px">Submitted</th>
             <th style="width:140px">Status</th>
+            <th style="width:180px">Approved By</th> @* NEW *@
             <th style="width:120px"></th>
           </tr>
         </thead>
@@ -77,13 +81,16 @@
           @if (!Model.Items.Items.Any())
           {
             <tr>
-              <td colspan="7" class="text-center text-muted py-4">No records</td>
+              <td colspan="8" class="text-center text-muted py-4">No records</td> @* updated colspan *@
             </tr>
           }
           else
           {
             foreach (var it in Model.Items.Items)
             {
+              var approverName = (it.Status == "Approved" && approvers.ContainsKey(it.Id))
+              ? approvers[it.Id]
+              : string.Empty;
               <tr>
                 <td>
                   <input type="checkbox" name="ids" value="@it.Id" class="rowChk" />
@@ -93,6 +100,7 @@
                 <td>@it.Company</td>
                 <td>@it.Date?.ToString("g")</td>
                 <td><span class="@ChipClass(it.Status)">@it.Status</span></td>
+                <td>@approverName</td> @* NEW *@
                 <td class="text-end">
                   <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Approvals" asp-action="Preview"
                     asp-route-id="@it.Id">

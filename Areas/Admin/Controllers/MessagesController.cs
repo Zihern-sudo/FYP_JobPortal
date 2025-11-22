@@ -6,6 +6,8 @@ using JobPortal.Areas.Shared.Extensions; // TryGetUserId()
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System;
+// MessagesController.cs — add this using at the top
+using Microsoft.AspNetCore.Mvc.Rendering; // <-- for SelectListItem
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -15,7 +17,28 @@ namespace JobPortal.Areas.Admin.Controllers
         private readonly AppDbContext _db;
         public MessagesController(AppDbContext db) => _db = db;
 
-        // GET: /Admin/Messages?q=...&flaggedOnly=true&page=1&pageSize=10
+        private static bool IsAjaxRequest(HttpRequest r) =>
+            string.Equals(r.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+
+        // Resolve a valid existing user_id for conversation_monitor.user_id (FK NOT NULL)
+        private int ResolveActorUserId(int? adminId)
+        {
+            // prefer the logged-in admin id if it exists in DB
+            if (adminId.HasValue && _db.users.Any(u => u.user_id == adminId.Value))
+                return adminId.Value;
+
+            // fallback to any admin account
+            var anyAdmin = _db.users.Where(u => u.user_role == "Admin")
+                                    .Select(u => u.user_id)
+                                    .FirstOrDefault();
+            if (anyAdmin != 0) return anyAdmin;
+
+            // last resort: any user (prevents FK failure in dev data)
+            var anyUser = _db.users.Select(u => u.user_id).FirstOrDefault();
+            return anyUser; // if 0, SaveChanges will still fail -> indicates empty users table
+        }
+
+        // ---------- Index (unchanged) ----------
         public IActionResult Index(string? q = null, bool flaggedOnly = false, int page = 1, int pageSize = 10)
         {
             ViewData["Title"] = "Conversation Monitor";
@@ -35,9 +58,7 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             if (flaggedOnly)
-            {
-                query = query.Where(c => c.conversation_monitors.Any(m => m.flag));
-            }
+                query = query.Where(c => c.is_blocked || c.conversation_monitors.Any(m => m.flag));
 
             query = query.OrderByDescending(c => c.last_message_at ?? c.created_at);
 
@@ -54,7 +75,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     LastMessageAt = c.last_message_at,
                     LastSnippet = c.last_snippet,
                     MessageCount = _db.messages.Count(m => m.conversation_id == c.conversation_id),
-                    Flagged = c.conversation_monitors.Any(m => m.flag),
+                    Flagged = c.is_blocked || c.conversation_monitors.Any(m => m.flag),
                     UnreadForRecruiter = c.unread_for_recruiter,
                     UnreadForCandidate = c.unread_for_candidate
                 })
@@ -81,11 +102,14 @@ namespace JobPortal.Areas.Admin.Controllers
             return View(vm);
         }
 
+        // ---------- Thread (includes block state) ----------
         public IActionResult Thread(int id)
         {
             ViewData["Title"] = $"Thread #{id}";
 
-            // Load messages + sender info
+            var conv = _db.conversations.AsNoTracking().FirstOrDefault(c => c.conversation_id == id);
+            if (conv == null) return NotFound();
+
             var messages = _db.messages
                 .AsNoTracking()
                 .Where(m => m.conversation_id == id)
@@ -101,40 +125,28 @@ namespace JobPortal.Areas.Admin.Controllers
                 })
                 .ToList();
 
-            if (messages.Count == 0)
-            {
-                var emptyVm = new ConversationThreadViewModel
-                {
-                    ConversationId = id,
-                    Messages = messages
-                };
-                return View(emptyVm);
-            }
-
-            // Derive participants (first two distinct senders)
-            var participants = messages
-                .Select(m => new { m.SenderId, m.SenderName, m.SenderRole })
-                .Distinct()
-                .Take(2)
-                .ToList();
-
             Participant? pA = null;
             Participant? pB = null;
-
-            foreach (var p in participants)
+            if (messages.Count > 0)
             {
-                // fetch latest status from users
-                var u = _db.users.AsNoTracking().FirstOrDefault(x => x.user_id == p.SenderId);
-                var status = u?.user_status ?? "Active";
-                var part = new Participant
+                var participants = messages.Select(m => new { m.SenderId, m.SenderName, m.SenderRole })
+                                           .Distinct()
+                                           .Take(2)
+                                           .ToList();
+                foreach (var p in participants)
                 {
-                    UserId = p.SenderId,
-                    Name = p.SenderName,
-                    Role = p.SenderRole ?? "User",
-                    Status = status
-                };
-                if (pA == null) pA = part;
-                else if (pB == null) pB = part;
+                    var u = _db.users.AsNoTracking().FirstOrDefault(x => x.user_id == p.SenderId);
+                    var status = u?.user_status ?? "Active";
+                    var part = new Participant
+                    {
+                        UserId = p.SenderId,
+                        Name = p.SenderName,
+                        Role = p.SenderRole ?? "User",
+                        Status = status
+                    };
+                    if (pA == null) pA = part;
+                    else if (pB == null) pB = part;
+                }
             }
 
             var vm = new ConversationThreadViewModel
@@ -142,38 +154,156 @@ namespace JobPortal.Areas.Admin.Controllers
                 ConversationId = id,
                 Messages = messages,
                 ParticipantA = pA,
-                ParticipantB = pB
+                ParticipantB = pB,
+                IsBlocked = conv.is_blocked,
+                BlockedReason = conv.blocked_reason
             };
 
             return View(vm);
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult ToggleFlag(int conversationId)
+        // ---------- NEW: preset reasons ----------
+        private static readonly (string Key, string Label)[] _presetReasonItems = new[]
         {
-            var monitor = _db.conversation_monitors.FirstOrDefault(m => m.conversation_id == conversationId);
-            if (monitor == null)
-            {
-                monitor = new conversation_monitor
-                {
-                    conversation_id = conversationId,
-                    flag = true
-                };
-                _db.conversation_monitors.Add(monitor);
-            }
-            else
-            {
-                monitor.flag = !monitor.flag;
-            }
-            _db.SaveChanges();
+            ("inappropriate", "Inappropriate text"),
+            ("spam", "Spam / scam content"),
+            ("harassment", "Harassment or abusive behaviour"),
+            ("personal_info", "Sharing personal/sensitive information"),
+            ("other", "Other (specify)")
+        };
 
-            TempData["Flash.Type"] = "success";
-            TempData["Flash.Message"] = "Conversation flag toggled.";
-            return RedirectToAction(nameof(Thread), new { id = conversationId });
+        private static List<SelectListItem> GetPresetReasons(string? selected = null)
+        {
+            return _presetReasonItems
+                .Select(x => new SelectListItem { Value = x.Key, Text = x.Label, Selected = x.Key == selected })
+                .ToList();
         }
 
-        // Clear unread counters and mark all messages as read
+        // ---------- NEW: GET modal (AJAX) ----------
+        [HttpGet]
+        public IActionResult FlagModal(int conversationId)
+        {
+            var exists = _db.conversations.Any(c => c.conversation_id == conversationId);
+            if (!exists) return NotFound();
+
+            var vm = new FlagConversationViewModel
+            {
+                ConversationId = conversationId,
+                PresetReasons = GetPresetReasons()
+            };
+            return PartialView("_FlagModal", vm);
+        }
+
+        // ---------- UPDATED: POST flag ----------
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult FlagConversation(FlagConversationViewModel form)
+        {
+            if (!ModelState.IsValid)
+            {
+                if (IsAjaxRequest(Request)) return BadRequest(new { ok = false, error = "Invalid form." });
+                TempData["Flash.Type"] = "danger";
+                TempData["Flash.Message"] = "Invalid form.";
+                return RedirectToAction(nameof(Thread), new { id = form.ConversationId });
+            }
+
+            var conv = _db.conversations.FirstOrDefault(c => c.conversation_id == form.ConversationId);
+            if (conv == null)
+            {
+                if (IsAjaxRequest(Request)) return NotFound(new { ok = false, error = "Conversation not found." });
+                TempData["Flash.Type"] = "danger";
+                TempData["Flash.Message"] = "Conversation not found.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var reason = form.ResolveReason();
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                if (IsAjaxRequest(Request)) return BadRequest(new { ok = false, error = "Reason is required." });
+                TempData["Flash.Type"] = "danger";
+                TempData["Flash.Message"] = "Reason is required.";
+                return RedirectToAction(nameof(Thread), new { id = form.ConversationId });
+            }
+
+            var now = DateTime.UtcNow;
+            int? adminId = null;
+            if (this.TryGetUserId(out var aid, out _)) adminId = aid;
+            var actorUserId = ResolveActorUserId(adminId);
+
+            // Persist current state
+            conv.is_blocked = true;
+            conv.blocked_reason = reason;
+            conv.flagged_at = now;
+            conv.flagged_by_user_id = adminId; // keep if your model has this column
+
+            // Append audit row — IMPORTANT: set user_id to satisfy FK
+            _db.conversation_monitors.Add(new conversation_monitor
+            {
+                conversation_id = conv.conversation_id,
+                user_id = actorUserId,         // <-- FIX: required FK to user(user_id)
+                flag = true,
+                flag_reason = reason,
+                flagged_at = now,
+                flagged_by_user_id = adminId,  // keep if column exists in your model
+                date_reviewed = now
+            });
+
+            _db.SaveChanges();
+
+            if (IsAjaxRequest(Request))
+                return Json(new { ok = true, blocked = true, reason, flaggedAt = now, conversationId = conv.conversation_id });
+
+            TempData["Flash.Type"] = "warning";
+            TempData["Flash.Message"] = $"Conversation blocked. Reason: {reason}";
+            return RedirectToAction(nameof(Thread), new { id = conv.conversation_id });
+        }
+
+        // ---------- UPDATED: POST unflag ----------
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult UnflagConversation(int conversationId)
+        {
+            var conv = _db.conversations.FirstOrDefault(c => c.conversation_id == conversationId);
+            if (conv == null)
+            {
+                if (IsAjaxRequest(Request)) return NotFound(new { ok = false, error = "Conversation not found." });
+                TempData["Flash.Type"] = "danger";
+                TempData["Flash.Message"] = "Conversation not found.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var now = DateTime.UtcNow;
+            int? adminId = null;
+            if (this.TryGetUserId(out var aid, out _)) adminId = aid;
+            var actorUserId = ResolveActorUserId(adminId);
+
+            conv.is_blocked = false;
+            conv.blocked_reason = null;
+            conv.flagged_at = null;
+            conv.flagged_by_user_id = null;
+
+            _db.conversation_monitors.Add(new conversation_monitor
+            {
+                conversation_id = conv.conversation_id,
+                user_id = actorUserId,        // <-- FIX: required FK to user(user_id)
+                flag = false,
+                flag_reason = "Unblocked by admin",
+                flagged_at = now,
+                flagged_by_user_id = adminId, // keep if column exists
+                date_reviewed = now
+            });
+
+            _db.SaveChanges();
+
+            if (IsAjaxRequest(Request))
+                return Json(new { ok = true, blocked = false, conversationId = conv.conversation_id });
+
+            TempData["Flash.Type"] = "success";
+            TempData["Flash.Message"] = "Conversation unblocked.";
+            return RedirectToAction(nameof(Thread), new { id = conv.conversation_id });
+        }
+
+        // ---------- Existing actions kept below ----------
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult MarkAllRead(int conversationId)
@@ -194,8 +324,6 @@ namespace JobPortal.Areas.Admin.Controllers
             return RedirectToAction(nameof(Thread), new { id = conversationId });
         }
 
-        // --- NEW: Restrict / Allow messaging for a user (uses existing user_status) ---
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult RestrictMessaging(int conversationId, int userId)
@@ -203,7 +331,7 @@ namespace JobPortal.Areas.Admin.Controllers
             var user = _db.users.FirstOrDefault(u => u.user_id == userId);
             if (user == null) return NotFound();
 
-            user.user_status = "Suspended"; // why: reuse existing status to block messaging
+            user.user_status = "Suspended";
             _db.SaveChanges();
 
             if (this.TryGetUserId(out var adminId, out _))
@@ -229,7 +357,6 @@ namespace JobPortal.Areas.Admin.Controllers
             var user = _db.users.FirstOrDefault(u => u.user_id == userId);
             if (user == null) return NotFound();
 
-            // If account is otherwise suspended for a reason, this sets to Active; tweak if you need another state.
             user.user_status = "Active";
             _db.SaveChanges();
 

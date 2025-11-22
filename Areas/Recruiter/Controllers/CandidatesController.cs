@@ -204,7 +204,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Name: string.IsNullOrWhiteSpace(fullName) ? $"User #{app.user_id}" : fullName,
                 Email: app.user.email,
                 Phone: "000-0000000",
-                Summary: "Generalist profile.",
                 Status: (app.application_status ?? "Submitted").Trim()
             );
 
@@ -255,6 +254,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             ViewBag.AiScore = aiScore;
             ViewBag.AiEvaluated = aiWhen;
+
+            // NEW: surface job_application.description & expected_salary to the view
+            ViewBag.Description = app.description?.Trim();
+            // store as int? to match view's cast/format; convert safely if DB type is decimal
+            ViewBag.ExpectedSalary = app.expected_salary == null
+                ? (int?)null
+                : (int?)Convert.ToInt32(app.expected_salary);
 
             return View();
         }

@@ -7,13 +7,19 @@
   var q = Model.Query;
   var stage = Model.Stage;
 
+  // --- Sorting state (ID ASC/DESC) ---
+  var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+  var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+  var arrow = sort == "id_asc" ? "▲" : "▼"; // show current direction
+
   // Helper for pagination links
   string RoutePreserve(int page) => Url.Action("Index", new
   {
     q = q,
     stage = stage,
     page = page,
-    pageSize = Model.PageSize
+    pageSize = Model.PageSize,
+    sort = sort
   })!;
 }
 
@@ -36,6 +42,8 @@
     <button class="btn btn-primary" type="submit">Filter</button>
     <a asp-area="Recruiter" asp-controller="Bulk" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
   </div>
+  @* Preserve current sort when filtering *@
+  <input type="hidden" name="sort" value="@sort" />
 </form>
 
 
@@ -69,6 +77,16 @@
             <th style="width:36px;">
               <input id="chkAll" type="checkbox" />
             </th>
+            @* MODIFIED: ID sort toggle with arrow, preserves filters/paging *@
+            <th class="position-relative" style="width:90px;">
+              <span>ID</span>
+              <span class="ms-1">@arrow</span>
+              <a class="stretched-link text-decoration-none" asp-area="Recruiter" asp-controller="Bulk" asp-action="Index"
+                asp-route-q="@q" asp-route-stage="@stage" asp-route-page="@Model.Page"
+                asp-route-pageSize="@Model.PageSize" asp-route-sort="@idNext" aria-label="Sort by ID">
+              </a>
+            </th>
+
             <th>Name</th>
             <th style="width:120px;">Score</th>
             <th style="width:160px;">Stage</th>
@@ -82,6 +100,8 @@
               <td>
                 <input type="checkbox" name="selectedIds" value="@x.Id" />
               </td>
+              @* MODIFIED: Show ID column *@
+              <td>@x.Id</td>
               <td>@x.Name</td>
               <td>@x.Score</td>
               <td>@x.Stage</td>

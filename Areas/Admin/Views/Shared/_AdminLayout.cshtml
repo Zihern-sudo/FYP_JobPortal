@@ -26,6 +26,8 @@
     string currentController = (ViewContext.RouteData.Values["controller"]?.ToString() ?? "");
     string currentAction = (ViewContext.RouteData.Values["action"]?.ToString() ?? "");
     bool inSettings = string.Equals(currentController, "Settings", StringComparison.OrdinalIgnoreCase);
+    //New for the AI SubMenu
+    bool inAI = string.Equals(currentController, "AI", StringComparison.OrdinalIgnoreCase);
     Func<string, string> ActiveAction = (string action) =>
         (inSettings && string.Equals(currentAction, action, StringComparison.OrdinalIgnoreCase)) ? "active" : "";
 
@@ -287,13 +289,34 @@
         <li class="side-item"><a class="side-link @(ActiveController("Users") ? "active" : "")" asp-area="Admin" asp-controller="Users" asp-action="Index">Users</a></li>
         <li class="side-item"><a class="side-link @(ActiveController("Approvals") ? "active" : "")" asp-area="Admin" asp-controller="Approvals" asp-action="Index">Job Approvals</a></li>
         <li class="side-item"><a class="side-link @(ActiveController("Companies") ? "active" : "")" asp-area="Admin" asp-controller="Companies" asp-action="Index">Companies</a></li>
-        <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates">AI Settings</a></li>
-        <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health">AI Health</a></li>
+        @* <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates">AI Settings</a></li>
+        <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health">AI Health</a></li> *@
+
+
+              <!-- AI Monitor collapsible -->
+@{
+  var aiShowClass = inAI ? "show" : "";
+}
+<li class="side-item">
+  <a class="side-link d-flex align-items-center" data-bs-toggle="collapse" href="#aiMonitorMenu" role="button" aria-expanded="@(inAI.ToString().ToLower())" aria-controls="aiMonitorMenu">
+    AI Monitor
+    <span class="side-caret">▾</span>
+  </a>
+  <div class="collapse @aiShowClass settings-nest" id="aiMonitorMenu">
+    <ul class="side-nav">
+      @* <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates">AI Settings</a></li> *@
+      <li class="side-item"><a class="side-link @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health">AI Health</a></li>
+    </ul>
+  </div>
+</li>
+
+
+
         <li class="side-item"><a class="side-link @(ActiveController("Messages") ? "active" : "")" asp-area="Admin" asp-controller="Messages" asp-action="Index">Conversation Monitor</a></li>
         <li class="side-item"><a class="side-link @(ActiveController("Audit") ? "active" : "")" asp-area="Admin" asp-controller="Audit" asp-action="Index">Audit Log</a></li>
         <li class="side-item"><a class="side-link @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index">Reports</a></li>
 
-        @* Settings collapsible *@
+        @* Settings collapsible
         @{
           var showClass = inSettings ? "show" : "";
         }
@@ -309,7 +332,7 @@
               <li class="side-item"><a class="side-link @ActiveAction("Notifications")" asp-area="Admin" asp-controller="Settings" asp-action="Notifications">Notifications</a></li>
             </ul>
           </div>
-        </li>
+        </li> *@
       </ul>
     </aside>
 
@@ -325,8 +348,31 @@
           <li class="side-item"><a class="side-link text-white @(ActiveController("Users") ? "active" : "")" asp-area="Admin" asp-controller="Users" asp-action="Index" data-bs-dismiss="offcanvas">Users</a></li>
           <li class="side-item"><a class="side-link text-white @(ActiveController("Approvals") ? "active" : "")" asp-area="Admin" asp-controller="Approvals" asp-action="Index" data-bs-dismiss="offcanvas">Job Approvals</a></li>
           <li class="side-item"><a class="side-link text-white @(ActiveController("Companies") ? "active" : "")" asp-area="Admin" asp-controller="Companies" asp-action="Index" data-bs-dismiss="offcanvas">Companies</a></li>
-          <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates" data-bs-dismiss="offcanvas">AI Settings</a></li>
-          <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health" data-bs-dismiss="offcanvas">AI Health</a></li>
+
+
+
+          @* <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates" data-bs-dismiss="offcanvas">AI Settings</a></li>
+          <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health" data-bs-dismiss="offcanvas">AI Health</a></li> *@
+
+
+          <!-- AI Monitor collapsible for mobile -->
+<li class="side-item">
+  <a class="side-link text-white d-flex align-items-center" data-bs-toggle="collapse" href="#mAiMonitorMenu" role="button" aria-expanded="@(inAI.ToString().ToLower())" aria-controls="mAiMonitorMenu">
+    AI Monitor <span class="side-caret ms-auto">▾</span>
+  </a>
+  <div class="collapse @aiShowClass settings-nest" id="mAiMonitorMenu">
+    <ul class="side-nav">
+      @* <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Templates", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Templates" data-bs-dismiss="offcanvas">AI Settings</a></li> *@
+      <li class="side-item"><a class="side-link text-white @((ActiveController("AI") && string.Equals(currentAction, "Health", StringComparison.OrdinalIgnoreCase)) ? "active" : "")" asp-area="Admin" asp-controller="AI" asp-action="Health" data-bs-dismiss="offcanvas">AI Health</a></li>
+    </ul>
+  </div>
+</li>
+
+
+
+
+
+
           <li class="side-item"><a class="side-link text-white @(ActiveController("Messages") ? "active" : "")" asp-area="Admin" asp-controller="Messages" asp-action="Index" data-bs-dismiss="offcanvas">Conversation Monitor</a></li>
           <li class="side-item"><a class="side-link text-white @(ActiveController("Audit") ? "active" : "")" asp-area="Admin" asp-controller="Audit" asp-action="Index" data-bs-dismiss="offcanvas">Audit Log</a></li>
           <li class="side-item"><a class="side-link text-white @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index" data-bs-dismiss="offcanvas">Reports</a></li>
@@ -334,13 +380,13 @@
             <a class="side-link text-white d-flex align-items-center" data-bs-toggle="collapse" href="#mSettingsMenu" role="button" aria-expanded="@(inSettings.ToString().ToLower())" aria-controls="mSettingsMenu">
               Settings <span class="side-caret ms-auto">▾</span>
             </a>
-            <div class="collapse @showClass settings-nest" id="mSettingsMenu">
+            @* <div class="collapse @showClass settings-nest" id="mSettingsMenu">
               <ul class="side-nav">
                 <li class="side-item"><a class="side-link text-white @ActiveAction("Branding")" asp-area="Admin" asp-controller="Settings" asp-action="Branding" data-bs-dismiss="offcanvas">Branding</a></li>
                 <li class="side-item"><a class="side-link text-white @ActiveAction("Legal")" asp-area="Admin" asp-controller="Settings" asp-action="Legal" data-bs-dismiss="offcanvas">Legal</a></li>
                 <li class="side-item"><a class="side-link text-white @ActiveAction("Notifications")" asp-area="Admin" asp-controller="Settings" asp-action="Notifications" data-bs-dismiss="offcanvas">Notifications</a></li>
               </ul>
-            </div>
+            </div> *@
           </li>
         </ul>
       </div>

@@ -1,0 +1,43 @@
+@* File: Areas/Admin/Views/Shared/_FlagModal.cshtml *@
+@model JobPortal.Areas.Admin.Models.FlagConversationViewModel
+<form id="flag-form" method="post" asp-area="Admin" asp-controller="Messages" asp-action="FlagConversation">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="ConversationId" value="@Model.ConversationId" />
+
+    <div class="modal-header">
+        <h5 class="modal-title">Flag & Block Conversation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">Reason</label>
+            <select class="form-select" id="flag-reason" name="ReasonKey">
+                @foreach (var r in Model.PresetReasons)
+                {
+                    <option value="@r.Value" selected="@(r.Selected ? "selected" : null)">@r.Text</option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3" id="flag-custom-wrap" style="display:none;">
+            <label class="form-label">Other (specify)</label>
+            <textarea class="form-control" name="CustomReason" rows="3" maxlength="1000"></textarea>
+            <div class="form-text">Shown to recruiter/job seeker as the block reason.</div>
+        </div>
+    </div>
+
+    <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Flag & Block</button>
+    </div>
+</form>
+
+<script>
+    (function () {
+        const sel = document.getElementById('flag-reason');
+        const wrap = document.getElementById('flag-custom-wrap');
+        function toggle() { wrap.style.display = sel.value === 'other' ? '' : 'none'; }
+        sel.addEventListener('change', toggle); toggle();
+    })();
+</script>

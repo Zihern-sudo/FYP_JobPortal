@@ -134,6 +134,8 @@ public sealed class ConversationThreadViewModel
     public IReadOnlyList<MessageViewModel> Messages { get; init; } = Array.Empty<MessageViewModel>();
     public Participant? ParticipantA { get; init; }
     public Participant? ParticipantB { get; init; }
+    public bool IsBlocked { get; init; }
+    public string? BlockedReason { get; init; }
 }
 
 public sealed class MessageViewModel
@@ -150,7 +152,7 @@ public sealed class ReportStatCardViewModel
     [Required] public string Value { get; init; } = string.Empty;
 }
 
-public sealed class ReportFilterViewModel
+public sealed class ReportFilterViewModel : IValidatableObject
 {
     [Display(Name = "From"), DataType(DataType.Date)]
     public DateTime? DateFrom { get; set; }
@@ -160,6 +162,13 @@ public sealed class ReportFilterViewModel
 
     [Display(Name = "Company")]
     public int? CompanyId { get; set; }
+
+    // Why: prevent inverted date ranges that would produce empty/incorrect reports
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (DateFrom.HasValue && DateTo.HasValue && DateFrom > DateTo)
+            yield return new ValidationResult("The 'From' date cannot be after the 'To' date.", new[] { nameof(DateFrom), nameof(DateTo) });
+    }
 }
 
 public sealed class ReportViewModel
@@ -247,7 +256,7 @@ public sealed class RecruiterRow
 {
     public int Id { get; init; }
     [Required] public string Name { get; init; } = string.Empty;
-    [Required] public string Email { get; init; } = string.Empty;
+    [Required, EmailAddress] public string Email { get; init; } = string.Empty; // added EmailAddress
     [Required] public string Status { get; init; } = "Active";     // user_status
     [Required] public string Role { get; init; } = "Recruiter";     // user_role
     public string? Company { get; init; }
@@ -274,14 +283,14 @@ public sealed class RecruiterPreviewViewModel
     public int Id { get; init; }
     [Required] public string FirstName { get; init; } = string.Empty;
     [Required] public string LastName { get; init; } = string.Empty;
-    [Required] public string Email { get; init; } = string.Empty;
+    [Required, EmailAddress] public string Email { get; init; } = string.Empty; // added EmailAddress
     [Required] public string Role { get; init; } = "Recruiter";
     [Required] public string Status { get; init; } = "Active";
     public DateTime CreatedAt { get; init; }
 
     public string? CompanyName { get; init; }
     public string? CompanyStatus { get; init; }
-    public string? Phone { get; init; }
+    [Phone] public string? Phone { get; init; } // added Phone
     public string? Address { get; init; }
 
     public int? CompanyId { get; init; }
@@ -296,9 +305,10 @@ public sealed class RecruiterPreviewViewModel
 public sealed class BrandingSettingsViewModel
 {
     [Display(Name = "Primary colour")]
+    [RegularExpression("^#(?:[A-Fa-f0-9]{3}){1,2}$", ErrorMessage = "Enter a valid hex color like #2563eb or #fff.")] // why: ensure CSS-safe color
     public string PrimaryColor { get; set; } = "#2563eb";
 
-    [Display(Name = "Logo URL")]
+    [Display(Name = "Logo URL"), Url(ErrorMessage = "Enter a valid URL.")] // why: prevent malformed asset URLs
     public string? LogoUrl { get; set; }
 }
 
@@ -386,4 +396,42 @@ public sealed class AiHealthVM
     public string? EmbedRequestId { get; set; }    // e.g., req_def456
 
     public bool OverallOk { get; set; }
+}
+
+public sealed class FlagConversationViewModel : IValidatableObject
+{
+    [Required] public int ConversationId { get; set; }
+
+    // Selected preset reason key
+    public string? ReasonKey { get; set; } // e.g., "inappropriate", "spam", "harassment", "other"
+
+    // Custom free-text reason (used when ReasonKey == "other" or when none selected)
+    [StringLength(1000)]
+    public string? CustomReason { get; set; }
+
+    // For dropdown
+    public List<SelectListItem> PresetReasons { get; set; } = new();
+
+    public string ResolveReason()
+    {
+        // Why: Ensure non-empty reason for audit and user-facing banner
+        if (!string.IsNullOrWhiteSpace(CustomReason)) return CustomReason!.Trim();
+
+        return ReasonKey switch
+        {
+            "inappropriate" => "Inappropriate text",
+            "spam" => "Spam/scam content",
+            "harassment" => "Harassment or abusive behaviour",
+            "personal_info" => "Sharing personal/sensitive information",
+            "other" => "Other (unspecified)",
+            _ => "Flagged by admin"
+        };
+    }
+
+    // Why: enforce that some reason exists for moderation audit trail
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(ReasonKey) && string.IsNullOrWhiteSpace(CustomReason))
+            yield return new ValidationResult("Please select a reason or provide a custom reason.", new[] { nameof(ReasonKey), nameof(CustomReason) });
+    }
 }

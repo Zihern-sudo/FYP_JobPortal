@@ -1,3 +1,4 @@
+@* File: Areas/Admin/Views/Messages/Thread.cshtml *@
 @model JobPortal.Areas.Admin.Models.ConversationThreadViewModel
 @{
   ViewData["Title"] = $"Thread #{Model.ConversationId}";
@@ -11,21 +12,60 @@
 }
 
 <a asp-area="Admin" asp-controller="Messages" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
-    &leftarrow; Back to Conversation Monitor
+  &leftarrow; Back to Conversation Monitor
 </a>
 
-<div class="d-flex align-items-center gap-2 mb-3">
-  <form method="post" asp-action="ToggleFlag" class="me-2">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="conversationId" value="@Model.ConversationId" />
-    <button class="btn btn-warning btn-sm">Toggle Flag</button>
-  </form>
+@* Flash (for non-AJAX posts) *@
+@if (TempData["Flash.Message"] is string fm)
+{
+  var ft = (TempData["Flash.Type"] as string) ?? "info";
+  <div class="alert alert-@ft">@fm</div>
+}
 
-  <form method="post" asp-action="MarkAllRead">
-    @Html.AntiForgeryToken()
-    <input type="hidden" name="conversationId" value="@Model.ConversationId" />
-    <button class="btn btn-outline-secondary btn-sm">Mark all as read</button>
-  </form>
+<!-- Global anti-forgery token for AJAX -->
+<form id="__af" method="post" class="d-none">@Html.AntiForgeryToken()</form>
+
+<!-- Blocked banner -->
+@if (Model.IsBlocked)
+{
+  <div class="alert alert-danger d-flex align-items-center" role="alert">
+    <i class="bi bi-shield-exclamation me-2"></i>
+    <div>
+      <strong>Chat is blocked by admin.</strong>
+      @if (!string.IsNullOrWhiteSpace(Model.BlockedReason))
+      {
+        <span class="ms-1">@Model.BlockedReason</span>
+      }
+    </div>
+  </div>
+}
+
+<div class="d-flex align-items-center gap-2 mb-3">
+
+  <!-- Flag/Unblock + Mark all read -->
+  <div class="d-flex gap-2">
+    @* Flag/Block (AJAX modal) or Unblock *@
+    @if (!Model.IsBlocked)
+    {
+      <a href="#" class="btn btn-danger btn-sm"
+        data-flag-modal="@Url.Action("FlagModal", "Messages", new { area = "Admin", conversationId = Model.ConversationId })">
+        <i class="bi bi-flag"></i> Flag & Block
+      </a>
+    }
+    else
+    {
+      <a href="#" class="btn btn-outline-secondary btn-sm"
+        data-unflag="@Url.Action("UnflagConversation", "Messages", new { area = "Admin", conversationId = Model.ConversationId })">
+        <i class="bi bi-unlock"></i> Unblock
+      </a>
+    }
+
+    <form method="post" asp-action="MarkAllRead" class="d-inline">
+      @Html.AntiForgeryToken()
+      <input type="hidden" name="conversationId" value="@Model.ConversationId" />
+      <button class="btn btn-outline-secondary btn-sm">Mark all as read</button>
+    </form>
+  </div>
 
   <div class="ms-auto d-flex gap-2">
     @if (Model.ParticipantA is not null)
@@ -106,3 +146,13 @@
     }
   </div>
 </div>
+
+<!-- Modal shell (content loaded via GET /Admin/Messages/FlagModal) -->
+<div class="modal fade" id="flagModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content"><!-- _FlagModal.cshtml will be injected here via AJAX --></div>
+  </div>
+</div>
+
+<!-- Ensure the AJAX handler is available (keep if not already included by layout) -->
+<script src="~/js/admin-messages.js"></script>

@@ -144,6 +144,10 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.created_at).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            entity.HasOne(d => d.flagged_by_user).WithMany(p => p.conversations)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_conv_flagged_by_user");
+
             entity.HasOne(d => d.job_listing).WithMany(p => p.conversations).HasConstraintName("fk_conversation_job");
         });
 
@@ -153,7 +157,11 @@ public partial class AppDbContext : DbContext
 
             entity.HasOne(d => d.conversation).WithMany(p => p.conversation_monitors).HasConstraintName("fk_monitor_conv");
 
-            entity.HasOne(d => d.user).WithMany(p => p.conversation_monitors).HasConstraintName("fk_monitor_user");
+            entity.HasOne(d => d.flagged_by_user).WithMany(p => p.conversation_monitorflagged_by_users)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_monitor_flagged_by_user");
+
+            entity.HasOne(d => d.user).WithMany(p => p.conversation_monitorusers).HasConstraintName("fk_monitor_user");
         });
 
         modelBuilder.Entity<email_verification>(entity =>

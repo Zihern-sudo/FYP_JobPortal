@@ -39,8 +39,8 @@
           <th>Company</th>
           <th>Job Title</th>
           <th>Last Message</th>
-          <th>Last Snippet</th> @* NEW *@
-          <th class="text-center" style="width:110px">Messages</th> @* NEW *@
+          <th>Last Snippet</th>
+          <th class="text-center" style="width:110px">Messages</th>
           <th style="width:140px">Unread</th>
           <th style="width:110px">Flag</th>
           <th style="width:120px"></th>
@@ -60,7 +60,13 @@
             <tr>
               <td>@t.ConversationId</td>
               <td>@t.CompanyName</td>
-              <td>@t.JobTitle</td>
+              <td>
+                @t.JobTitle
+                @if (t.Flagged)
+                {
+                  <span class="badge text-bg-danger ms-1" title="Blocked by admin">Blocked</span>
+                }
+              </td>
               <td>@t.LastMessageAt?.ToString("g")</td>
               <td class="text-muted">@Snip(t.LastSnippet)</td>
               <td class="text-center"><span class="badge text-bg-dark">@t.MessageCount</span></td>
@@ -74,10 +80,21 @@
                 <span class="@FlagBadge(t.Flagged)">@((t.Flagged) ? "Flagged" : "OK")</span>
               </td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Messages" asp-action="Thread"
-                  asp-route-id="@t.ConversationId">
-                  Open
-                </a>
+                @if (t.Flagged)
+                {
+                  <!-- Gray, disabled button for blocked conversations -->
+                  <button type="button" class="btn btn-sm btn-outline-secondary disabled" title="Blocked by admin"
+                    tabindex="-1" aria-disabled="true">
+                    Open
+                  </button>
+                }
+                else
+                {
+                  <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Messages" asp-action="Thread"
+                    asp-route-id="@t.ConversationId">
+                    Open
+                  </a>
+                }
               </td>
             </tr>
           }

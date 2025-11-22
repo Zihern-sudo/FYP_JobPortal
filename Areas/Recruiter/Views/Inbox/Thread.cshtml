@@ -1,3 +1,4 @@
+@* File: Areas/Recruiter/Views/Inbox/Thread.cshtml (UPDATED: blocked banner + disabled composer) *@
 @{
   ViewData["Title"] = ViewData["Title"] ?? "Thread";
   var messages = (IEnumerable<JobPortal.Areas.Recruiter.Models.NoteVM>)ViewBag.Messages;
@@ -7,9 +8,12 @@
   string recruiterName = ViewBag.RecruiterNameFirst ?? "";
   string company = ViewBag.Company ?? "";
   string? draft = ViewBag.Draft as string;
+
+  // NEW: block state
+  bool isBlocked = false;
+  try { isBlocked = (bool)(ViewBag.IsBlocked ?? false); } catch { isBlocked = false; }
+  string blockedReason = (string)(ViewBag.BlockedReason ?? "");
 }
-
-
 
 <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -23,7 +27,19 @@
   </a>
 </div>
 
-
+@if (isBlocked)
+{
+  <div class="alert alert-danger d-flex align-items-center" role="alert">
+    <i class="bi bi-shield-exclamation me-2"></i>
+    <div>
+      <strong>Chat is blocked by admin.</strong>
+      @if (!string.IsNullOrWhiteSpace(blockedReason))
+      {
+        <span class="ms-1">@blockedReason</span>
+      }
+    </div>
+  </div>
+}
 
 <div class="card mb-3">
   <div class="card-header">Conversation with @ViewBag.OtherUser</div>
@@ -51,13 +67,15 @@
     </div>
   </div>
   <div class="card-body">
-    <textarea name="text" id="composer" class="form-control" rows="3" placeholder="Type a message…">@draft</textarea>
+    <textarea name="text" id="composer" class="form-control" rows="3"
+      placeholder="@(isBlocked ? "Chat is blocked by admin." : "Type a message…")" @(isBlocked ? "readonly disabled" :
+      "")>@(isBlocked ? "" : draft)</textarea>
   </div>
   <div class="card-footer d-flex justify-content-end gap-2">
     <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveTplModal">
       Save as Template
     </button>
-    <button class="btn btn-primary" type="submit">Send</button>
+    <button class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" : "")>Send</button>
   </div>
 </form>
 
@@ -112,12 +130,16 @@
         Company: '@company'
       };
 
+      // Skip token helper if blocked (why: composer is disabled)
+      const IS_BLOCKED = @(isBlocked ? "true" : "false");
+
       function replaceAllCaseInsensitive(s, find, repl) {
         const esc = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         return s.replace(new RegExp(esc, 'ig'), repl);
       }
 
       function ensureFriendlyDefaults() {
+        if (IS_BLOCKED === true || IS_BLOCKED === 'true') return;
         let v = composer.value || '';
         if (/hi\s+user/i.test(v)) v = v.replace(/hi\s+user/ig, 'Hi ' + ctx.FirstName);
         v = replaceAllCaseInsensitive(v, '{{FirstName}}', ctx.FirstName);
@@ -128,6 +150,7 @@
       }
 
       function scanTokens() {
+        if (IS_BLOCKED === true || IS_BLOCKED === 'true') { helper.classList.add('d-none'); return; }
         const v = composer.value || '';
         const re = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
         const found = new Set();
@@ -157,9 +180,9 @@
           else if (tok.toLowerCase() === 'time') inputType = 'time';
 
           col.innerHTML = `
-                        <label class="form-label mb-0 small">${tok}</label>
-                        <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
-                    `;
+                          <label class="form-label mb-0 small">${tok}</label>
+                          <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
+                      `;
           fields.appendChild(col);
         });
       }

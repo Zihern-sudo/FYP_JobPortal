@@ -1,6 +1,3 @@
-// ==============================
-// File: Areas/Admin/Controllers/ReportsController.cs
-// ==============================
 using Microsoft.AspNetCore.Mvc;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Admin.Models;
@@ -17,6 +14,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using System.Globalization;
+using Microsoft.AspNetCore.Hosting; // inject env for logo
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -25,11 +23,34 @@ namespace JobPortal.Areas.Admin.Controllers
     {
         private readonly AppDbContext _db;
         private readonly ICompositeViewEngine _viewEngine;
+        private readonly IWebHostEnvironment _env;
 
-        public ReportsController(AppDbContext db, ICompositeViewEngine viewEngine)
+        // Simple DTOs to pass insight data to Razor via ViewBag
+        public class KeyIndicator
+        {
+            public string Label { get; set; } = "";
+            public string Value { get; set; } = "";
+            public string? Note { get; set; }
+        }
+
+        public class InsightItem
+        {
+            public string Title { get; set; } = "";
+            public string Detail { get; set; } = "";
+            public string Level { get; set; } = "info"; // info | warn | critical
+        }
+
+        public class ActionItem
+        {
+            public string Title { get; set; } = "";
+            public string Why { get; set; } = "";
+        }
+
+        public ReportsController(AppDbContext db, ICompositeViewEngine viewEngine, IWebHostEnvironment env)
         {
             _db = db;
             _viewEngine = viewEngine;
+            _env = env;
         }
 
         public IActionResult Index(ReportFilterViewModel filters)
@@ -84,10 +105,10 @@ namespace JobPortal.Areas.Admin.Controllers
 
             return new()
             {
-                new() { Label = "Total Users",         Value = userQuery.Count().ToString("N0") },
-                new() { Label = "Total Companies",     Value = coQuery.Count().ToString("N0") },
-                new() { Label = "Total Job Listings",  Value = jobQuery.Count().ToString("N0") },
-                new() { Label = "Total Applications",  Value = appQuery.Count().ToString("N0") }
+                new() { Label = "Total Users",        Value = userQuery.Count().ToString("N0") },
+                new() { Label = "Total Companies",    Value = coQuery.Count().ToString("N0") },
+                new() { Label = "Total Job Listings", Value = jobQuery.Count().ToString("N0") },
+                new() { Label = "Total Applications", Value = appQuery.Count().ToString("N0") }
             };
         }
 
@@ -182,33 +203,25 @@ namespace JobPortal.Areas.Admin.Controllers
             return data;
         }
 
-        // CSV (filtered) + Top companies section
+        // CSV (filtered) + Top companies section (unchanged)
         public IActionResult ExportCsv(ReportFilterViewModel filters)
         {
-            // Summary cards + Top companies (honors filters)
             var cards = GetReportData(filters);
             var tops = GetTopCompanies(filters, top: 10);
-
-            // Helper to CSV-quote any value
             static string Q(string? s) => $"\"{(s ?? string.Empty).Replace("\"", "\"\"")}\"";
 
-            // Resolve company name
             var companyName = filters.CompanyId.HasValue
                 ? (_db.companies.Find(filters.CompanyId.Value)?.company_name ?? $"ID: {filters.CompanyId}")
                 : "All Companies";
 
-            // Totals for Top Companies section
             var totalApps = tops.Sum(t => t.Applications);
             var totalJobs = tops.Sum(t => t.JobListings);
 
             var sb = new StringBuilder();
-
-            // ===== Title & timestamp =====
             sb.AppendLine(Q("JobPortal Admin Report"));
             sb.AppendLine($"{Q("Generated")},{Q(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'"))}");
             sb.AppendLine();
 
-            // ===== Filters =====
             sb.AppendLine(Q("Filters"));
             sb.AppendLine($"{Q("Field")},{Q("Value")}");
             sb.AppendLine($"{Q("Date From")},{Q(filters.DateFrom?.ToShortDateString() ?? "N/A")}");
@@ -216,14 +229,12 @@ namespace JobPortal.Areas.Admin.Controllers
             sb.AppendLine($"{Q("Company")},{Q(companyName)}");
             sb.AppendLine();
 
-            // ===== Summary Metrics =====
             sb.AppendLine(Q("Summary Metrics"));
             sb.AppendLine($"{Q("Metric")},{Q("Value")}");
             foreach (var c in cards)
                 sb.AppendLine($"{Q(c.Label)},{Q(c.Value)}");
             sb.AppendLine();
 
-            // ===== Top Companies by Applications =====
             sb.AppendLine(Q("Top Companies by Applications (Top 10)"));
             sb.AppendLine($"{Q("Rank")},{Q("Company")},{Q("Applications")},{Q("Job Listings")},{Q("% of Applications")}");
 
@@ -232,9 +243,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 for (int i = 0; i < tops.Count; i++)
                 {
                     var t = tops[i];
-                    var share = totalApps > 0
-                        ? (t.Applications / (double)totalApps).ToString("P1", CultureInfo.InvariantCulture)
-                        : "0.0%";
+                    var share = totalApps > 0 ? (t.Applications / (double)totalApps).ToString("P1", CultureInfo.InvariantCulture) : "0.0%";
                     sb.AppendLine(
                         $"{Q((i + 1).ToString())}," +
                         $"{Q(t.CompanyName)}," +
@@ -243,15 +252,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         $"{Q(share)}"
                     );
                 }
-
-                // Totals row (for the table)
-                sb.AppendLine(
-                    $"{Q("Total")}," +
-                    $"{Q(string.Empty)}," +
-                    $"{Q(totalApps.ToString())}," +
-                    $"{Q(totalJobs.ToString())}," +
-                    $"{Q("100%")}"
-                );
+                sb.AppendLine($"{Q("Total")},{Q(string.Empty)},{Q(totalApps.ToString())},{Q(totalJobs.ToString())},{Q("100%")}");
             }
             else
             {
@@ -261,10 +262,12 @@ namespace JobPortal.Areas.Admin.Controllers
             var csv = Encoding.UTF8.GetBytes(sb.ToString());
             return File(csv, "text/csv", $"JobPortal_Report_{DateTime.UtcNow:yyyyMMdd}.csv");
         }
-        // PDF (filtered) — adds Top companies table
+
+        // PDF (filtered) — table-less view; embeds logo via base64; adds insights
         public async Task<IActionResult> ExportPdf(ReportFilterViewModel filters)
         {
             var cards = GetReportData(filters);
+            var dailyRows = GetDailyData(filters);
             var tops = GetTopCompanies(filters);
 
             var companyName = filters.CompanyId.HasValue
@@ -276,25 +279,168 @@ namespace JobPortal.Areas.Admin.Controllers
                 Filters = filters,
                 CompanyName = companyName,
                 StatCards = cards,
-                DailyRows = GetDailyData(filters),
+                DailyRows = dailyRows,
                 TopCompanies = tops,
                 ReportDate = DateTime.UtcNow
             };
 
+            // ----- Build Insights & KPIs -----
+            var totalJobs = dailyRows.Sum(r => r.Jobs);
+            var totalApps = dailyRows.Sum(r => r.Applications);
+
+            // Applications per Job
+            var apj = (totalJobs > 0) ? (totalApps / (double)totalJobs) : 0.0;
+
+            // Trend: last 7d vs previous 7d (applications)
+            int days = dailyRows.Count;
+            int last7 = dailyRows.Skip(Math.Max(0, days - 7)).Sum(r => r.Applications);
+            int prev7 = dailyRows.Skip(Math.Max(0, days - 14)).Take(Math.Max(0, Math.Min(7, days - 7))).Sum(r => r.Applications);
+            double trendPct = (prev7 == 0) ? (last7 > 0 ? 100.0 : 0.0) : ((last7 - prev7) / (double)prev7) * 100.0;
+
+            // Busiest day by applications
+            var busiest = dailyRows.OrderByDescending(r => r.Applications).FirstOrDefault();
+            var busiestLabel = busiest != null ? $"{busiest.Date:yyyy-MM-dd} ({busiest.Applications} apps)" : "N/A";
+
+            // Inactivity (days with zero jobs & apps in period)
+            int zeroDays = dailyRows.Count(r => r.Jobs == 0 && r.Applications == 0);
+
+            // Concentration: top company share(s)
+            var topShare = 0.0;
+            var top3Share = 0.0;
+            if (totalApps > 0 && tops.Any())
+            {
+                topShare = tops.First().Applications / (double)totalApps;
+                top3Share = tops.Take(3).Sum(t => t.Applications) / (double)totalApps;
+            }
+
+            var indicators = new List<KeyIndicator>
+            {
+                new KeyIndicator { Label = "Applications / Job", Value = apj.ToString("0.00"), Note = "Efficiency of postings" },
+                new KeyIndicator { Label = "7-day Application Trend", Value = (trendPct >= 0 ? "+" : "") + trendPct.ToString("0.#") + "%", Note = $"Last 7d ({last7}) vs prev 7d ({prev7})" },
+                new KeyIndicator { Label = "Busiest Day", Value = busiestLabel, Note = "Peak application activity" },
+                new KeyIndicator { Label = "Inactive Days", Value = zeroDays.ToString("N0"), Note = "No jobs or applications" },
+                new KeyIndicator { Label = "Top Company Share", Value = (topShare*100).ToString("0.#") + "%", Note = tops.Any() ? tops.First().CompanyName : "N/A" },
+                new KeyIndicator { Label = "Top 3 Concentration", Value = (top3Share*100).ToString("0.#") + "%", Note = "Share of all applications" },
+            };
+
+            var insights = new List<InsightItem>();
+
+            // Insight: Low APJ
+            if (apj < 1.0 && totalJobs > 0)
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "Low conversions per job",
+                    Detail = $"Applications per job is {apj:0.00}. Consider improving job descriptions or reach.",
+                    Level = "warn"
+                });
+            }
+
+            // Insight: Strong positive/negative trend
+            if (trendPct >= 25)
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "Applications trending up",
+                    Detail = $"Last 7 days are up {trendPct:0.#}% vs previous week ({last7} vs {prev7}).",
+                    Level = "info"
+                });
+            }
+            else if (trendPct <= -25)
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "Applications trending down",
+                    Detail = $"Last 7 days are down {trendPct:0.#}% vs previous week ({last7} vs {prev7}).",
+                    Level = "warn"
+                });
+            }
+
+            // Insight: Concentration risk
+            if (topShare >= 0.5)
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "High company concentration",
+                    Detail = $"Top company accounts for {(topShare * 100):0.#}% of applications ({(tops.FirstOrDefault()?.CompanyName ?? "N/A")}).",
+                    Level = "critical"
+                });
+            }
+            else if (top3Share >= 0.7)
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "Top-3 concentration notable",
+                    Detail = $"Top 3 companies take {(top3Share * 100):0.#}% of all applications.",
+                    Level = "warn"
+                });
+            }
+
+            // Insight: Operational inactivity
+            if (zeroDays >= Math.Max(3, dailyRows.Count / 5))
+            {
+                insights.Add(new InsightItem
+                {
+                    Title = "Frequent inactive days",
+                    Detail = $"{zeroDays} days in the period with no postings or applications.",
+                    Level = "info"
+                });
+            }
+
+            var actions = new List<ActionItem>();
+            if (apj < 1.2)
+            {
+                actions.Add(new ActionItem
+                {
+                    Title = "Review job quality",
+                    Why = "Low applications per job. Improve titles, benefits, and keywords."
+                });
+            }
+            if (trendPct <= -25)
+            {
+                actions.Add(new ActionItem
+                {
+                    Title = "Boost outreach",
+                    Why = "Sharp week-over-week decline. Promote selected roles or email dormant candidates."
+                });
+            }
+            if (topShare >= 0.5)
+            {
+                actions.Add(new ActionItem
+                {
+                    Title = "Balance employer mix",
+                    Why = "Reduce dependency on a single company; onboard 1–2 new employers."
+                });
+            }
+
+            // Build base64 data URL for logo so PDF engine can render it without file path issues.
+            ViewBag.LogoDataUrl = BuildLogoDataUrl();
+            ViewBag.KeyIndicators = indicators;
+            ViewBag.Insights = insights;
+            ViewBag.Recommendations = actions;
+
+            // Ensure the view receives all dynamic data (for RenderRazorViewToString path).
+            ViewData["LogoDataUrl"] = ViewBag.LogoDataUrl;
+            ViewData["KeyIndicators"] = indicators;
+            ViewData["Insights"] = insights;
+            ViewData["Recommendations"] = actions;
+
+            // Render Razor view -> HTML
             var html = await RenderRazorViewToString("Pdf", pdfViewModel);
 
+            // Convert HTML -> PDF
             var converter = new HtmlToPdf
             {
                 Options =
-        {
-            PdfPageSize         = PdfPageSize.A4,
-            PdfPageOrientation  = PdfPageOrientation.Portrait,
-            MarginTop           = 20, MarginRight = 20, MarginBottom = 20, MarginLeft = 20,
-            WebPageWidth        = 1024
-        }
+                {
+                    PdfPageSize         = PdfPageSize.A4,
+                    PdfPageOrientation  = PdfPageOrientation.Portrait,
+                    MarginTop           = 20, MarginRight = 20, MarginBottom = 20, MarginLeft = 20,
+                    WebPageWidth        = 1024
+                }
             };
 
-            // Header (HTML ok)
+            // Header
             converter.Options.DisplayHeader = true;
             converter.Header.Height = 50;
             converter.Header.Add(new PdfHtmlSection(
@@ -304,16 +450,13 @@ namespace JobPortal.Areas.Admin.Controllers
                 $"  <div style='clear:both'></div>" +
                 $"</div>", string.Empty));
 
-            // Footer: left via HTML; right via PdfTextSection for page numbers
+            // Footer
             converter.Options.DisplayFooter = true;
             converter.Footer.Height = 40;
-
-            // left copyright (HTML)
             converter.Footer.Add(new PdfHtmlSection(
                 $"<div style='font-family:Arial; font-size:9px'>&copy; {pdfViewModel.ReportDate:yyyy} JobPortal</div>",
                 string.Empty));
 
-            // right page numbers (PdfTextSection supports placeholders)
             var pageText = new PdfTextSection(0, 0, "Page {page_number} of {total_pages}",
                 new System.Drawing.Font("Arial", 9))
             {
@@ -326,6 +469,24 @@ namespace JobPortal.Areas.Admin.Controllers
             pdfDoc.Close();
 
             return File(pdfBytes, "application/pdf", $"JobPortal_Report_{DateTime.UtcNow:yyyyMMdd}.pdf");
+        }
+
+        private string? BuildLogoDataUrl()
+        {
+            // Why: data URI avoids deployment/path issues in HTML-to-PDF.
+            try
+            {
+                var logoPath = Path.Combine(_env.WebRootPath ?? string.Empty, "img", "FYP_Logo.jpg");
+                if (!System.IO.File.Exists(logoPath)) return null;
+
+                var bytes = System.IO.File.ReadAllBytes(logoPath);
+                var b64 = Convert.ToBase64String(bytes);
+                return $"data:image/jpeg;base64,{b64}";
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // Razor view to string (uses current ControllerContext)
@@ -346,6 +507,12 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 Model = model
             };
+
+            // Pass through ViewBag collections to the view
+            vdd["LogoDataUrl"] = ViewBag.LogoDataUrl;
+            vdd["KeyIndicators"] = ViewBag.KeyIndicators;
+            vdd["Insights"] = ViewBag.Insights;
+            vdd["Recommendations"] = ViewBag.Recommendations;
 
             var vc = new ViewContext(ControllerContext, viewResult.View, vdd, TempData, sw, new HtmlHelperOptions());
             await viewResult.View.RenderAsync(vc);

@@ -229,7 +229,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         first_name = first,
                         last_name = last,
                         email = email,
-                        password_hash = "AQAAAAIAAYagAAAAEDCZu4pS5gczGSWwSIstyH0K91mopa2ahDjX186ZkIsPB4to1cH5eFdgvXLHg0AMRA==",
+                        password_hash = "AQAAAAIAAYagAAAAEIzV7hL4dlr2aojht4w5Og7ukkWnAEFMT6NdAs9y+b2hZfp7mpu3wcnkOL/1G0gAvw==",
                         user_role = roleCsv,
                         user_status = stat
                     };

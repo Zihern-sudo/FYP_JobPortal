@@ -121,6 +121,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (conv == null) return NotFound();
 
+            // NEW: expose block state to the view (banner + disable composer)
+            ViewBag.IsBlocked = conv.is_blocked;            // why: UI must not allow composing when blocked
+            ViewBag.BlockedReason = conv.blocked_reason ?? "";
+
             // Determine the other participant
             int otherId;
             if (conv.candidate_id.HasValue)
@@ -227,6 +231,15 @@ namespace JobPortal.Areas.Recruiter.Controllers
                      (c.recruiter_id == null && c.job_listing.user_id == recruiterId)));
 
             if (conv == null) return NotFound();
+
+            // NEW: server-side hard block (prevents any send attempts)
+            if (conv.is_blocked)
+            {
+                // why: enforce admin decision; keep UX informative
+                var reason = string.IsNullOrWhiteSpace(conv.blocked_reason) ? "Chat is blocked by admin." : $"Chat is blocked by admin: {conv.blocked_reason}";
+                TempData["Message"] = reason;
+                return RedirectToAction(nameof(Thread), new { id });
+            }
 
             int otherId = conv.candidate_id ?? await _db.messages
                 .Where(m => m.conversation_id == id)

@@ -65,6 +65,21 @@ namespace JobPortal.Areas.Admin.Controllers
                 })
                 .ToList();
 
+            // NEW: map approver names for current page (only Approved items)
+            var pageIds = items.Select(i => i.Id).ToArray();
+            var approvers = _db.job_post_approvals
+                .AsNoTracking()
+                .Where(a => pageIds.Contains(a.approval_id) && a.approval_status == "Approved")
+                .Select(a => new
+                {
+                    a.approval_id,
+                    First = a.user.first_name,
+                    Last = a.user.last_name
+                })
+                .ToList()
+                .ToDictionary(x => x.approval_id, x => $"{(x.First ?? "").Trim()} {(x.Last ?? "").Trim()}".Trim());
+            ViewBag.Approvers = approvers;
+
             var vm = new ApprovalsIndexViewModel
             {
                 Status = status ?? "All",
@@ -118,6 +133,18 @@ namespace JobPortal.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(photo))
                 ViewBag.CompanyPhotoUrl = photo;
 
+            // NEW: approver name for Approved items
+            if (string.Equals(item.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+            {
+                var approver = _db.job_post_approvals
+                    .AsNoTracking()
+                    .Where(a => a.approval_id == id)
+                    .Select(a => new { a.user.first_name, a.user.last_name })
+                    .FirstOrDefault();
+                if (approver != null)
+                    ViewBag.ApprovedByName = $"{(approver.first_name ?? "").Trim()} {(approver.last_name ?? "").Trim()}".Trim();
+            }
+
             return View(item);
         }
 
@@ -138,6 +165,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             approval.approval_status = "Approved";
             approval.date_approved = DateTime.UtcNow;
+            approval.user_id = adminId; // NEW: persist approver
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
 
@@ -261,6 +289,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     case "Approve":
                         a.approval_status = "Approved";
                         a.date_approved = now;
+                        a.user_id = adminId; // NEW: persist approver
                         if (!string.IsNullOrWhiteSpace(comments))
                             a.comments = comments;
 

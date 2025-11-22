@@ -1,3 +1,4 @@
+// File: Areas/JobSeeker/Controllers/InboxController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.JobSeeker.Models;
@@ -7,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -17,7 +19,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         private readonly ChatbotService _chatbot;
         private const int DefaultPageSize = 10;
         private const int MaxPageSize = 20;
-
 
         public InboxController(ChatbotService chatbot, AppDbContext db)
         {
@@ -96,9 +97,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             };
 
             return View(vm);
-
         }
-
 
         // GET: /JobSeeker/Inbox/Thread/{id}
         [HttpGet]
@@ -116,13 +115,17 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (convo == null)
                 return NotFound();
 
+            // NEW: expose block state to the view
+            ViewBag.IsBlocked = convo.is_blocked;
+            ViewBag.BlockedReason = convo.blocked_reason ?? string.Empty;
+
             // Get messages linked to this conversation
             var messages = await _db.messages
                 .Where(m => m.conversation_id == convo.conversation_id)
                 .OrderBy(m => m.msg_timestamp)
                 .ToListAsync();
 
-            // Mark unread messages as read
+            // Mark unread messages as read (keep existing behavior)
             var unread = messages.Where(m => m.receiver_id == candidateId && m.is_read == false).ToList();
             if (unread.Any())
             {
@@ -147,7 +150,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 Messages = messageList
             };
 
-            // 👇 Pass the prefilled message to the View
+            // Prefilled message to the View
             ViewBag.PrefillMessage = prefill;
 
             return View(vm);
@@ -169,6 +172,15 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             var convo = await _db.conversations.FirstOrDefaultAsync(c => c.conversation_id == vm.ThreadId && c.candidate_id == candidateId);
             if (convo == null)
                 return NotFound();
+
+            // NEW: hard block enforcement
+            if (convo.is_blocked)
+            {
+                TempData["Message"] = string.IsNullOrWhiteSpace(convo.blocked_reason)
+                    ? "Chat is blocked by admin."
+                    : $"Chat is blocked by admin: {convo.blocked_reason}";
+                return RedirectToAction("Thread", new { id = vm.ThreadId });
+            }
 
             // Create new message
             var message = new message
@@ -200,6 +212,5 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             var answer = await _chatbot.AskAsync(question);
             return Json(new { reply = answer });
         }
-
     }
 }

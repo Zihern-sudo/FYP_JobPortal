@@ -12,13 +12,19 @@
   ? (isArchived ? "Archived Job Post Templates" : "Job Post Templates")
   : (isArchived ? "Archived Templates" : "Message Templates");
 
+  // --- Sorting state (ID ASC/DESC) ---
+  var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+  var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+  var arrow = sort == "id_asc" ? "▲" : "▼";
+
   // Helper for pagination links
   string RoutePreserve(int page) => Url.Action(isArchived ? "Archived" : "Index", new
   {
     q = q,
     page = page,
     pageSize = Model.PageSize,
-    threadId = threadId
+    threadId = threadId,
+    sort = sort
   })!;
 }
 
@@ -76,6 +82,8 @@
     <a asp-controller="Templates" asp-action="@(isArchived ? "Archived" : "Index")" asp-route-threadId="@threadId"
       class="btn btn-outline-secondary">Reset</a>
   </div>
+  @* Preserve current sort when filtering *@
+  <input type="hidden" name="sort" value="@sort" />
 </form>
 
 @if (Model.Items.Count == 0)
@@ -91,6 +99,16 @@ else
           <th style="width:34px">
             <input type="checkbox" id="chkAll" title="Select all" />
           </th>
+          @* MODIFIED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+          <th class="position-relative" style="width:90px;">
+            <span>ID</span>
+            <span class="ms-1">@arrow</span>
+            <a class="stretched-link text-decoration-none" asp-area="Recruiter"
+              asp-controller="@(isJobPost ? "JobPostTemplates" : "Templates")"
+              asp-action="@(isArchived ? "Archived" : "Index")" asp-route-q="@q" asp-route-page="@Model.Page"
+              asp-route-pageSize="@Model.PageSize" asp-route-threadId="@threadId" asp-route-sort="@idNext"
+              aria-label="Sort by ID"></a>
+          </th>
           <th style="width:26%">Name</th>
           <th style="width:24%">Subject</th>
           <th>Snippet</th>
@@ -105,6 +123,8 @@ else
               <input type="checkbox" class="form-check-input fav-check" data-id="@t.Id"
                 aria-label="select template @t.Name" />
             </td>
+            @* MODIFIED: Show ID column *@
+            <td>@t.Id</td>
             <td>
               <div class="d-flex align-items-center gap-2">
                 <span class="fav-indicator badge bg-light text-muted d-none">Favourite</span>

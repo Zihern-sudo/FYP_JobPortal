@@ -849,3 +849,11 @@ CREATE TABLE `resume_feedback_history` (
         REFERENCES `user` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /* ---- */
+
+
+
+/* -------Eason------------------------------------------------------------------------------- */
+ALTER TABLE job_application
+ADD expected_salary INT NULL,
+ADD description NVARCHAR(255) NULL;
+/* ------------------------------------------------------------------------------------------- */

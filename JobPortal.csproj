@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>3e343550-6715-48f1-86ec-9b8915dfdc8f</UserSecretsId>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Google.GenAI" Version="0.6.0" />
     <PackageReference Include="Azure.AI.DocumentIntelligence" Version="1.0.0" />
@@ -25,4 +26,11 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
+
+  <!-- Override transitive vulnerable package -->
+ <ItemGroup>
+  <!-- Force NuGet to resolve 4.3.2 instead of 4.3.0 -->
+  <PackageReference Include="System.Net.Security" Version="4.3.2" />
+</ItemGroup>
+
 </Project>
