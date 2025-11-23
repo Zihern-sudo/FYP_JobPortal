@@ -44,6 +44,11 @@ public class HomeController : Controller
         return View();
     }
 
+    public IActionResult Terms()
+    {
+        return View();
+    }
+
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
@@ -53,8 +58,6 @@ public class HomeController : Controller
 
     public IActionResult About()
     {
-        // You can pass data to the view through ViewData/ViewBag/Model if you like
-        ViewData["Message"] = "This is a simple About page.";
         return View();
     }
 

@@ -93,13 +93,34 @@
         </main>
     </div>
 
-<footer class="dashboard-footer text-center py-3 text-muted">
-    <span>© @DateTime.UtcNow.Year Joboria</span>
-    <span class="mx-2">•</span>
-    <a href="#" class="text-muted text-decoration-none">Privacy Policy</a>
-    <span class="mx-2">•</span>
-    <a href="#" class="text-muted text-decoration-none">Terms</a>
-</footer>
+<footer>
+    <div class="footer container-fluid bg-dark text-white-50 pt-4 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <h6 class="text-white">Company</h6>
+                    <a class="btn btn-link text-white-50 p-0 d-block" asp-area="JobSeeker" asp-controller="Home"
+                        asp-action="About">About Us</a>
+                    <a class="btn btn-link text-white-50 p-0 d-block" asp-area="JobSeeker" asp-controller="Home"
+                        asp-action="Privacy">Privacy Policy</a>
+                    <a class="btn btn-link text-white-50 p-0 d-block" asp-area="JobSeeker" asp-controller="Home"
+                        asp-action="Terms">Terms & Conditions</a>
+                </div>
+
+                <div class="col-md-4 mb-3">
+                    <h6 class="text-white">Contact</h6>
+                    <p class="mb-1"><i class="fa fa-map-marker-alt me-2"></i>123 Street, Kuala Lumpur, MY</p>
+                    <p class="mb-1"><i class="fa fa-phone-alt me-2"></i>+60 12-345 6789</p>
+                    <p class="mb-1"><i class="fa fa-envelope me-2"></i>support@joboria.com</p>
+                </div>
+            </div>
+
+            <div class="text-center border-top border-secondary pt-3 mt-3">
+                © @DateTime.UtcNow.Year Joboria. All Rights Reserved.
+            </div>
+        </div>
+    </footer>
+
 
 
     @RenderSection("Scripts", required: false)

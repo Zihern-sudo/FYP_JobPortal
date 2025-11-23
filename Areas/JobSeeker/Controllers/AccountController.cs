@@ -80,12 +80,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
 
 
-            // ✅ Restrict main login page to JobSeekers only
+            // Restrict main login page to JobSeekers only
             if (user.user_role != "JobSeeker")
             {
-                // Redirect to staff login page if admin/recruiter tries to use main login
+                TempData["Message"] = "You must use Staff Login. You have been redirected.";
                 return RedirectToAction("StaffLogin");
             }
+
 
             // -------------------------------
             // SAFE SESSION-BASED LOGIN LIMIT
@@ -758,6 +759,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             // 6️⃣ Hash new password
             var hasher = new PasswordHasher<object>();
+            if (hasher.VerifyHashedPassword(null, user.password_hash, newPassword) == PasswordVerificationResult.Success)
+            {
+                TempData["Message"] = "New password cannot be the same as your current password.";
+                ViewBag.Email = email;
+                ViewBag.Token = token;
+                return View();
+            }
+            
             user.password_hash = hasher.HashPassword(null, newPassword);
 
             // ✅ Set user_status to Active

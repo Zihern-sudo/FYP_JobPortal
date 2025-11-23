@@ -17,8 +17,6 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<ai_rank_override> ai_rank_overrides { get; set; }
 
-    public virtual DbSet<ai_resume_analysis> ai_resume_analyses { get; set; }
-
     public virtual DbSet<ai_resume_evaluation> ai_resume_evaluations { get; set; }
 
     public virtual DbSet<ai_scoring_rule> ai_scoring_rules { get; set; }
@@ -98,13 +96,6 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.job_listing).WithMany(p => p.ai_rank_overrides).HasConstraintName("fk_override_job");
 
             entity.HasOne(d => d.user).WithMany(p => p.ai_rank_overrides).HasConstraintName("fk_override_user");
-        });
-
-        modelBuilder.Entity<ai_resume_analysis>(entity =>
-        {
-            entity.HasKey(e => e.analysis_id).HasName("PRIMARY");
-
-            entity.HasOne(d => d.resume).WithMany(p => p.ai_resume_analyses).HasConstraintName("fk_analysis_resume");
         });
 
         modelBuilder.Entity<ai_resume_evaluation>(entity =>

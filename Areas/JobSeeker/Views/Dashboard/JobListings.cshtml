@@ -28,7 +28,7 @@
     <form asp-action="JobListings" method="get" class="job-filter-bar d-flex flex-wrap gap-2 align-items-center">
         <!-- Keyword Search -->
         <input type="text" name="search" class="form-control w-auto" placeholder="Search jobs or companies..."
-            value="@ViewBag.Search" />
+            maxlength="60" value="@ViewBag.Search" />
 
         <!-- 📍 Location Filter -->
         <select name="location" class="form-select w-auto">
@@ -49,10 +49,10 @@
 
             <!-- Linked Inputs -->
             <div class="d-flex align-items-center justify-content-center mt-2 gap-2">
-                <input type="number" id="minSalary" name="minSalary" min="0" max="10000" step="500"
+                <input type="number" id="minSalary" name="minSalary" min="0" max="20000" step="500"
                     value="@ViewBag.MinSalary" class="form-control w-auto text-center" style="width:100px;">
                 <span class="mx-2 fw-semibold">-</span>
-                <input type="number" id="maxSalary" name="maxSalary" min="0" max="10000" step="500"
+                <input type="number" id="maxSalary" name="maxSalary" min="0" max="20000" step="500"
                     value="@ViewBag.MaxSalary" class="form-control w-auto text-center" style="width:100px;">
             </div>
         </div>
@@ -225,6 +225,38 @@
                 }
             });
         });
+        document.querySelector("form").addEventListener("submit", function (e) {
+            const minInput = document.getElementById("minSalary").value.trim();
+            const maxInput = document.getElementById("maxSalary").value.trim();
+
+            const min = parseInt(minInput, 10);
+            const max = parseInt(maxInput, 10);
+
+            if (isNaN(min) || isNaN(max)) {
+                e.preventDefault();
+                document.getElementById("salaryError").textContent = "Please enter valid numbers for salary.";
+                document.getElementById("salaryError").style.display = "block";
+                return false;
+            }
+
+            if (min > max) {
+                e.preventDefault();
+                document.getElementById("salaryError").textContent = "Minimum salary cannot be higher than maximum.";
+                document.getElementById("salaryError").style.display = "block";
+                return false;
+            }
+
+            if ((min + max) > 20000) {
+                e.preventDefault();
+                document.getElementById("salaryError").textContent = "Combined salary range cannot exceed 20,000.";
+                document.getElementById("salaryError").style.display = "block";
+                return false;
+            }
+
+            document.getElementById("salaryError").style.display = "none"; // hide error if valid
+        });
+
+
 
 
 

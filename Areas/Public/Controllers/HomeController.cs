@@ -63,7 +63,6 @@ namespace JobPortal.Areas.Public.Controllers
             return View();
         }
 
-
         // GET: /Public/Home/Testimonial
         [HttpGet]
         public IActionResult Testimonial() => View();
@@ -140,6 +139,15 @@ namespace JobPortal.Areas.Public.Controllers
                 return View(vm);
             }
         }
+
+        [HttpGet]
+        public IActionResult Services() => View();
+
+        [HttpGet]
+        public IActionResult Privacy() => View();
+
+        [HttpGet]
+        public IActionResult Terms() => View();
 
         // GET: /Public/Home/Error404
         [HttpGet]

@@ -43,28 +43,28 @@
 
         <h3>Education</h3>
         <label>School / University</label>
-        <input type="text" id="school" name="school" placeholder="University of XYZ" />
+        <input type="text" id="school" name="school" placeholder="University of XYZ" pattern="^[a-zA-Z\s.&'-]+$" maxlength="100"/>
 
         <label>Degree</label>
-        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science in Computer Science" />
+        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science in Computer Science" pattern="^[a-zA-Z\s.&'-]+$" maxlength="100"/>
 
         <label>Year</label>
-        <input type="text" id="eduYear" name="eduYear" placeholder="2020 - 2024" />
+        <input type="text" id="eduYear" name="eduYear" placeholder="2020-2024" pattern="^\d{4}(\s*-\s*\d{4})?$" maxlength="9" />
 
         <h3>Work Experience</h3>
         <div id="experienceContainer">
             <div class="experience-entry">
                 <label>Company</label>
-                <input type="text" id="company" name="company" placeholder="ABC Corp" />
+                <input type="text" id="company" name="company" placeholder="ABC Corp" maxlength="100"/>
 
                 <label>Position</label>
-                <input type="text" id="position" name="position" placeholder="Software Intern" />
+                <input type="text" id="position" name="position" placeholder="Software Intern" maxlength="50"/>
 
                 <label>Duration</label>
-                <input type="text" id="duration" name="duration" placeholder="2 years, 6 months" />
+                <input type="text" id="duration" name="duration" placeholder="2 years, 6 months" maxlength="30" />
 
                 <label>Responsibilities / Achievements</label>
-                <textarea id="achievements" name="achievements" placeholder="Describe your contributions..."
+                <textarea id="achievements" name="achievements" placeholder="Describe your contributions..." maxlength="300"
                     rows="3"></textarea>
             </div>
         </div>
@@ -76,13 +76,13 @@
         <div id="projectContainer">
             <div class="project-entry">
                 <label>Project Title</label>
-                <input type="text" name="projectTitle" placeholder="Hospital Appointment System" />
+                <input type="text" name="projectTitle" placeholder="Hospital Appointment System" maxlength="50"/>
 
                 <label>Tech Stack</label>
-                <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure" />
+                <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure" maxlength="100" />
 
                 <label>Description / Achievements</label>
-                <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..."
+                <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..." maxlength="300"
                     rows="3"></textarea>
             </div>
         </div>
@@ -95,8 +95,8 @@
 
 
         <h3>Skills & Certifications</h3>
-        <input type="text" id="skills" name="skills" value="@Model.Skills" placeholder="C#, ASP.NET, SQL" />
-        <input type="text" id="certifications" name="certifications" value="@Model.Certifications"
+        <input type="text" id="skills" name="skills" value="@Model.Skills" placeholder="C#, ASP.NET, SQL" maxlength="50" />
+        <input type="text" id="certifications" name="certifications" value="@Model.Certifications" maxlength="100"
             placeholder="Microsoft Certified: Azure Fundamentals" />
 
         <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>
@@ -228,4 +228,12 @@
 
         document.getElementById("projects").value = projects.join("\n\n");
     });
+    document.getElementById("eduYear").addEventListener("input", function() {
+    const regex = /^\d{4}(\s*-\s*\d{4})?$/;
+    if (!regex.test(this.value)) {
+        this.setCustomValidity("Enter a valid year or range (e.g., 2020 or 2020-2024)");
+    } else {
+        this.setCustomValidity("");
+    }
+});
 </script>

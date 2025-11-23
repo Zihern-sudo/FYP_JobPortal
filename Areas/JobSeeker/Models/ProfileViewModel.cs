@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 namespace JobPortal.Areas.JobSeeker.Models
 {
     public class ProfileViewModel
@@ -8,6 +9,9 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string? Email { get; set; }
         public bool TwoFAEnabled { get; set; }
         public string? TwoFASecret { get; set; }
+
+        [Display(Name = "Phone Number")]
+        [RegularExpression(@"^[0-9+\-]+$", ErrorMessage = "Phone number can only contain digits, '+' and '-' symbols.")]
         public string? Phone { get; set; }
         public string? Address { get; set; }
         public string? Skills { get; set; }

@@ -26,54 +26,56 @@ namespace JobPortal.Areas.JobSeeker.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IWebHostEnvironment _webHostEnvironment;
-        public DashboardController(AppDbContext db, IWebHostEnvironment webHostEnvironment)
+        private readonly INotificationService _notificationService;
+        public DashboardController(AppDbContext db, IWebHostEnvironment webHostEnvironment, INotificationService notificationService)
         {
             _db = db;
             _webHostEnvironment = webHostEnvironment;
+            _notificationService = notificationService;
         }
-public async Task<IActionResult> Index(string? search)
-{
-    var recentJobsQuery = _db.job_listings
-        .Include(j => j.company)
-        .Where(j => j.job_status == "Open")
-        .OrderByDescending(j => j.date_posted)
-        .Take(4);
-
-    if (!string.IsNullOrEmpty(search))
-    {
-        recentJobsQuery = recentJobsQuery.Where(j =>
-            j.job_title.Contains(search) ||
-            j.company.company_name.Contains(search) ||
-            j.company.company_industry.Contains(search) ||
-            j.company.company_location.Contains(search) ||              // ⭐ NEW searchable info
-            j.job_type.Contains(search)
-        );
-    }
-
-    var recentJobs = await recentJobsQuery
-        .Select(j => new RecentJobViewModel
+        public async Task<IActionResult> Index(string? search)
         {
-            JobId = j.job_listing_id,
-            JobTitle = j.job_title,
-            CompanyName = j.company.company_name,
-            Industry = j.company.company_industry,
+            var recentJobsQuery = _db.job_listings
+                .Include(j => j.company)
+                .Where(j => j.job_status == "Open")
+                .OrderByDescending(j => j.date_posted)
+                .Take(4);
 
-            // ⭐ New fields
-            Location = j.company.company_location,
-            MinSalary = j.salary_min,
-            MaxSalary = j.salary_max,
-            JobType = j.job_type
-        })
-        .ToListAsync();
+            if (!string.IsNullOrEmpty(search))
+            {
+                recentJobsQuery = recentJobsQuery.Where(j =>
+                    j.job_title.Contains(search) ||
+                    j.company.company_name.Contains(search) ||
+                    j.company.company_industry.Contains(search) ||
+                    j.company.company_location.Contains(search) ||              // ⭐ NEW searchable info
+                    j.job_type.Contains(search)
+                );
+            }
 
-    var model = new DashboardIndexViewModel
-    {
-        SearchKeyword = search,
-        RecentJobs = recentJobs
-    };
+            var recentJobs = await recentJobsQuery
+                .Select(j => new RecentJobViewModel
+                {
+                    JobId = j.job_listing_id,
+                    JobTitle = j.job_title,
+                    CompanyName = j.company.company_name,
+                    Industry = j.company.company_industry,
 
-    return View(model);
-}
+                    // ⭐ New fields
+                    Location = j.company.company_location,
+                    MinSalary = j.salary_min,
+                    MaxSalary = j.salary_max,
+                    JobType = j.job_type
+                })
+                .ToListAsync();
+
+            var model = new DashboardIndexViewModel
+            {
+                SearchKeyword = search,
+                RecentJobs = recentJobs
+            };
+
+            return View(model);
+        }
 
 
         public IActionResult Feedback() => View();
@@ -705,9 +707,6 @@ public async Task<IActionResult> Index(string? search)
             return RedirectToAction("Applications", "Dashboard", new { area = "JobSeeker" });
         }
 
-
-
-
         public async Task<IActionResult> Applications(string? status, string? sortBy, int page = 1)
         {
             var userId = HttpContext.Session.GetString("UserId");
@@ -979,8 +978,9 @@ public async Task<IActionResult> Index(string? search)
 
             // Get job listings for those IDs
             var jobs = await _db.job_listings
-                                .Where(j => favJobIds.Contains(j.job_listing_id))
+                                .Where(j => favJobIds.Contains(j.job_listing_id) && j.job_status == "Open")
                                 .ToListAsync();
+
 
             return View(jobs); // pass to a view
         }
@@ -1458,6 +1458,31 @@ public async Task<IActionResult> Index(string? search)
 
             return Json(new { success = true });
         }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateStatus(int applicationId, string newStatus)
+        {
+            // Include JobListing to get JobTitle
+            var application = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == applicationId);
+
+            if (application == null)
+                return NotFound();
+
+            // Update status
+            application.application_status = newStatus;
+            application.date_updated = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            // Send notification using your service
+            var message = $"Your application for '{application.job_listing.job_title}' has been {newStatus}.";
+            await _notificationService.SendAsync(application.user_id, "Application Status Updated", message, "Application");
+
+            return RedirectToAction("Details", new { id = applicationId });
+        }
+
 
 
 

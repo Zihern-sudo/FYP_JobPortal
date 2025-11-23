@@ -139,22 +139,31 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "feedback");
                 Directory.CreateDirectory(folderPath);
 
-                // Use a GUID to avoid file name conflicts
-                var fileName = $"{Guid.NewGuid()}_resume.pdf"; // or get original file extension
+                var user = await _db.users.FindAsync(userId);
+
+                // Make filename readable & safe
+                string firstNameSafe = (user?.first_name ?? "User")
+                    .Replace(" ", "")
+                    .Replace(".", "")
+                    .Replace("-", "");
+
+                // Use nicely formatted name instead of GUID
+                var fileName = $"{firstNameSafe}_{DateTime.Now:yyyyMMddHHmmss}.pdf";
                 var filePath = Path.Combine(folderPath, fileName);
 
+                // Save the file into /wwwroot/uploads/feedback/
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await resumeFile.CopyToAsync(stream);
                 }
 
                 // ===============================
-                // 📌 Create new resume record
+                // 📌 Create new resume record with correct path
                 // ===============================
                 var newResume = new resume
                 {
                     user_id = userId,
-                    file_path = fileName,
+                    file_path = $"/uploads/feedback/{fileName}",   // 🔥 FIXED — now accessible in browser
                     upload_date = DateTime.Now
                 };
 

@@ -1,6 +1,8 @@
 @{
     ViewData["Title"] = "Staff Login";
 }
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
 
 <div class="auth-container">
     <h1>Staff Login</h1>
@@ -10,11 +12,15 @@
         <form id="staffLoginForm" asp-area="JobSeeker" asp-controller="Account" asp-action="StaffLogin" method="post"
             class="auth-form active">
             <label for="email">Email</label>
-            <input type="email" id="email" name="email" placeholder="Enter your staff email" value="@ViewBag.Email"
+            <input type="email" id="email" name="email" placeholder="Enter your staff email" value="@ViewBag.Email" maxlength="60"
                 required>
 
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            <div class="password-wrapper">
+                <input type="password" id="password" name="password" placeholder="Enter your password" maxlength="20" required />
+                <span class="toggle-password"><i class="bi bi-eye"></i></span>
+            </div>
+
 
             <div class="forgot-password">
                 <a asp-area="JobSeeker" asp-controller="Account" asp-action="ForgotPassword">Forgot Password?</a>
@@ -78,6 +84,21 @@
                             alertType === 'warning' ? '#f0ad4e' : '#dc3545'
                 });
             }
+            document.querySelectorAll(".toggle-password").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const input = btn.parentElement.querySelector("input");
+                    const icon = btn.querySelector("i");
+                    if (input.type === "password") {
+                        input.type = "text";
+                        icon.classList.remove("bi-eye");
+                        icon.classList.add("bi-eye-slash");
+                    } else {
+                        input.type = "password";
+                        icon.classList.remove("bi-eye-slash");
+                        icon.classList.add("bi-eye");
+                    }
+                });
+            });
 
             // ===============================
             // 🔹 2FA CODE PROMPT (Google Authenticator)
@@ -106,10 +127,10 @@
                         form.method = "POST";
                         form.action = "/JobSeeker/Account/StaffLogin";
                         form.innerHTML = `
-                                <input type="hidden" name="email" value="${pendingEmail}">
-                                <input type="hidden" name="password" value="${pendingPassword}">
-                                <input type="hidden" name="twoFACode" value="${code}">
-                            `;
+                                        <input type="hidden" name="email" value="${pendingEmail}">
+                                        <input type="hidden" name="password" value="${pendingPassword}">
+                                        <input type="hidden" name="twoFACode" value="${code}">
+                                    `;
                         document.body.appendChild(form);
                         form.submit();
                     }

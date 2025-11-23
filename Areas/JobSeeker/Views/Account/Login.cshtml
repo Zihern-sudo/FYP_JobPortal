@@ -18,7 +18,7 @@
         <form id="loginForm" asp-area="JobSeeker" asp-controller="Account" asp-action="Login" method="post"
             class="auth-form active">
             <label for="email">Email</label>
-            <input type="text" id="email" name="email" placeholder="Enter your email" value="@ViewBag.Email">
+            <input type="text" id="email" name="email" placeholder="Enter your email" value="@ViewBag.Email" maxlength="60">
 
             <label for="password">Password</label>
             <div class="password-wrapper">
@@ -63,7 +63,7 @@
             </div>
 
             <label asp-for="Email"></label>
-            <input asp-for="Email" maxlength="190" placeholder="Enter your email" />
+            <input asp-for="Email" maxlength="60" placeholder="Enter your email" />
 
             <label asp-for="Password"></label>
             <div class="password-wrapper">
