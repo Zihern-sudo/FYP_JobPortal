@@ -616,7 +616,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 email = user.email,
                 token = token,
                 purpose = "PasswordReset",
-                expires_at = now.AddMinutes(30), // reset link valid for 30 mins
+                expires_at = now.AddMinutes(5), // reset link valid for 5 mins
                 used = false,
                 created_at = now
             };

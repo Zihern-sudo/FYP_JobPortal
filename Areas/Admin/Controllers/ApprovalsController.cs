@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Admin.Models;
-using JobPortal.Areas.Shared.Extensions; // For TryGetUserId
+using JobPortal.Areas.Shared.Extensions; // For TryGetUserId + DateTime helpers
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -85,9 +85,12 @@ namespace JobPortal.Areas.Admin.Controllers
                 : query.OrderByDescending(a => a.approval_id);
 
             var total = query.Count();
+
+            // Convert date_posted (stored as UTC) to Malaysia time for display
             var items = query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .AsEnumerable() // switch to client-side so extension methods work
                 .Select(a => new ApprovalRow
                 {
                     Id = a.approval_id,
@@ -96,6 +99,8 @@ namespace JobPortal.Areas.Admin.Controllers
                     Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status, // Pending/Approved/ChangesRequested/Rejected
                     Date = a.job_listing!.date_posted
+                        .AsUtc()
+                        .ToMalaysiaTime()
                 })
                 .ToList();
 
@@ -136,7 +141,6 @@ namespace JobPortal.Areas.Admin.Controllers
             return View(vm);
         }
 
-
         public IActionResult Preview(int id)
         {
             ViewData["Title"] = "Job Preview";
@@ -145,6 +149,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 .AsNoTracking()
                 .Include(a => a.job_listing!.company)
                 .Where(a => a.approval_id == id)
+                .AsEnumerable() // for extension methods
                 .Select(a => new ApprovalPreviewViewModel
                 {
                     Id = a.approval_id,
@@ -152,7 +157,10 @@ namespace JobPortal.Areas.Admin.Controllers
                     JobTitle = a.job_listing!.job_title,
                     Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status,
-                    Date = a.job_listing!.date_posted,
+                    // Convert stored UTC to Malaysia time for display
+                    Date = a.job_listing!.date_posted
+                        .AsUtc()
+                        .ToMalaysiaTime(),
                     JobDescription = a.job_listing!.job_description,
                     JobRequirements = a.job_listing!.job_requirements,
                     Comments = a.comments
@@ -200,8 +208,11 @@ namespace JobPortal.Areas.Admin.Controllers
                 .FirstOrDefault(a => a.approval_id == id);
             if (approval == null) return NotFound();
 
+            var nowUtc = DateTime.UtcNow;
+
             approval.approval_status = "Approved";
-            approval.date_approved = DateTime.Now;
+            // Store as UTC in DB
+            approval.date_approved = nowUtc;
             approval.user_id = adminId; // NEW: persist approver
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
@@ -218,7 +229,8 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 user_id = adminId,
                 action_type = $"Approved job #{approval.job_listing_id}",
-                timestamp = DateTime.UtcNow
+                // Store log timestamp as UTC
+                timestamp = nowUtc
             });
 
             _db.SaveChanges();
@@ -251,6 +263,7 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 user_id = adminId,
                 action_type = $"Rejected job #{approval.job_listing_id}",
+                // UTC for DB storage
                 timestamp = DateTime.UtcNow
             });
 
@@ -284,6 +297,7 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 user_id = adminId,
                 action_type = $"Requested changes for job #{approval.job_listing_id}",
+                // UTC for DB storage
                 timestamp = DateTime.UtcNow
             });
 
@@ -316,6 +330,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 .Where(a => ids.Contains(a.approval_id))
                 .ToList();
 
+            // UTC for DB storage
             var now = DateTime.UtcNow;
             int changed = 0;
 
@@ -416,6 +431,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     ["summary"] = "Item not found.",
                     ["items"] = new List<AiJobPolicyCheckItemVM>(),
                     ["fromCache"] = false,
+                    // cachedAt kept as UTC for consistency; convert at UI if needed
                     ["cachedAt"] = DateTime.UtcNow
                 };
                 return Json(nf);
@@ -465,6 +481,63 @@ namespace JobPortal.Areas.Admin.Controllers
                         "    \"clarity\": boolean\n" +
                         "  },\n  \"items\": [{\"issue\": string, \"severity\": \"Advice|Warning|Violation\"}]\n}\n" +
                         "Set a check to false whenever that problem appears. Keep items short (0–5)." },
+
+                    // ---------------- FEW-SHOT EXAMPLES ----------------
+                    // BAD EXAMPLE (should fail multiple checks)
+                    new { role = "user", content =
+                        "Company: ExampleCo\nTitle: Brand Ambassador – Fast Pay\n\n" +
+                        "Description:\nPay a small onboarding fee to unlock client lists. Message me on WhatsApp +1 555 1234.\n\n" +
+                        "Requirements:\nSend bank account and passport for verification. Must be under 30. Be available 24/7. Skip the platform and email me directly." },
+                    new { role = "assistant", content =
+                        "{\n" +
+                        "  \"summary\": \"Multiple compliance issues detected (off-platform contact, fees, ID, age limit, 24/7, bypass platform).\",\n" +
+                        "  \"checks\": {\n" +
+                        "    \"off_platform\": false,\n" +
+                        "    \"payment_or_bank\": false,\n" +
+                        "    \"id_documents\": false,\n" +
+                        "    \"personal_data\": true,\n" +
+                        "    \"discrimination\": false,\n" +
+                        "    \"availability_24_7\": false,\n" +
+                        "    \"skip_platform\": false,\n" +
+                        "    \"scammy_language\": true,\n" +
+                        "    \"unrealistic_claims\": true,\n" +
+                        "    \"clarity\": true\n" +
+                        "  },\n" +
+                        "  \"items\": [\n" +
+                        "    {\"issue\":\"Requests off-platform contact (WhatsApp)\",\"severity\":\"Violation\"},\n" +
+                        "    {\"issue\":\"Upfront payment/fee\",\"severity\":\"Violation\"},\n" +
+                        "    {\"issue\":\"Requests passport/ID\",\"severity\":\"Violation\"},\n" +
+                        "    {\"issue\":\"Age discrimination (under 30)\",\"severity\":\"Violation\"},\n" +
+                        "    {\"issue\":\"24/7 availability pressure\",\"severity\":\"Violation\"},\n" +
+                        "    {\"issue\":\"Instruction to bypass platform\",\"severity\":\"Violation\"}\n" +
+                        "  ]\n" +
+                        "}" },
+
+                    // GOOD EXAMPLE (should pass all checks)
+                    new { role = "user", content =
+                        "Company: Acme Labs\nTitle: Software Engineer (Backend)\n\n" +
+                        "Description:\nBuild and maintain .NET APIs, collaborate with Product, review code, write tests. Hybrid 2–3 days/week. Clear responsibilities and growth path.\n\n" +
+                        "Requirements:\n2+ years C#/.NET, REST, SQL; unit testing experience; ability to work with code reviews; strong communication. Optional: Docker, Azure." },
+                    new { role = "assistant", content =
+                        "{\n" +
+                        "  \"summary\": \"Professional and compliant; no significant issues identified.\",\n" +
+                        "  \"checks\": {\n" +
+                        "    \"off_platform\": true,\n" +
+                        "    \"payment_or_bank\": true,\n" +
+                        "    \"id_documents\": true,\n" +
+                        "    \"personal_data\": true,\n" +
+                        "    \"discrimination\": true,\n" +
+                        "    \"availability_24_7\": true,\n" +
+                        "    \"skip_platform\": true,\n" +
+                        "    \"scammy_language\": true,\n" +
+                        "    \"unrealistic_claims\": true,\n" +
+                        "    \"clarity\": true\n" +
+                        "  },\n" +
+                        "  \"items\": []\n" +
+                        "}" },
+                    // --------------- END FEW-SHOT EXAMPLES -------------
+
+                    // ---- Actual item to evaluate ----
                     new { role = "user", content =
                         $"Company: {data.Company}\n" +
                         $"Title: {data.Title}\n\n" +

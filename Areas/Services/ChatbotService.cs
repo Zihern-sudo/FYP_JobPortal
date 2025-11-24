@@ -1,8 +1,9 @@
-using System;
+// File: JobPortal/Services/ChatbotService.cs
 using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using Google.GenAI;
-using Google.GenAI.Types;
+using Microsoft.Extensions.Configuration;
 
 namespace JobPortal.Services
 {
@@ -11,18 +12,25 @@ namespace JobPortal.Services
         private readonly Client _client;
         private readonly string _modelName;
 
-        public ChatbotService(string modelName = "gemini-2.5-flash")
+        public ChatbotService(IConfiguration configuration, string modelName = "gemini-2.5-flash")
         {
-            // Client reads GEMINI_API_KEY from env by default
-            _client = new Client();
+            // Why: avoid env visibility issues in IIS Express/Docker/VS; use explicit key.
+            var envKey = System.Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            var cfgKey = configuration["Gemini:ApiKey"]; // present in appsettings.json
+            var apiKey = string.IsNullOrWhiteSpace(envKey) ? cfgKey : envKey;
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new System.ArgumentException(
+                    "Google GenAI API key is missing. Set env GOOGLE_API_KEY or configuration 'Gemini:ApiKey'.");
+
+            _client = new Client(apiKey: apiKey);
             _modelName = modelName;
         }
 
-        // Optional: pass priorMessages to keep context (each entry like "User: ...", "Assistant: ...")
         public async Task<string> AskAsync(string userMessage, IEnumerable<string>? priorMessages = null)
         {
             var systemPrompt =
-            @"You are the HR assistant for Joboria, the Job Seeker Application Portal.
+@"You are the HR assistant for Joboria, the Job Seeker Application Portal.
 Answer ONLY based on the features that exist in our system.
 
 Strict rules:
@@ -55,9 +63,7 @@ Additional guidelines:
 - If unsure, ask the user to clarify.
 ";
 
-
-            // Build full conversation string
-            var convoBuilder = new System.Text.StringBuilder();
+            var convoBuilder = new StringBuilder();
             convoBuilder.AppendLine(systemPrompt);
             convoBuilder.AppendLine();
 
@@ -77,15 +83,16 @@ Additional guidelines:
                 contents: contents
             );
 
-            if (response?.Candidates != null && response.Candidates.Count > 0)
+            if (response?.Candidates is { Count: > 0 })
             {
                 var candidate = response.Candidates[0];
-                if (candidate?.Content?.Parts != null && candidate.Content.Parts.Count > 0)
+                if (candidate?.Content?.Parts is { Count: > 0 })
                     return candidate.Content.Parts[0].Text ?? "Sorry, no reply generated.";
             }
 
             return "Sorry, I couldn't generate a response.";
         }
+
         public async Task<string> GenerateResumeFeedbackAI(string resumeText, double score)
         {
             string prompt = $@"

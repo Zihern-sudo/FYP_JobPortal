@@ -1,3 +1,4 @@
+// File: Program.cs
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Services;
@@ -9,9 +10,29 @@ using JobPortal.Areas.Services;
 using JobPortal.Areas.Shared.Options;
 using JobPortal.Areas.Shared.AI;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------- FORCE GOOGLE_API_KEY (process-level) ----------
+{
+    // Why: ensure Google.GenAI.Client() sees the key even if VS/IIS/Docker profile didn't pass env vars.
+    var keyFromConfig =
+        builder.Configuration["Gemini:ApiKey"] ??
+        builder.Configuration["GeminiOptions:ApiKey"]; // support either section name
+
+    var effectiveKey = string.IsNullOrWhiteSpace(keyFromConfig)
+        ? Environment.GetEnvironmentVariable("GOOGLE_API_KEY")
+        : keyFromConfig;
+
+    if (!string.IsNullOrWhiteSpace(effectiveKey))
+    {
+        Environment.SetEnvironmentVariable(
+            "GOOGLE_API_KEY",
+            effectiveKey,
+            EnvironmentVariableTarget.Process);
+    }
+    // else: leave unset; ChatbotService will throw a clear error if missing.
+}
+// ---------------------------------------------------------
 
 // DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -44,7 +65,6 @@ builder.Services.AddScoped<IScoringService, ScoringService>();
 builder.Services.AddScoped<AiOrchestrator>();
 builder.Services.AddScoped<JobSeekerNotificationService>();
 builder.Services.AddHostedService<JobSeekerNotificationBackgroundService>();
-
 
 // --- REMOVE Gemini ---
 // (Deleted GeminiOptions, GeminiClient, GeminiResumeParser registrations)

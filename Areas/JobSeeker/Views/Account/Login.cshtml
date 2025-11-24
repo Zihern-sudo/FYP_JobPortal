@@ -99,6 +99,20 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
 
+
+            // Check TempData errors from controller
+            const tempError = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["Error"]));
+
+            const combinedError = tempError;
+
+            if (combinedError) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Error",
+                    text: combinedError,
+                    confirmButtonColor: "#007bff"
+                });
+            }
             // ===============================
             // 🔹 LOGIN / REGISTER TAB SWITCH
             // ===============================

@@ -10,6 +10,16 @@ using System;
 using System.Linq;
 using System.Text;
 
+// NEW for AI Company Profile Check
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using Microsoft.Extensions.Caching.Memory;
+using JobPortal.Areas.Shared.Options; // OpenAIOptions
+using System.Text.RegularExpressions;  // <-- NEW (evidence gating)
+
 namespace JobPortal.Areas.Admin.Controllers
 {
     [Area("Admin")]
@@ -18,10 +28,24 @@ namespace JobPortal.Areas.Admin.Controllers
         private readonly AppDbContext _db;
         private readonly INotificationService _notif;
 
-        public CompaniesController(AppDbContext db, INotificationService notif)
+        // NEW: AI deps (kept minimal)
+        private readonly IHttpClientFactory _httpFactory;
+        private readonly IOptions<OpenAIOptions> _openAi;
+        private readonly IMemoryCache _cache;
+
+        public CompaniesController(
+            AppDbContext db,
+            INotificationService notif,
+            // NEW deps are optional in DI; if not configured, API falls back gracefully
+            IHttpClientFactory httpFactory = null!,
+            IOptions<OpenAIOptions> openAi = null!,
+            IMemoryCache cache = null!)
         {
             _db = db;
             _notif = notif;
+            _httpFactory = httpFactory!;
+            _openAi = openAi!;
+            _cache = cache!;
         }
 
         // GET: /Admin/Companies
@@ -379,6 +403,368 @@ namespace JobPortal.Areas.Admin.Controllers
         {
             TempData["Flash.Type"] = type;
             TempData["Flash.Message"] = message;
+        }
+
+        // ======================================================================
+        // NEW: AI Company Profile Check endpoint (cached & conservative)
+        // ======================================================================
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> CompanyPolicyCheck(int id, bool force = false)
+        {
+            // Graceful fallback if DI not wired
+            if (_httpFactory == null || _openAi == null || _cache == null)
+            {
+                return Json(new AiCompanyProfileCheckResultVM
+                {
+                    Pass = false,
+                    Summary = "AI check unavailable (service not configured). Please review manually.",
+                    Items = new() { new AiCompanyProfileCheckItemVM { Issue = "Service not configured", Severity = "Warning" } },
+                    FromCache = false,
+                    CachedAt = DateTime.UtcNow
+                });
+            }
+
+            string cacheKey = $"ai:company:{id}";
+            if (!force && _cache.TryGetValue(cacheKey, out AiCompanyProfileCheckResultVM cached) && cached != null)
+            {
+                cached.FromCache = true;
+                return Json(cached);
+            }
+
+            var data = _db.companies
+                .AsNoTracking()
+                .Where(c => c.company_id == id)
+                .Select(c => new
+                {
+                    c.company_name,
+                    c.company_industry,
+                    c.company_location,
+                    c.company_description
+                })
+                .FirstOrDefault();
+
+            if (data == null)
+            {
+                return Json(new AiCompanyProfileCheckResultVM
+                {
+                    Pass = false,
+                    Summary = "Company not found.",
+                    Items = new(),
+                    FromCache = false,
+                    CachedAt = DateTime.UtcNow
+                });
+            }
+
+            var opts = _openAi.Value;
+            if (string.IsNullOrWhiteSpace(opts.ApiKey))
+            {
+                var noKey = new AiCompanyProfileCheckResultVM
+                {
+                    Pass = false,
+                    Summary = "AI check unavailable (no API key). Please review manually.",
+                    Items = new(),
+                    FromCache = false,
+                    CachedAt = DateTime.UtcNow
+                };
+                _cache.Set(cacheKey, noKey, TimeSpan.FromMinutes(10));
+                return Json(noKey);
+            }
+
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(5, opts.TimeoutSeconds));
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", opts.ApiKey);
+
+            // ---- Evidence gating (regex) on profile text ----
+            string fullText = $"{data.company_name}\n{data.company_industry}\n{data.company_location}\n{data.company_description ?? ""}";
+            string[] redWordPatterns =
+            {
+                @"whats\s*app|telegram|line\s?app|wechat|discord",
+                @"contact\s+(?:me|us)\s+at\s+[^@\s]+\s*@|gmail\.com|yahoo\.com|hotmail\.com",
+                @"activation\s*fee|onboarding\s*fee|deposit\b|pay\s+to\s+apply|unlock\s+client\s+list",
+                @"bank\s+account|iban|swift|wire\s+transfer",
+                @"passport|nric|ic\s*number|id\s*card|identity\s*document|mykad",
+                @"guaranteed\s+(?:income|earnings)|get[-\s]?rich|lottery",
+                @"mlm|multi[-\s]?level|pyramid\s+scheme",
+                @"bypass\s+(?:this\s+)?platform|talk\s+outside|skip\s+platform"
+            };
+            bool HasEvidence(string s)
+            {
+                foreach (var pat in redWordPatterns)
+                    if (Regex.IsMatch(s, pat, RegexOptions.IgnoreCase | RegexOptions.Multiline)) return true;
+                return false;
+            }
+            bool evidenceFound = HasEvidence(fullText);
+
+            // Company-specific checks (true = OK, false = problem)
+            var payload = new
+            {
+                model = string.IsNullOrWhiteSpace(opts.ModelText) ? "gpt-4o-mini" : opts.ModelText,
+                temperature = 0,
+                response_format = new { type = "json_object" },
+                messages = new object[]
+                {
+                    new {
+                        role = "system",
+                        content =
+@"You audit **company profiles** (not job posts) for professionalism and concrete business legitimacy.
+OUTPUT STRICT JSON ONLY with this schema:
+
+{
+  ""summary"": string,
+  ""checks"": {
+    ""contact_off_platform"": boolean,          // true ONLY if the profile does NOT ask to contact via WhatsApp/Telegram/personal email
+    ""requests_money_or_bank"": boolean,        // true ONLY if no fees/deposits/bank transfers are requested
+    ""requests_id_documents"": boolean,         // true ONLY if no ID/passport/NRIC scans requested
+    ""asks_sensitive_personal_data"": boolean,  // true ONLY if no sensitive personal data requested
+    ""vague_or_no_business_info"": boolean,     // true ONLY if business info is sufficiently concrete & normal
+    ""unrealistic_claims_or_lottery"": boolean, // true ONLY if profile avoids 'guaranteed income', 'lottery', etc.
+    ""mlm_or_pyramid_indications"": boolean,    // true ONLY if no MLM/pyramid hints
+    ""impersonation_or_trademark"": boolean,    // true ONLY if no impersonation of known brands
+    ""skip_platform_instruction"": boolean,     // true ONLY if no instruction to bypass this platform
+    ""clarity"": boolean                        // true ONLY if profile is reasonably clear/coherent
+  },
+  ""items"": [{""issue"": string, ""severity"": ""Advice|Warning|Violation""}]
+}
+
+IMPORTANT:
+- **Default every check to true unless the profile text clearly shows that problem.**
+- Do **NOT** guess or infer hidden details; be conservative.
+- Keep items 0–5, short and specific.
+"
+                    },
+
+                    // Few-shot GOOD (should PASS)
+                    new {
+                        role = "user",
+                        content =
+@"Company: Northbridge Software Sdn Bhd
+Industry: Information Technology
+Location: Kuala Lumpur, MY
+Profile Description:
+We build B2B workflow tools for mid-sized manufacturers. Registered since 2016. Our team integrates ERP and maintains APIs. No fees to apply; all recruiting handled on this platform. Contact via in-app messaging."
+                    },
+                    new {
+                        role = "assistant",
+                        content =
+@"{
+  ""summary"": ""Legitimate software SME with clear services and no red flags."",
+  ""checks"": {
+    ""contact_off_platform"": true,
+    ""requests_money_or_bank"": true,
+    ""requests_id_documents"": true,
+    ""asks_sensitive_personal_data"": true,
+    ""vague_or_no_business_info"": true,
+    ""unrealistic_claims_or_lottery"": true,
+    ""mlm_or_pyramid_indications"": true,
+    ""impersonation_or_trademark"": true,
+    ""skip_platform_instruction"": true,
+    ""clarity"": true
+  },
+  ""items"": []
+}"
+                    },
+
+                    // Few-shot BAD (should FAIL)
+                    new {
+                        role = "user",
+                        content =
+@"Company: FastPay Global Network
+Industry: Financial Services
+Location: —
+Profile Description:
+Guaranteed monthly earnings! Message our recruiter on WhatsApp +1 555 9999. Small activation fee required to unlock client access. Send NRIC and bank details for verification. We sometimes use big brand names in marketing."
+                    },
+                    new {
+                        role = "assistant",
+                        content =
+@"{
+  ""summary"": ""Multiple high-risk red flags: guaranteed earnings, off-platform WhatsApp, fees, ID and bank requests, possible impersonation."",
+  ""checks"": {
+    ""contact_off_platform"": false,
+    ""requests_money_or_bank"": false,
+    ""requests_id_documents"": false,
+    ""asks_sensitive_personal_data"": false,
+    ""vague_or_no_business_info"": false,
+    ""unrealistic_claims_or_lottery"": false,
+    ""mlm_or_pyramid_indications"": true,
+    ""impersonation_or_trademark"": false,
+    ""skip_platform_instruction"": false,
+    ""clarity"": true
+  },
+  ""items"": [
+    { ""issue"": ""Requests contact via WhatsApp"", ""severity"": ""Violation"" },
+    { ""issue"": ""Activation/other fees"", ""severity"": ""Violation"" },
+    { ""issue"": ""Requests NRIC/ID and bank details"", ""severity"": ""Violation"" },
+    { ""issue"": ""Guaranteed earnings claim"", ""severity"": ""Warning"" },
+    { ""issue"": ""Possible brand impersonation"", ""severity"": ""Warning"" }
+  ]
+}"
+                    },
+
+                    // Actual item
+                    new {
+                        role = "user",
+                        content =
+$@"Company: {data.company_name}
+Industry: {data.company_industry}
+Location: {data.company_location}
+
+Profile Description:
+{data.company_description}"
+                    }
+                }
+            };
+
+            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            try
+            {
+                using var resp = await http.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var body = await resp.Content.ReadAsStringAsync();
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var down = new AiCompanyProfileCheckResultVM
+                    {
+                        Pass = false,
+                        Summary = "AI check temporarily unavailable. Please review manually.",
+                        Items = new(),
+                        FromCache = false,
+                        CachedAt = DateTime.UtcNow
+                    };
+                    _cache.Set(cacheKey, down, TimeSpan.FromMinutes(10));
+                    return Json(down);
+                }
+
+                string? contentJson = null;
+                try
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    contentJson = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+                }
+                catch
+                {
+                    var malformed = new AiCompanyProfileCheckResultVM
+                    {
+                        Pass = false,
+                        Summary = "AI response malformed. Please review manually.",
+                        Items = new(),
+                        FromCache = false,
+                        CachedAt = DateTime.UtcNow
+                    };
+                    _cache.Set(cacheKey, malformed, TimeSpan.FromMinutes(10));
+                    return Json(malformed);
+                }
+
+                bool finalPass = true; // default to pass unless explicit, evidenced violation
+                string finalSummary = "Profile looks professional.";
+                var finalItems = new System.Collections.Generic.List<AiCompanyProfileCheckItemVM>();
+
+                try
+                {
+                    using var parsed = JsonDocument.Parse(contentJson ?? "{}");
+
+                    string summaryText = parsed.RootElement.TryGetProperty("summary", out var s) && s.ValueKind == JsonValueKind.String
+                        ? s.GetString() ?? ""
+                        : "";
+
+                    if (parsed.RootElement.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in arr.EnumerateArray())
+                        {
+                            var issue = el.TryGetProperty("issue", out var iProp) && iProp.ValueKind == JsonValueKind.String ? iProp.GetString() ?? "" : "";
+                            var sev = el.TryGetProperty("severity", out var sv) && sv.ValueKind == JsonValueKind.String ? sv.GetString() ?? "Advice" : "Advice";
+                            if (!string.IsNullOrWhiteSpace(issue))
+                                finalItems.Add(new AiCompanyProfileCheckItemVM { Issue = issue, Severity = string.IsNullOrWhiteSpace(sev) ? "Advice" : sev });
+                        }
+                    }
+
+                    bool anyExplicitFalse = false;
+                    if (parsed.RootElement.TryGetProperty("checks", out var checks) && checks.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var kv in checks.EnumerateObject())
+                        {
+                            // Only treat explicit false as a problem; missing keys are ignored
+                            if (kv.Value.ValueKind == JsonValueKind.False) anyExplicitFalse = true;
+                        }
+                    }
+
+                    // If assistant provided a clear “compliant” summary, prefer pass
+                    if (!string.IsNullOrWhiteSpace(summaryText))
+                        finalSummary = summaryText;
+
+                    // Decide pass/fail:
+                    // 1) If we have any Violation items:
+                    bool hasViolation = finalItems.Any(i => string.Equals(i.Severity, "Violation", StringComparison.OrdinalIgnoreCase));
+
+                    if (hasViolation)
+                    {
+                        if (evidenceFound)
+                        {
+                            finalPass = false; // evidence-backed violations
+                        }
+                        else
+                        {
+                            // downgrade to warnings if no textual evidence found in profile
+                            foreach (var it in finalItems.Where(i => i.Severity.Equals("Violation", StringComparison.OrdinalIgnoreCase)))
+                                it.Severity = "Warning";
+                            finalPass = true;
+                            if (string.IsNullOrWhiteSpace(finalSummary) || finalSummary.Contains("issues", StringComparison.OrdinalIgnoreCase))
+                                finalSummary = "Minor concerns noted, but no explicit red flags in the profile text.";
+                        }
+                    }
+                    else if (anyExplicitFalse && evidenceFound)
+                    {
+                        // No explicit 'Violation' items, but checks show problems and text evidence exists
+                        finalPass = false;
+                        if (string.IsNullOrWhiteSpace(finalSummary)) finalSummary = "Detected explicit red flags in profile.";
+                        // Add a generic item if none existed
+                        if (finalItems.Count == 0)
+                            finalItems.Add(new AiCompanyProfileCheckItemVM { Issue = "Profile contains explicit red-flag signals.", Severity = "Violation" });
+                    }
+                    else
+                    {
+                        // No violations (or none evidenced) → pass
+                        finalPass = true;
+                        if (string.IsNullOrWhiteSpace(finalSummary)) finalSummary = "Profile looks professional.";
+                    }
+
+                    // Cap list for UI
+                    if (finalItems.Count > 8) finalItems = finalItems.Take(8).ToList();
+                }
+                catch
+                {
+                    // On parse error, be conservative but do not auto-fail
+                    finalPass = true;
+                    finalSummary = "Profile looks professional.";
+                    finalItems = new();
+                }
+
+                var outPayload = new AiCompanyProfileCheckResultVM
+                {
+                    Pass = finalPass,
+                    Summary = finalSummary,
+                    Items = finalItems,
+                    FromCache = false,
+                    CachedAt = DateTime.UtcNow
+                };
+
+                _cache.Set(cacheKey, outPayload, TimeSpan.FromHours(12));
+                return Json(outPayload);
+            }
+            catch
+            {
+                var timeout = new AiCompanyProfileCheckResultVM
+                {
+                    Pass = false,
+                    Summary = "AI check timed out. Please review manually.",
+                    Items = new(),
+                    FromCache = false,
+                    CachedAt = DateTime.UtcNow
+                };
+                _cache.Set(cacheKey, timeout, TimeSpan.FromMinutes(10));
+                return Json(timeout);
+            }
         }
     }
 }

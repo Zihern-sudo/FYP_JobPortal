@@ -11,16 +11,14 @@
     <h1>@Model.job_title</h1>
 
     <div class="job-meta">
-        @*
-       // 🖼️ Company Logo (if available) 
+
         @if (!string.IsNullOrEmpty(Model.company.company_photo))
         {
-            <img src="~/uploads/@Model.company.company_photo" 
-                 alt="Company Logo" 
-                 class="company-logo mb-3" 
-                 style="width:120px; height:auto;" />
-        } 
-*@
+            <img src="@Url.Content(Model.company.company_photo)" alt="Company Logo" class="company-logo mb-3"
+                style="width:120px; height:auto;" />
+        }
+
+
 
         <p><strong>Company:</strong> @Model.company.company_name</p>
         <p><strong>Location:</strong> @Model.company.company_location</p>

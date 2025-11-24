@@ -462,3 +462,26 @@ public class AiJobPolicyCheckResultVM
     // Optional debugging note (not shown to end users)
     public string? RawNote { get; set; }
 }
+
+/* ===============================
+ * === Company AI Check VMs ======
+ * ===============================
+ */
+
+// Minimal, controller-agnostic VMs (do NOT move into controllers)
+public sealed class AiCompanyProfileCheckItemVM
+{
+    [Required] public string Issue { get; set; } = string.Empty;            // human-readable
+    [Required] public string Severity { get; set; } = "Advice";             // Advice | Warning | Violation
+}
+
+public sealed class AiCompanyProfileCheckResultVM
+{
+    public bool Pass { get; set; } = true;
+    public string Summary { get; set; } = "Looks good.";
+    public List<AiCompanyProfileCheckItemVM> Items { get; set; } = new();
+
+    // Optional metadata for the UI (not required to persist)
+    public bool FromCache { get; set; } = false;
+    public DateTime CachedAt { get; set; } = DateTime.UtcNow;
+}

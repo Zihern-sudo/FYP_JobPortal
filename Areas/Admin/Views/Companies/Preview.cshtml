@@ -1,3 +1,4 @@
+
 @model JobPortal.Areas.Admin.Models.CompanyPreviewViewModel
 @{
     ViewData["Title"] = "Company Preview";
@@ -53,13 +54,15 @@
                 {
                     <div class="mb-3">
                         <img src="@companyPhotoUrl" alt="Company photo"
-                            style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
+                             style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
                     </div>
                 }
 
-                <div class="mb-2"><strong>@Model.Name</strong> <span
-                        class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status :
-                                                "Unverified")</span></div>
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <strong class="fs-5">@Model.Name</strong>
+                    <span class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status : "Unverified")</span>
+                </div>
+
                 <div class="text-muted small mb-1">Industry: @Model.Industry</div>
                 <div class="text-muted small mb-3">Location: @Model.Location</div>
                 <div class="mb-2 fw-semibold">Description</div>
@@ -105,7 +108,7 @@
                                     <td>@j.Date?.ToString("g")</td>
                                     <td class="text-end">
                                         <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Approvals"
-                                            asp-action="Preview" asp-route-id="@j.Id">Open Job</a>
+                                           asp-action="Preview" asp-route-id="@j.Id">Open Job</a>
                                     </td>
                                 </tr>
                             }
@@ -117,6 +120,48 @@
     </div>
 
     <div class="col-lg-4">
+        @* ================== NEW: AI Company Profile Check ================== *@
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="fw-semibold">AI Company Profile Check (Auto)</div>
+                    <div class="d-flex gap-2">
+                        <button type="button" id="btnCopyIssues" class="btn btn-sm btn-outline-primary">
+                            Copy issues to comments
+                        </button>
+                        <button type="button" id="btnRecheck" class="btn btn-sm btn-outline-secondary">
+                            Re-check
+                        </button>
+                    </div>
+                </div>
+
+                @* Legend for severities *@
+                <div class="mt-2 small text-muted d-flex align-items-center gap-2 flex-wrap">
+                    <span class="me-1">Legend:</span>
+                    <span class="badge rounded-pill text-bg-secondary">Advice</span>
+                    <span class="badge rounded-pill text-bg-warning">Warning</span>
+                    <span class="badge rounded-pill text-bg-danger">Violation</span>
+                </div>
+
+                <div id="aiCompanyBox" class="mt-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div id="aiCompanyBadge" class="badge text-bg-secondary">Checking…</div>
+                        <div id="aiCompanyAudit" class="small text-muted" aria-live="polite"></div>
+                    </div>
+
+                    <div id="aiCompanySuccess" class="alert alert-success py-2 px-3 mt-2 d-none small mb-2">
+                        No explicit red flags detected in the company profile.
+                    </div>
+
+                    <div id="aiCompanySummary" class="small text-muted mt-1">Running AI check…</div>
+                    <ul id="aiCompanyList" class="small mt-2 mb-0"></ul>
+                </div>
+
+                @* Hidden anti-forgery token for AJAX *@
+                <form id="aiCompanyTokenForm" method="post" class="d-none">@Html.AntiForgeryToken()</form>
+            </div>
+        </div>
+
         <div class="card shadow-sm">
             <div class="card-header bg-white fw-semibold">Actions</div>
             <div class="card-body">
@@ -133,10 +178,153 @@
                 <form method="post" asp-action="Reject" class="d-grid gap-2">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
-                    <textarea name="comments" class="form-control" rows="3" placeholder="Reason (optional)"></textarea>
+                    <textarea name="comments" id="adminComments" class="form-control" rows="3"
+                              placeholder="Reason (optional)"></textarea>
                     <button class="btn btn-outline-danger" type="submit">Reject</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <style>
+        /* tiny breathing room so the list doesn’t feel cramped */
+        #aiCompanyList { padding-left: 1rem; }
+        #aiCompanyList > li { margin-bottom: .35rem; }
+    </style>
+    <script>
+        (function () {
+            const badge = document.getElementById('aiCompanyBadge');
+            const audit = document.getElementById('aiCompanyAudit');
+            const summary = document.getElementById('aiCompanySummary');
+            const list = document.getElementById('aiCompanyList');
+            const btnRe = document.getElementById('btnRecheck');
+            const btnCopy = document.getElementById('btnCopyIssues');
+            const adminComments = document.getElementById('adminComments');
+            const successNote = document.getElementById('aiCompanySuccess');
+
+            let lastAi = null;
+
+            function toHHMMSS(dt) {
+                try { return new Date(dt).toLocaleTimeString([], { hour12: false }); } catch { return ''; }
+            }
+
+            function setBadge(pass) {
+                badge.className = 'badge ' + (pass ? 'text-bg-success' : 'text-bg-warning');
+                badge.textContent = pass ? 'Passed' : 'Needs attention';
+            }
+
+            function setButtons(disabled) {
+                if (btnRe) btnRe.disabled = disabled;
+                if (btnCopy) btnCopy.disabled = disabled;
+            }
+
+            function onlyAdviceOrEmpty(items) {
+                if (!Array.isArray(items) || items.length === 0) return true;
+                return items.every(i => (i.severity || 'Advice').toLowerCase() === 'advice');
+            }
+
+            function render(r) {
+                if (!r) return;
+                lastAi = r;
+                setBadge(!!r.pass);
+
+                const items = Array.isArray(r.items) ? r.items : [];
+                const showGreen = !!r.pass && onlyAdviceOrEmpty(items);
+
+                // success hint
+                successNote.classList.toggle('d-none', !showGreen);
+
+                summary.textContent = r.summary || (r.pass ? 'Profile looks professional.' : 'Potential issues detected.');
+
+                list.innerHTML = '';
+                items.slice(0, 8).forEach(it => {
+                    const sev = (it.severity || 'Advice').trim();
+                    const li = document.createElement('li');
+                    li.innerHTML =
+                        `<span class="badge rounded-pill me-2 ${
+                            sev === 'Violation' ? 'text-bg-danger'
+                            : (sev === 'Warning' ? 'text-bg-warning' : 'text-bg-secondary')
+                        }">${sev}</span>${(it.issue || '').trim()}`;
+                    list.appendChild(li);
+                });
+
+                if (list.children.length === 0) {
+                    const li = document.createElement('li');
+                    li.className = 'text-muted'; li.textContent = 'No issues found.';
+                    list.appendChild(li);
+                }
+
+                const auditText = r.fromCache
+                    ? `Cached result (checked at ${toHHMMSS(r.cachedAt)}) — use Re-check to refresh`
+                    : `Checked by AI at ${toHHMMSS(r.cachedAt)}`;
+                audit.textContent = auditText;
+            }
+
+            function showChecking() {
+                setButtons(true);
+                successNote.classList.add('d-none');
+                badge.className = 'badge text-bg-secondary';
+                badge.textContent = 'Checking…';
+                summary.textContent = 'Running AI check…';
+                list.innerHTML = '';
+                audit.textContent = '';
+            }
+
+            async function callCheck(force) {
+                const token = document.querySelector('#aiCompanyTokenForm input[name="__RequestVerificationToken"]')?.value || '';
+                showChecking();
+                try {
+                    const resp = await fetch('@Url.Action("CompanyPolicyCheck", "Companies", new { area = "Admin" })', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'RequestVerificationToken': token
+                        },
+                        body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=1' : '')
+                    });
+                    const data = await resp.json();
+                    render(data);
+                } catch {
+                    badge.className = 'badge text-bg-warning';
+                    badge.textContent = 'Needs attention';
+                    summary.textContent = 'AI check failed.';
+                    list.innerHTML = '<li class="text-muted">Please try again.</li>';
+                    audit.textContent = 'Check failed';
+                } finally {
+                    setButtons(false);
+                }
+            }
+
+            function copyIssuesToComments() {
+                if (!adminComments) return;
+                const r = lastAi || {};
+                const lines = [];
+                const sum = (r.summary || '').trim();
+                if (sum) lines.push('AI summary: ' + sum);
+                const items = Array.isArray(r.items) ? r.items : [];
+                if (items.length > 0) {
+                    lines.push('AI detected:');
+                    items.slice(0, 8).forEach(it => {
+                        const sev = (it.severity || 'Advice').trim();
+                        const iss = (it.issue || '').trim();
+                        if (iss) lines.push(`- [${sev}] ${iss}`);
+                    });
+                }
+                const block = lines.join('\n');
+                if (!block) return;
+                const existing = adminComments.value || '';
+                adminComments.value = existing ? (existing.trimEnd() + '\n\n' + block) : block;
+                adminComments.focus();
+            }
+
+            btnRe?.addEventListener('click', () => callCheck(true));
+            btnCopy?.addEventListener('click', copyIssuesToComments);
+
+            // Initial load (cached on server if available)
+            document.addEventListener('DOMContentLoaded', () => callCheck(false));
+        })();
+    </script>
+}
+
