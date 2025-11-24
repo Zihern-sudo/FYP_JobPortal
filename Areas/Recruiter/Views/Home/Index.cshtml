@@ -2,6 +2,15 @@
 @model JobPortal.Areas.Recruiter.Models.DashboardVm
 @{
     ViewData["Title"] = "Recruiter Dashboard";
+
+    // Sorting state for both tables
+    var sortJobs = (string)(ViewBag.SortJobs ?? "id_desc");
+    var nextJobs = sortJobs == "id_desc" ? "id_asc" : "id_desc";
+    var arrowJobs = sortJobs == "id_asc" ? "▲" : "▼";
+
+    var sortApps = (string)(ViewBag.SortApps ?? "id_desc");
+    var nextApps = sortApps == "id_desc" ? "id_asc" : "id_desc";
+    var arrowApps = sortApps == "id_asc" ? "▲" : "▼";
 }
 
 @if (TempData["Message"] != null)
@@ -197,7 +206,14 @@
                 <table class="table mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>#</th>
+                            @* ID sort toggle (cell-wide clickable, non-blue arrow) *@
+                            <th class="position-relative" style="width:90px;">
+                                <span>ID</span>
+                                <span class="ms-1">@arrowJobs</span>
+                                <a class="stretched-link text-decoration-none" asp-area="Recruiter"
+                                    asp-controller="Home" asp-action="Index" asp-route-sortJobs="@nextJobs"
+                                    asp-route-sortApps="@sortApps" aria-label="Sort jobs by ID"></a>
+                            </th>
                             <th>Title</th>
                             <th>Status</th>
                             <th>Posted</th>
@@ -247,7 +263,14 @@
                 <table class="table mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>#</th>
+                            @* ID sort toggle (cell-wide clickable, non-blue arrow) *@
+                            <th class="position-relative" style="width:90px;">
+                                <span>ID</span>
+                                <span class="ms-1">@arrowApps</span>
+                                <a class="stretched-link text-decoration-none" asp-area="Recruiter"
+                                    asp-controller="Home" asp-action="Index" asp-route-sortJobs="@sortJobs"
+                                    asp-route-sortApps="@nextApps" aria-label="Sort applications by ID"></a>
+                            </th>
                             <th>Candidate</th>
                             <th>Job</th>
                             <th>Status</th>
@@ -330,7 +353,7 @@
             const openJobs = @Model.OpenJobs;
             const otherJobs = Math.max(0, jobsCount - openJobs);
             const latestApps = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
-                                    Model.LatestApplications.Select(a => new { updatedAt = a.UpdatedAt, jobTitle = a.JobTitle })));
+                                                                            Model.LatestApplications.Select(a => new { updatedAt = a.UpdatedAt, jobTitle = a.JobTitle })));
 
         function groupBy(arr, keyFn) {
             const m = new Map();

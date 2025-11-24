@@ -127,7 +127,7 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 user_id = adminId,
                 action_type = "ParsingRulesUpdated",
-                timestamp = DateTime.Now
+                timestamp = DateTime.UtcNow
             }, ct);
 
             // Optional: notify
@@ -137,7 +137,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 notification_title = "Parsing rules updated",
                 notification_msg = $"highlight={highlight}; manualReview={manualReview}; allowUploadPdf={allowUploadPdf}",
                 notification_read_status = false,
-                notification_date_created = DateTime.Now
+                notification_date_created = DateTime.UtcNow
             }, ct);
 
             await _db.SaveChangesAsync(ct);
@@ -165,7 +165,7 @@ namespace JobPortal.Areas.Admin.Controllers
             {
                 user_id = adminId,
                 action_type = "FairnessUpdated",
-                timestamp = DateTime.Now
+                timestamp = DateTime.UtcNow
             }, ct);
 
             await _db.notifications.AddAsync(new notification
@@ -174,7 +174,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 notification_title = "Fairness settings updated",
                 notification_msg = $"blindMode={blindMode}; biasReport={biasReport}",
                 notification_read_status = false,
-                notification_date_created = DateTime.Now
+                notification_date_created = DateTime.UtcNow
             }, ct);
 
             await _db.SaveChangesAsync(ct);

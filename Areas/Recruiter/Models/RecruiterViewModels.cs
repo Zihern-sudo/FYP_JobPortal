@@ -91,22 +91,29 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Status")]
         public JobStatus job_status { get; set; }
 
+        // === Added: required + sane limits (why: prevent empty/overlong titles) ===
+        [Required, Display(Name = "Job Title"), StringLength(160)]
         public string job_title { get; set; } = string.Empty;
+
+        [Display(Name = "Job Description"), StringLength(10000)]
         public string? job_description { get; set; }
 
-        [Display(Name = "Must-have Requirements")]
+        [Display(Name = "Must-have Requirements"), StringLength(8000)]
         public string? job_requirements { get; set; }
 
-        [Display(Name = "Nice-to-have Requirements")]
+        [Display(Name = "Nice-to-have Requirements"), StringLength(8000)]
         public string? job_requirements_nice { get; set; }
 
+        // === Added: range > 0 + currency (align with Create VM) ===
         [Display(Name = "Salary Min"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Minimum salary must be > 0")]
         public decimal? salary_min { get; set; }
 
         [Display(Name = "Salary Max"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Maximum salary must be > 0")]
         public decimal? salary_max { get; set; }
 
-        [Required, Display(Name = "Employment Type")] // fixed label
+        [Required, Display(Name = "Employment Type")]
         public string job_type { get; set; } = "Full Time";
 
         [Required, Display(Name = "Work Mode")]
@@ -353,6 +360,8 @@ namespace JobPortal.Areas.Recruiter.Models
 
         public IList<DashJobItem> LatestJobs { get; set; } = new List<DashJobItem>();
         public IList<DashAppItem> LatestApplications { get; set; } = new List<DashAppItem>();
+        public string SortJobs { get; set; } = "id_desc";
+        public string SortApps { get; set; } = "id_desc";
     }
 
     public record DashJobItem(int Id, string Title, string Status, string CreatedAt);
@@ -367,6 +376,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public int TotalPages { get; set; }
         public string Query { get; set; } = "";
         public string Stage { get; set; } = "";
+        public string Sort { get; set; } = "id_desc";
     }
 
     public class BulkMessagePostVM : IValidatableObject
@@ -400,6 +410,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public int TotalPages { get; set; }
         public string Query { get; set; } = "";
         public string Filter { get; set; } = "";
+        public string Sort { get; set; } = "id_desc";
     }
 
     public class TemplatesIndexVM
@@ -474,5 +485,19 @@ namespace JobPortal.Areas.Recruiter.Models
         public string Filter { get; set; } = "all";   // "all" | "unread"
         public string? Type { get; set; }
         public IList<string> AvailableTypes { get; set; } = new List<string>();
+    }
+
+    public class MessageModerationCheckRequestVM
+    {
+        public int ThreadId { get; set; }
+        [Required, StringLength(8000)]
+        public string Text { get; set; } = "";
+    }
+
+    public class MessageModerationCheckResultVM
+    {
+        public bool Allowed { get; set; }
+        public string Reason { get; set; } = "";
+        public string? Category { get; set; }  
     }
 }

@@ -14,35 +14,40 @@
 
   // NEW: approver map injected by controller (approval_id -> "First Last")
   var approvers = ViewBag.Approvers as IDictionary<int, string> ?? new Dictionary<int, string>();
+
+  // ADDED: sorting state for ID toggle
+  var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+  var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+  var arrow = sort == "id_asc" ? "▲" : "▼";
 }
 
 <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
   <ul class="nav nav-pills me-auto">
     <li class="nav-item">
-      <a class="@TabClass("All")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
-        asp-route-status="All">All</a>
+      <a class="@TabClass("All")" asp-area="Admin" asp-controller="Approvals" asp-action="Index" asp-route-status="All"
+        asp-route-q="@Model.Query" asp-route-sort="@sort">All</a>
     </li>
     <li class="nav-item">
       <a class="@TabClass("Pending")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
-        asp-route-status="Pending">
+        asp-route-status="Pending" asp-route-q="@Model.Query" asp-route-sort="@sort">
         Pending <span class="badge bg-secondary ms-1">@Model.PendingCount</span>
       </a>
     </li>
     <li class="nav-item">
       <a class="@TabClass("Approved")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
-        asp-route-status="Approved">
+        asp-route-status="Approved" asp-route-q="@Model.Query" asp-route-sort="@sort">
         Approved <span class="badge bg-success ms-1">@Model.ApprovedCount</span>
       </a>
     </li>
     <li class="nav-item">
       <a class="@TabClass("ChangesRequested")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
-        asp-route-status="ChangesRequested">
+        asp-route-status="ChangesRequested" asp-route-q="@Model.Query" asp-route-sort="@sort">
         Changes <span class="badge bg-warning text-dark ms-1">@Model.ChangesRequestedCount</span>
       </a>
     </li>
     <li class="nav-item">
       <a class="@TabClass("Rejected")" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
-        asp-route-status="Rejected">
+        asp-route-status="Rejected" asp-route-q="@Model.Query" asp-route-sort="@sort">
         Rejected <span class="badge bg-danger ms-1">@Model.RejectedCount</span>
       </a>
     </li>
@@ -50,6 +55,8 @@
 
   <form class="d-flex gap-2" method="get" asp-area="Admin" asp-controller="Approvals" asp-action="Index">
     <input type="hidden" name="status" value="@Model.Status" />
+    @* ADDED: preserve sort on search *@
+    <input type="hidden" name="sort" value="@sort" />
     <input type="text" class="form-control" style="min-width:260px" name="q" value="@Model.Query"
       placeholder="Search job/company…" />
     <button class="btn btn-outline-primary">Search</button>
@@ -68,7 +75,15 @@
             <th style="width:36px">
               <input type="checkbox" id="chkAll" />
             </th>
-            <th style="width:80px">#</th>
+            @* ADDED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+            <th class="position-relative" style="width:80px">
+              <span>ID</span>
+              <span class="ms-1">@arrow</span>
+              <a class="stretched-link text-decoration-none" asp-area="Admin" asp-controller="Approvals"
+                asp-action="Index" asp-route-status="@Model.Status" asp-route-q="@Model.Query"
+                asp-route-page="@Model.Items.Page" asp-route-pageSize="@Model.Items.PageSize" asp-route-sort="@idNext"
+                aria-label="Sort by ID"></a>
+            </th>
             <th>Job Title</th>
             <th>Company</th>
             <th style="width:160px">Submitted</th>
@@ -138,12 +153,12 @@
           <li class="page-item@prevDisabled">
             <a class="page-link" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
               asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-page="@prevPage"
-              asp-route-pageSize="@Model.Items.PageSize">Prev</a>
+              asp-route-pageSize="@Model.Items.PageSize" asp-route-sort="@sort">Prev</a>
           </li>
           <li class="page-item@nextDisabled">
             <a class="page-link" asp-area="Admin" asp-controller="Approvals" asp-action="Index"
               asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-page="@nextPage"
-              asp-route-pageSize="@Model.Items.PageSize">Next</a>
+              asp-route-pageSize="@Model.Items.PageSize" asp-route-sort="@sort">Next</a>
           </li>
         </ul>
       </nav>

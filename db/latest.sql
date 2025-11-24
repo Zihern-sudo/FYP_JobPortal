@@ -857,3 +857,141 @@ ALTER TABLE job_application
 ADD expected_salary INT NULL,
 ADD description NVARCHAR(255) NULL;
 /* ------------------------------------------------------------------------------------------- */
+
+
+/* -------Zi Hern------------------------------------------------------------------------------- */
+
+/*Conversation*/
+-- ===== Collation-agnostic (BINARY) DB Update: chat blocking + reason =====
+SET @old_fk = @@FOREIGN_KEY_CHECKS; SET FOREIGN_KEY_CHECKS = 0;
+SET @db := DATABASE();
+
+-- Helper note: All information_schema comparisons use BINARY to avoid collation issues.
+
+-- ---------------- conversation: columns ----------------
+-- is_blocked
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation'
+    AND BINARY COLUMN_NAME  = BINARY 'is_blocked'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation` ADD COLUMN `is_blocked` TINYINT(1) NOT NULL DEFAULT 0;',
+  'SELECT "conversation.is_blocked already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- blocked_reason
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation'
+    AND BINARY COLUMN_NAME  = BINARY 'blocked_reason'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation` ADD COLUMN `blocked_reason` VARCHAR(255) NULL;',
+  'SELECT "conversation.blocked_reason already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- flagged_at
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation'
+    AND BINARY COLUMN_NAME  = BINARY 'flagged_at'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation` ADD COLUMN `flagged_at` DATETIME NULL;',
+  'SELECT "conversation.flagged_at already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- flagged_by_user_id
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation'
+    AND BINARY COLUMN_NAME  = BINARY 'flagged_by_user_id'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation` ADD COLUMN `flagged_by_user_id` INT NULL;',
+  'SELECT "conversation.flagged_by_user_id already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- ---------------- conversation: index ----------------
+SET @idx_exists := (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation'
+    AND BINARY INDEX_NAME   = BINARY 'idx_conv_last_blocked'
+);
+SET @sql := IF(@idx_exists=0,
+  'CREATE INDEX `idx_conv_last_blocked` ON `conversation` (`last_message_at`, `is_blocked`);',
+  'SELECT "index idx_conv_last_blocked already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- -------- conversation: FK -> user(user_id) ----------
+SET @fk_exists := (
+  SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+  WHERE BINARY CONSTRAINT_SCHEMA = BINARY @db
+    AND BINARY CONSTRAINT_NAME  = BINARY 'fk_conv_flagged_by_user'
+);
+SET @sql := IF(@fk_exists=0,
+  'ALTER TABLE `conversation` ADD CONSTRAINT `fk_conv_flagged_by_user`
+     FOREIGN KEY (`flagged_by_user_id`) REFERENCES `user`(`user_id`)
+     ON DELETE SET NULL ON UPDATE CASCADE;',
+  'SELECT "FK fk_conv_flagged_by_user already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- -------- conversation_monitor: columns -----------
+-- flag_reason
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation_monitor'
+    AND BINARY COLUMN_NAME  = BINARY 'flag_reason'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation_monitor` ADD COLUMN `flag_reason` TEXT NULL;',
+  'SELECT "conversation_monitor.flag_reason already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- flagged_by_user_id
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation_monitor'
+    AND BINARY COLUMN_NAME  = BINARY 'flagged_by_user_id'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation_monitor` ADD COLUMN `flagged_by_user_id` INT NULL;',
+  'SELECT "conversation_monitor.flagged_by_user_id already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- flagged_at
+SET @exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE BINARY TABLE_SCHEMA = BINARY @db
+    AND BINARY TABLE_NAME   = BINARY 'conversation_monitor'
+    AND BINARY COLUMN_NAME  = BINARY 'flagged_at'
+);
+SET @sql := IF(@exists=0,
+  'ALTER TABLE `conversation_monitor` ADD COLUMN `flagged_at` DATETIME NULL;',
+  'SELECT "conversation_monitor.flagged_at already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- -------- conversation_monitor: FK ---------------
+SET @fk_exists := (
+  SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
+  WHERE BINARY CONSTRAINT_SCHEMA = BINARY @db
+    AND BINARY CONSTRAINT_NAME  = BINARY 'fk_monitor_flagged_by_user'
+);
+SET @sql := IF(@fk_exists=0,
+  'ALTER TABLE `conversation_monitor` ADD CONSTRAINT `fk_monitor_flagged_by_user`
+     FOREIGN KEY (`flagged_by_user_id`) REFERENCES `user`(`user_id`)
+     ON DELETE SET NULL ON UPDATE CASCADE;',
+  'SELECT "FK fk_monitor_flagged_by_user already exists"');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET FOREIGN_KEY_CHECKS = @old_fk;
+SELECT 'Schema update completed (binary-safe).' AS status;
+/* ------------------------------------------------------------------------------------------- */

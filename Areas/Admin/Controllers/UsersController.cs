@@ -26,10 +26,16 @@ namespace JobPortal.Areas.Admin.Controllers
           DateTime? to = null,
           int page = 1,
           int pageSize = 10,
-          string role = "All")
+          string role = "All",
+          string? sort = null) // MODIFIED: accept sort
         {
             ViewData["Title"] = "Users";
             ViewBag.Role = role;
+
+            // normalize sort; default newest first by user_id
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
+            ViewBag.Sort = sort; // pass to view
 
             var baseQuery = _db.users.AsNoTracking()
                 .Where(u => u.user_role == "Recruiter" || u.user_role == "JobSeeker");
@@ -78,8 +84,12 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             // Effective company status rule
-            var projected = qset
-                .OrderBy(u => u.first_name).ThenBy(u => u.last_name)
+            // MODIFIED: order by ID according to sort (latest first by default)
+            var ordered = sort == "id_asc"
+                ? qset.OrderBy(u => u.user_id)
+                : qset.OrderByDescending(u => u.user_id);
+
+            var projected = ordered
                 .Select(u => new RecruiterRow
                 {
                     Id = u.user_id,
@@ -120,7 +130,6 @@ namespace JobPortal.Areas.Admin.Controllers
             ViewBag.To = to?.ToString("yyyy-MM-dd");
             return View(vm);
         }
-
 
         // IMPORT CSV: upsert users; for Recruiters also upsert company (validated)
         [HttpPost, ValidateAntiForgeryToken]

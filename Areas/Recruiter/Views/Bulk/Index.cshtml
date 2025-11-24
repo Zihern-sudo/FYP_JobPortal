@@ -1,52 +1,118 @@
-@* File: Areas/Recruiter/Views/Bulk/Index.cshtml *@
+@* ===============================================
+   File: Areas/Recruiter/Views/Bulk/Index.cshtml
+   =============================================== *@
 @using JobPortal.Areas.Recruiter.Models
 @model JobPortal.Areas.Recruiter.Models.BulkIndexVM
 @{
   ViewData["Title"] = "Bulk Tools";
-  var items = Model.Items;
-  var q = Model.Query;
-  var stage = Model.Stage;
 
-  // --- Sorting state (ID ASC/DESC) ---
+  var items = Model.Items;
+  var q = Model.Query ?? string.Empty;
+  var stage = Model.Stage ?? string.Empty;
+
+  // Sorting state (ID ASC/DESC)
   var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
   var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
-  var arrow = sort == "id_asc" ? "▲" : "▼"; // show current direction
+  var arrow = sort == "id_asc" ? "▲" : "▼";
 
-  // Helper for pagination links
   string RoutePreserve(int page) => Url.Action("Index", new
   {
-    q = q,
-    stage = stage,
-    page = page,
+    q,
+    stage,
+    page,
     pageSize = Model.PageSize,
-    sort = sort
+    sort
   })!;
 }
 
-@* MODIFIED: Added Search and Filter form *@
-<form method="get" class="row g-2 mb-3">
-  <div class="col-md-6">
-    <input type="text" name="q" value="@q" class="form-control" placeholder="Search name, email, job title..." />
-  </div>
-  <div class="col-md-3">
-    <select class="form-select" name="stage">
-      <option value="">All stages</option>
-      @* These stages match the MapStage logic in the controller *@
-      @foreach (var s in new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" })
-      {
-        <option value="@s" selected="@(stage == s ? "selected" : null)">@s</option>
-      }
-    </select>
-  </div>
-  <div class="col-md-3 text-end">
-    <button class="btn btn-primary" type="submit">Filter</button>
-    <a asp-area="Recruiter" asp-controller="Bulk" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
-  </div>
-  @* Preserve current sort when filtering *@
-  <input type="hidden" name="sort" value="@sort" />
-</form>
+<style>
+  .chip-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .25rem .7rem;
+    border-radius: 999px;
+    background: #f1f3f5;
+    font-size: .85rem;
+    text-decoration: none;
+  }
 
+  .chip-clear:hover {
+    background: #e9ecef;
+    text-decoration: none;
+  }
 
+  .btb {
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 1rem;
+    padding: .8rem 1rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+  }
+</style>
+
+@* =================== Filters (auto-apply) =================== *@
+<div class="btb mb-3">
+  <form id="filtersForm" method="get" class="row g-2 align-items-center">
+    <input type="hidden" name="page" value="1" />
+    <input type="hidden" name="pageSize" value="@Model.PageSize" />
+    <input type="hidden" name="sort" value="@sort" />
+
+    <div class="col-md-6">
+      <input type="text" name="q" value="@q" class="form-control" placeholder="Search name, email, job title..."
+        autocomplete="off" />
+    </div>
+
+    <div class="col-md-3">
+      <div class="input-group">
+        <span class="input-group-text">Stage</span>
+        <select class="form-select" name="stage">
+          <option value="" selected="@(string.IsNullOrEmpty(stage) ? "selected" : null)">All stages</option>
+          @foreach (var s in new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" })
+          {
+            <option value="@s" selected="@(stage == s ? "selected" : null)">@s</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="col-md-3 text-end">
+      @* No Apply button; auto-submits *@
+      <a asp-area="Recruiter" asp-controller="Bulk" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
+    </div>
+  </form>
+
+  @* Filter chips *@
+  <div class="mt-2 d-flex flex-wrap gap-2">
+    @{
+      bool hasQ = !string.IsNullOrWhiteSpace(q);
+      bool hasStage = !string.IsNullOrWhiteSpace(stage);
+    }
+    @if (hasQ)
+    {
+      <a class="chip-clear" asp-action="Index" asp-route-q="" asp-route-stage="@stage" asp-route-page="1"
+        asp-route-pageSize="@Model.PageSize" asp-route-sort="@sort">
+        Search: @q <span aria-hidden="true">×</span>
+      </a>
+    }
+    @if (hasStage)
+    {
+      <a class="chip-clear" asp-action="Index" asp-route-q="@q" asp-route-stage="" asp-route-page="1"
+        asp-route-pageSize="@Model.PageSize" asp-route-sort="@sort">
+        Stage: @stage <span aria-hidden="true">×</span>
+      </a>
+    }
+    @if (hasQ || hasStage)
+    {
+      <a class="chip-clear" asp-action="Index" asp-route-q="" asp-route-stage="" asp-route-page="1"
+        asp-route-pageSize="@Model.PageSize" asp-route-sort="@sort">
+        Reset filters
+      </a>
+    }
+  </div>
+</div>
+
+@* =================== Bulk Action Buttons =================== *@
 <div class="d-flex gap-2 mb-3">
   <button id="btnMessage" type="button" class="btn btn-primary">Message</button>
 
@@ -77,7 +143,6 @@
             <th style="width:36px;">
               <input id="chkAll" type="checkbox" />
             </th>
-            @* MODIFIED: ID sort toggle with arrow, preserves filters/paging *@
             <th class="position-relative" style="width:90px;">
               <span>ID</span>
               <span class="ms-1">@arrow</span>
@@ -97,10 +162,7 @@
           @foreach (var x in Model.Items)
           {
             <tr>
-              <td>
-                <input type="checkbox" name="selectedIds" value="@x.Id" />
-              </td>
-              @* MODIFIED: Show ID column *@
+              <td><input type="checkbox" name="selectedIds" value="@x.Id" /></td>
               <td>@x.Id</td>
               <td>@x.Name</td>
               <td>@x.Score</td>
@@ -114,7 +176,7 @@
   }
 </form>
 
-<nav aria-label="paging" class="mt-3"> @* <--- You can add the 'mt-3' class for spacing *@
+<nav aria-label="paging" class="mt-3">
   <ul class="pagination justify-content-end">
     <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
       <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
@@ -143,13 +205,12 @@
   </ul>
 </nav>
 
-
 <div class="text-muted small">
   Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
   <strong>@Model.TotalCount</strong> candidates
 </div>
 
-
+@* ===================== Bulk Message Modal ===================== *@
 <div class="modal fade" id="bulkMsgModal" tabindex="-1" aria-labelledby="bulkMsgLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -169,10 +230,7 @@
               <select id="templateSelect" name="TemplateId" class="form-select">
                 <option value="">— Choose a template —</option>
               </select>
-              <div class="form-text">
-                Choosing a template auto-fills the editor;
-                you can still edit.
-              </div>
+              <div class="form-text">Choosing a template auto-fills the editor; you can still edit.</div>
             </div>
 
             <div class="col-md-3">
@@ -201,7 +259,7 @@
   </div>
 </div>
 
-@* ===================== Success Toast (TempData["Message"]) ===================== *@
+@* ===================== Success Toast ===================== *@
 @if (TempData["Message"] is string flash && !string.IsNullOrWhiteSpace(flash))
 {
   <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index:1080">
@@ -219,7 +277,32 @@
 @section Scripts {
   <script>
     (function () {
-      // Select-all
+      // ===== Auto-apply filters =====
+      const form = document.getElementById('filtersForm');
+      if (form) {
+        const setPage1 = () => { const p = form.querySelector('input[name="page"]'); if (p) p.value = '1'; };
+        const submitNow = () => { setPage1(); if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit(); };
+
+        // Stage change => submit
+        form.querySelector('select[name="stage"]')?.addEventListener('change', submitNow);
+
+        // Debounced search
+        const q = form.querySelector('input[name="q"]');
+        if (q) {
+          let t;
+          const fire = () => {
+            clearTimeout(t); t = setTimeout(() => {
+              // only submit when value actually changed vs last submitted
+              if (q.dataset.last !== q.value) { q.dataset.last = q.value; submitNow(); }
+            }, 400);
+          };
+          q.addEventListener('input', fire);
+          // Enter key submits immediately
+          q.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNow(); } });
+        }
+      }
+
+      // ===== Select-all in table =====
       const chkAll = document.getElementById('chkAll');
       if (chkAll) {
         chkAll.addEventListener('change', function () {
@@ -227,32 +310,26 @@
         });
       }
 
-      // Bootstrap modal helper
+      // ===== Bulk Message Modal =====
       const bsModal = () => new bootstrap.Modal(document.getElementById('bulkMsgModal'), { backdrop: 'static' });
-      // Open modal on Message click
       document.getElementById('btnMessage')?.addEventListener('click', async function () {
         const checked = Array.from(document.querySelectorAll('input[name="selectedIds"]:checked')).map(chk => chk.value);
         if (checked.length === 0) { alert('Please select at least one candidate.'); return; }
 
-        // Inject SelectedIds[] inputs for SendMessages
         const container = document.getElementById('selectedIdsContainer');
         container.innerHTML = '';
         checked.forEach(v => {
           const h = document.createElement('input');
-          h.type = 'hidden';
-          h.name = 'SelectedIds';
-          h.value = v;
+          h.type = 'hidden'; h.name = 'SelectedIds'; h.value = v;
           container.appendChild(h);
         });
 
-        // Reset editor, load templates
         document.getElementById('msgText').value = '';
         document.getElementById('templateSelect').value = '';
         await loadTemplates();
-
         bsModal().show();
       });
-      // Load templates for dropdown
+
       async function loadTemplates() {
         const sel = document.getElementById('templateSelect');
         sel.querySelectorAll('option:not(:first-child)').forEach(o => o.remove());
@@ -264,26 +341,23 @@
           const items = await res.json();
           items.forEach(t => {
             const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            opt.dataset.body = t.body; // used to fill textarea
+            opt.value = t.id; opt.textContent = t.name; opt.dataset.body = t.body;
             sel.appendChild(opt);
           });
         } catch (e) { console.error(e); }
       }
 
-      // Fill textarea when template selected
       document.getElementById('templateSelect')?.addEventListener('change', function () {
         const body = this.selectedOptions?.[0]?.dataset?.body ?? '';
         if (body) document.getElementById('msgText').value = body;
       });
-      // Guard empty send
+
       document.getElementById('bulkMsgForm')?.addEventListener('submit', function (e) {
         const txt = document.getElementById('msgText').value.trim();
         const tpl = document.getElementById('templateSelect').value;
         if (!txt && !tpl) { e.preventDefault(); alert('Please type a message or pick a template.'); }
       });
-      // Toast on redirect
+
       const toastEl = document.getElementById('flashToast');
       if (toastEl) new bootstrap.Toast(toastEl).show();
     })();

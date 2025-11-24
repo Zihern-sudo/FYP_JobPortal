@@ -15,6 +15,11 @@
         "Inactive" => "badge text-bg-secondary",
         _ => "badge text-bg-light"
     };
+
+    // ---- ADDED: sorting state from controller (default newest first) ----
+    var sort = (string)(ViewBag.Sort ?? "id_desc"); // id_asc | id_desc
+    var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+    var arrow = sort == "id_asc" ? "▲" : "▼";
 }
 
 <div class="card shadow-sm mb-3">
@@ -26,22 +31,23 @@
                 <div class="btn-group mb-2">
                     <a class="btn btn-outline-secondary @Active("All")" asp-action="Index" asp-route-status="All"
                         asp-route-role="@role" asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">
                         All (@Model.AllCount)</a>
 
                     <a class="btn btn-outline-success @Active("Active")" asp-action="Index" asp-route-status="Active"
                         asp-route-role="@role" asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">
                         Active (@Model.ActiveCount)</a>
 
                     <a class="btn btn-outline-warning @Active("Pending")" asp-action="Index" asp-route-status="Pending"
                         asp-route-role="@role" asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">
                         Pending (@Model.PendingCount)</a>
 
                     <a class="btn btn-outline-danger @Active("Suspended")" asp-action="Index"
                         asp-route-status="Suspended" asp-route-role="@role" asp-route-q="@Model.Query"
-                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)">
+                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)"
+                        asp-route-sort="@sort">
                         Suspended (@Model.SuspendedCount)</a>
                 </div>
             </div>
@@ -64,6 +70,8 @@
                 <input class="form-control" type="search" name="q" value="@Model.Query"
                     placeholder="Search name/email/company">
                 <input type="hidden" name="status" value="@Model.Status" />
+                @* ADDED: preserve sort on submit *@
+                <input type="hidden" name="sort" value="@sort" />
             </div>
 
             <div class="col-auto">
@@ -118,7 +126,16 @@
                     <thead>
                         <tr>
                             <th style="width:36px"><input type="checkbox" id="chkAll" /></th>
-                            <th style="width:80px">ID</th>
+                            @* ADDED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+                            <th class="position-relative" style="width:80px">
+                                <span>ID</span>
+                                <span class="ms-1">@arrow</span>
+                                <a class="stretched-link text-decoration-none" asp-action="Index"
+                                    asp-route-status="@Model.Status" asp-route-role="@role" asp-route-q="@Model.Query"
+                                    asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)"
+                                    asp-route-page="@Model.Items.Page" asp-route-sort="@idNext"
+                                    aria-label="Sort by ID"></a>
+                            </th>
                             <th>Name</th>
                             <th>Email</th>
                             <th>Role</th>
@@ -147,7 +164,7 @@
                                     "Suspended" => "badge text-bg-danger",
                                     null or "" => "badge text-bg-secondary",
                                     _ => "badge text-bg-secondary"
-                                };
+                                        };
                                 <tr>
                                     <td><input type="checkbox" name="ids" value="@r.Id" class="rowChk" /></td>
                                     <td>@r.Id</td>
@@ -162,7 +179,7 @@
                                     <td class="text-end">
                                         <div class="btn-group">
                                             @* Row actions submit THIS form using formaction (no nested forms) *@
-                                            <button type="submit" class="btn btn-sm btn-outline-success"
+                                                    <button type="submit" class="btn btn-sm btn-outline-success"
                                                 formaction="@Url.Action("Approve", "Users", new { area = "Admin" })" name="id"
                                                 value="@r.Id">Approve</button>
                                             <button type="submit" class="btn btn-sm btn-outline-warning"
@@ -179,11 +196,12 @@
                                                 asp-route-id="@r.Id">Open</a>
 
                                             @* NEW: View Company (only if recruiter and company is NOT yet verified/active) *@
-                                            @if (r.Role == "Recruiter" && (string.IsNullOrEmpty(r.CompanyStatus) || r.CompanyStatus == "Pending" || r.CompanyStatus == "Incomplete" || r.CompanyStatus == "Rejected"))
+                                                    @if (r.Role == "Recruiter" && (string.IsNullOrEmpty(r.CompanyStatus) ||
+                                                                                r.CompanyStatus == "Pending" || r.CompanyStatus == "Incomplete" || r.CompanyStatus
+                                                                                == "Rejected"))
                                             {
-                                                <a class="btn btn-sm btn-outline-secondary"
-                                                   asp-action="CompanyProfile"
-                                                   asp-route-id="@r.Id">View Company</a>
+                                                <a class="btn btn-sm btn-outline-secondary" asp-action="CompanyProfile"
+                                                    asp-route-id="@r.Id">View Company</a>
                                             }
                                         </div>
                                     </td>
@@ -217,11 +235,11 @@
     }
     <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == 1 ? "disabled" : "")" asp-action="Index"
         asp-route-status="@Model.Status" asp-route-role="@role" asp-route-q="@Model.Query"
-        asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To" asp-route-page="@prev">Prev</a>
+        asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To" asp-route-page="@prev" asp-route-sort="@sort">Prev</a>
 
     <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == Model.Items.TotalPages ? "disabled" : "")"
         asp-action="Index" asp-route-status="@Model.Status" asp-route-role="@role" asp-route-q="@Model.Query"
-        asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To" asp-route-page="@next">Next</a>
+        asp-route-from="@ViewBag.From" asp-route-to="@ViewBag.To" asp-route-page="@next" asp-route-sort="@sort">Next</a>
 </div>
 
 @section Scripts {

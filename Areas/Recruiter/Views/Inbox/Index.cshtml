@@ -3,12 +3,19 @@
 @{
   var q = Model.Query;
   var filter = Model.Filter;
+
+  // --- Sorting state (ID ASC/DESC) ---
+  var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+  var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+  var arrow = sort == "id_asc" ? "▲" : "▼";
+
   string RoutePreserve(int page) => Url.Action("Index", new
   {
     q = q,
     filter = filter,
     page = page,
-    pageSize = Model.PageSize
+    pageSize = Model.PageSize,
+    sort = sort
   })!;
 }
 
@@ -41,6 +48,8 @@
     <button class="btn btn-primary" type="submit">Filter</button>
     <a asp-area="Recruiter" asp-controller="Inbox" asp-action="Index" class="btn btn-outline-secondary">Reset</a>
   </div>
+  @* Preserve current sort when filtering *@
+  <input type="hidden" name="sort" value="@sort" />
 </form>
 
 <div class="card shadow-sm">
@@ -48,6 +57,14 @@
     <table class="table mb-0 align-middle">
       <thead>
         <tr>
+          @* MODIFIED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+          <th class="position-relative" style="width:90px;">
+            <span>ID</span>
+            <span class="ms-1">@arrow</span>
+            <a class="stretched-link text-decoration-none" asp-area="Recruiter" asp-controller="Inbox"
+              asp-action="Index" asp-route-q="@q" asp-route-filter="@filter" asp-route-page="@Model.Page"
+              asp-route-pageSize="@Model.PageSize" asp-route-sort="@idNext" aria-label="Sort by ID"></a>
+          </th>
           <th>Job</th>
           <th>Participant</th>
           <th>Last message</th>
@@ -60,7 +77,7 @@
         @if (Model.Items.Count == 0)
         {
           <tr>
-            <td colspan="5" class="text-center text-muted">No conversations found.</td>
+            <td colspan="6" class="text-center text-muted">No conversations found.</td>
           </tr>
         }
         else
@@ -69,6 +86,8 @@
           foreach (var t in Model.Items)
           {
             <tr class="@(t.UnreadCount > 0 ? "fw-bold" : "")">
+              @* MODIFIED: Show ID column *@
+              <td>@t.Id</td>
               <td>@t.JobTitle</td>
               <td>@t.Participant</td>
               <td class="text-muted">@t.LastSnippet</td>

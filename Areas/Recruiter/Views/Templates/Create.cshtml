@@ -11,17 +11,26 @@
     <div class="card-body">
         <form asp-area="Recruiter" asp-controller="Templates" asp-action="Create" method="post" class="vstack gap-3">
             @Html.AntiForgeryToken()
+
+            <!-- Surface model-level errors -->
+            <div class="mb-1">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            </div>
+
             <div>
-                <label class="form-label">Name</label>
+                <label asp-for="Name" class="form-label">Name</label>
                 <input asp-for="Name" class="form-control" required maxlength="120" />
+                <span asp-validation-for="Name" class="text-danger"></span>
             </div>
             <div>
-                <label class="form-label">Subject (optional)</label>
+                <label asp-for="Subject" class="form-label">Subject (optional)</label>
                 <input asp-for="Subject" class="form-control" maxlength="160" />
+                <span asp-validation-for="Subject" class="text-danger"></span>
             </div>
             <div>
-                <label class="form-label">Body</label>
+                <label asp-for="Body" class="form-label">Body</label>
                 <textarea asp-for="Body" class="form-control" rows="8" required></textarea>
+                <span asp-validation-for="Body" class="text-danger"></span>
                 <div class="form-text">You can use placeholders like <code>{{FirstName}}</code>,
                     <code>{{JobTitle}}</code>, etc.
                 </div>
@@ -34,3 +43,7 @@
         </form>
     </div>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

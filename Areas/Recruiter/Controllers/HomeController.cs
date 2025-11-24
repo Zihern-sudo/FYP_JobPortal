@@ -1,3 +1,4 @@
+// File: Areas/Recruiter/Controllers/HomeController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
@@ -21,9 +22,13 @@ public class HomeController : Controller
     }
 
     // Dashboard
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? sortJobs, string? sortApps)
     {
         if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+        // normalize sorts (default newest by ID)
+        sortJobs = NormalizeSort(sortJobs);
+        sortApps = NormalizeSort(sortApps);
 
         // Jobs for this recruiter
         var jobsQ = _db.job_listings
@@ -49,9 +54,10 @@ public class HomeController : Controller
             .Where(c => c.recruiter_id == recruiterId && c.unread_for_recruiter > 0)
             .CountAsync();
 
-        // Latest 5 jobs
-        var latestJobs = await jobsQ
-            .OrderByDescending(j => j.date_posted)
+        // Latest 5 jobs (ID sort toggle; default id_desc)
+        var latestJobs = await (sortJobs == "id_asc"
+                ? jobsQ.OrderBy(j => j.job_listing_id)
+                : jobsQ.OrderByDescending(j => j.job_listing_id))
             .Take(5)
             .Select(j => new DashJobItem(
                 j.job_listing_id,
@@ -60,9 +66,10 @@ public class HomeController : Controller
                 j.date_posted.ToString("yyyy-MM-dd HH:mm")
             )).ToListAsync();
 
-        // Latest 5 applications (with candidate + job)
-        var latestApps = await appQ
-            .OrderByDescending(a => a.date_updated)
+        // Latest 5 applications (ID sort toggle; default id_desc)
+        var latestApps = await (sortApps == "id_asc"
+                ? appQ.OrderBy(a => a.application_id)
+                : appQ.OrderByDescending(a => a.application_id))
             .Take(5)
             .Select(a => new DashAppItem(
                 a.application_id,
@@ -82,6 +89,16 @@ public class HomeController : Controller
             LatestApplications = latestApps
         };
 
+        // pass current sort states to the view (VM unchanged)
+        ViewBag.SortJobs = sortJobs;
+        ViewBag.SortApps = sortApps;
+
         return View(vm);
+    }
+
+    private static string NormalizeSort(string? s)
+    {
+        s = (s ?? "id_desc").Trim().ToLowerInvariant();
+        return (s == "id_asc" || s == "id_desc") ? s : "id_desc";
     }
 }

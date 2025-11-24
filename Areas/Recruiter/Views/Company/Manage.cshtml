@@ -1,6 +1,6 @@
 @model JobPortal.Areas.Recruiter.Models.CompanyProfileVm
 @{
-    
+
 
     var rawStatus = (ViewBag.CompanyStatus as string ?? "").Trim();
     var status = rawStatus.ToLowerInvariant();
@@ -135,6 +135,11 @@
 <form asp-action="Manage" method="post" enctype="multipart/form-data" class="row g-3" id="companyManageForm">
     @Html.AntiForgeryToken()
 
+    @* NEW: show model-level errors *@
+    <div class="col-12">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    </div>
+
     <!-- Company Photo -->
     <div class="col-12 col-md-4">
         <div class="mb-2 border rounded d-flex align-items-center justify-content-center" id="logoPreviewBox"
@@ -153,6 +158,8 @@
         <input id="companyPhoto" name="companyPhoto" type="file" accept=".jpg,.jpeg,.png,.webp" class="form-control" />
         <div class="form-text">Max 2 MB; jpg, jpeg, png, webp.</div>
         <span class="text-danger" id="companyPhotoError"></span>
+        @* NEW: surface server-side photo errors from ModelState ("companyPhoto") *@
+        <span class="text-danger">@Html.ValidationMessage("companyPhoto")</span>
         <button type="button" id="btnCancelPhoto" class="btn btn-outline-secondary mt-2">Cancel</button>
     </div>
 
@@ -160,18 +167,18 @@
     <div class="col-12 col-md-8">
         <div class="mb-3">
             <label asp-for="company_name" class="form-label"></label>
-            <input asp-for="company_name" class="form-control" />
+            <input asp-for="company_name" class="form-control" maxlength="160" />
             <span asp-validation-for="company_name" class="text-danger"></span>
         </div>
         <div class="row g-3">
             <div class="col-md-6">
                 <label asp-for="company_industry" class="form-label"></label>
-                <input asp-for="company_industry" class="form-control" />
+                <input asp-for="company_industry" class="form-control" maxlength="120" />
                 <span asp-validation-for="company_industry" class="text-danger"></span>
             </div>
             <div class="col-md-6">
                 <label asp-for="company_location" class="form-label"></label>
-                <input asp-for="company_location" class="form-control" />
+                <input asp-for="company_location" class="form-control" maxlength="120" />
                 <span asp-validation-for="company_location" class="text-danger"></span>
             </div>
         </div>

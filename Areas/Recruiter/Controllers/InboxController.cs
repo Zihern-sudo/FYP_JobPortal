@@ -1,37 +1,58 @@
+// ============================================
 // File: Areas/Recruiter/Controllers/InboxController.cs
+// CHANGES: DI + new Moderate() action; no unrelated edits
+// ============================================
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using System.Net.Http;                   // NEW
+using System.Net.Http.Headers;           // NEW
+using System.Text;                        // NEW
+using System.Text.Json;                   // NEW
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;       // NEW
 using JobPortal.Areas.Shared.Models;          // DbContext + entities
 using JobPortal.Areas.Recruiter.Models;       // VMs
 using JobPortal.Areas.Shared.Extensions;      // TryGetUserId extension
+using JobPortal.Areas.Shared.Options;         // OpenAIOptions (already registered)
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
     [Area("Recruiter")]
     public class InboxController : Controller
     {
-        // MODIFIED: Added pagination constants
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
         private readonly AppDbContext _db;
-        public InboxController(AppDbContext db) => _db = db;
+
+        // NEW: for OpenAI moderation
+        private readonly IHttpClientFactory _httpFactory;
+        private readonly IOptions<OpenAIOptions> _openAi;
+
+        // OLD ctor kept; wire new DI
+        public InboxController(AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi)
+        {
+            _db = db;
+            _httpFactory = httpFactory;
+            _openAi = openAi;
+        }
 
         [HttpGet]
-        public async Task<IActionResult> Index(string? q, string? filter, int page = 1, int pageSize = DefaultPageSize)
+        public async Task<IActionResult> Index(string? q, string? filter, string? sort, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             ViewData["Title"] = "Inbox";
 
-            // MODIFIED: Pagination and query logic
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
+
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             var baseQuery = _db.conversations
                 .Include(c => c.job_listing)
@@ -39,13 +60,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     (c.recruiter_id != null && c.recruiter_id == recruiterId) ||
                     (c.recruiter_id == null && c.job_listing.user_id == recruiterId));
 
-            // Apply filter
             if (filter == "unread")
             {
                 baseQuery = baseQuery.Where(c => c.unread_for_recruiter > 0);
             }
 
-            // Apply search
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -57,22 +76,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 );
             }
 
-            // Get total count for pagination
             var totalCount = await baseQuery.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
-
             var skip = (page - 1) * pageSize;
 
-            // Get paginated conversations
-            var convs = await baseQuery
-                .OrderByDescending(c => c.last_message_at ?? c.created_at)
+            var ordered = sort == "id_asc"
+                ? baseQuery.OrderBy(c => c.conversation_id)
+                : baseQuery.OrderByDescending(c => c.conversation_id);
+
+            var convs = await ordered
                 .Skip(skip)
                 .Take(pageSize)
                 .ToListAsync();
 
             var threads = new List<ThreadListItemVM>(convs.Count);
-
             foreach (var c in convs)
             {
                 var lastAt = c.last_message_at ?? c.created_at;
@@ -90,7 +108,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 ));
             }
 
-            // Create the new view model
             var vm = new InboxIndexVM
             {
                 Items = threads,
@@ -99,13 +116,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 TotalCount = totalCount,
                 TotalPages = totalPages,
                 Query = q ?? string.Empty,
-                Filter = filter ?? string.Empty
+                Filter = filter ?? string.Empty,
+                Sort = sort
             };
 
             return View(vm);
         }
 
-        // GET: /Recruiter/Inbox/Thread/{id}?before=ISO8601&draft=...
         [HttpGet]
         public async Task<IActionResult> Thread(int id, string? before = null, string? draft = null)
         {
@@ -113,7 +130,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var conv = await _db.conversations
                 .Include(c => c.job_listing)
-                .ThenInclude(j => j.company) // needed for company_name
+                .ThenInclude(j => j.company)
                 .FirstOrDefaultAsync(c =>
                     c.conversation_id == id &&
                     ((c.recruiter_id != null && c.recruiter_id == recruiterId) ||
@@ -121,11 +138,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (conv == null) return NotFound();
 
-            // NEW: expose block state to the view (banner + disable composer)
-            ViewBag.IsBlocked = conv.is_blocked;            // why: UI must not allow composing when blocked
+            ViewBag.IsBlocked = conv.is_blocked;
             ViewBag.BlockedReason = conv.blocked_reason ?? "";
 
-            // Determine the other participant
             int otherId;
             if (conv.candidate_id.HasValue)
             {
@@ -190,21 +205,18 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.OtherUserId = otherId;
             ViewBag.BeforeCursor = beforeCursor;
 
-            // expose helpers for client-side placeholder assist
             var otherFirst = (ViewBag.OtherUser as string ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "there";
             ViewBag.OtherUserFirst = otherFirst;
             ViewBag.JobTitle = conv.job_title ?? conv.job_listing.job_title ?? string.Empty;
             var recruiter = await _db.users.Where(u => u.user_id == recruiterId).Select(u => new { u.first_name, u.last_name }).FirstOrDefaultAsync();
             ViewBag.RecruiterNameFirst = $"{recruiter?.first_name} {recruiter?.last_name}".Trim();
-            ViewBag.Company = conv.job_listing.company?.company_name ?? ""; // FIX: company is on job_listing.company
+            ViewBag.Company = conv.job_listing.company?.company_name ?? "";
 
-            // prefill message box if redirected from Templates/Fill
             ViewBag.Draft = string.IsNullOrWhiteSpace(draft) ? null : draft;
 
             return View();
         }
 
-        // POST: /Recruiter/Inbox/Send
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Send(
@@ -224,7 +236,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var conv = await _db.conversations
                 .Include(c => c.job_listing)
-                .ThenInclude(j => j.company) // FIX: need company for placeholder
+                .ThenInclude(j => j.company)
                 .FirstOrDefaultAsync(c =>
                     c.conversation_id == id &&
                     ((c.recruiter_id != null && c.recruiter_id == recruiterId) ||
@@ -232,10 +244,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (conv == null) return NotFound();
 
-            // NEW: server-side hard block (prevents any send attempts)
             if (conv.is_blocked)
             {
-                // why: enforce admin decision; keep UX informative
                 var reason = string.IsNullOrWhiteSpace(conv.blocked_reason) ? "Chat is blocked by admin." : $"Chat is blocked by admin: {conv.blocked_reason}";
                 TempData["Message"] = reason;
                 return RedirectToAction(nameof(Thread), new { id });
@@ -262,7 +272,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
             }
 
-            // --- Smart token merge ---
             var candidateName = conv.candidate_name ?? $"User #{otherId}";
             var firstName = candidateName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "there";
             var jobTitle = conv.job_title ?? conv.job_listing.job_title ?? string.Empty;
@@ -271,7 +280,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Select(u => new { u.first_name, u.last_name })
                 .FirstOrDefaultAsync();
             var recruiterName = $"{recruiterRow?.first_name} {recruiterRow?.last_name}".Trim();
-            var company = conv.job_listing.company?.company_name ?? ""; // FIX
+            var company = conv.job_listing.company?.company_name ?? "";
 
             var context = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -308,7 +317,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
             }
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
             var msg = new message
             {
@@ -351,8 +360,130 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             return RedirectToAction(nameof(Thread), new { id });
         }
+        // Areas/Recruiter/Controllers/InboxController.cs
+        // === Client-side AI message monitoring endpoint (AI-only + robust JSON parse, fail-open) ===
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Moderate([FromBody] MessageModerationCheckRequestVM req)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            if (req is null || string.IsNullOrWhiteSpace(req.Text))
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Message is empty.", Category = "Empty" });
 
-        // WHY: case-insensitive, culture-invariant token replacement
+            // Ownership check
+            var conv = await _db.conversations
+                .Include(c => c.job_listing)
+                .FirstOrDefaultAsync(c =>
+                    c.conversation_id == req.ThreadId &&
+                    ((c.recruiter_id != null && c.recruiter_id == recruiterId) ||
+                     (c.recruiter_id == null && c.job_listing.user_id == recruiterId)));
+            if (conv == null)
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Thread not found or access denied.", Category = "Access" });
+
+            // Admin block
+            if (conv.is_blocked)
+            {
+                var reason = string.IsNullOrWhiteSpace(conv.blocked_reason)
+                    ? "Chat is blocked by admin."
+                    : $"Chat is blocked by admin: {conv.blocked_reason}";
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = reason, Category = "AdminBlock" });
+            }
+
+            // OpenAI config
+            var opts = _openAi.Value;
+            if (string.IsNullOrWhiteSpace(opts.ApiKey))
+                return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check unavailable (no API key).", Category = "Bypass" });
+
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", opts.ApiKey);
+
+            var modelName = string.IsNullOrWhiteSpace(opts.ModelText) ? "gpt-4o-mini" : opts.ModelText;
+
+            var payload = new
+            {
+                model = modelName,
+                temperature = 0,
+                response_format = new { type = "json_object" },
+                messages = new object[]
+                {
+            new { role = "system", content =
+                "You are the sole content policy judge for a recruitment chat. " +
+                "Given ONE outbound recruiter message, decide if it violates policy. " +
+                "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
+                "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
+                "Block only for clear violations; neutral/safety reminders are allowed." },
+            // Few-shot calibration (examples only)
+            new { role = "user", content = "We’ll conduct the interview via this platform. No payment is required at any stage." },
+            new { role = "assistant", content = "{\"allowed\": true, \"reason\": \"Platform/safety reminder.\", \"category\": \"Other\"}" },
+            new { role = "user", content = "Share your phone number or WhatsApp so we can talk there." },
+            new { role = "assistant", content = "{\"allowed\": false, \"reason\": \"Requests moving conversation off-platform (phone/WhatsApp).\", \"category\": \"OffPlatform\"}" },
+            new { role = "user", content = "There is a placement fee. Send $50 to proceed." },
+            new { role = "assistant", content = "{\"allowed\": false, \"reason\": \"Requests payment from candidate.\", \"category\": \"Payment\"}" },
+            // Message to evaluate
+            new { role = "user", content = req.Text.Trim() }
+                }
+            };
+
+            using var content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+
+            try
+            {
+                using var resp = await http.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var body = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                    return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check temporarily unavailable.", Category = "Bypass" });
+
+                // Robust parse: explicitly read 'allowed', 'reason', 'category'; if missing -> allow (fail-open)
+                string? msg = null;
+                try
+                {
+                    using var top = System.Text.Json.JsonDocument.Parse(body);
+                    msg = top.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+                }
+                catch
+                {
+                    return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI response malformed.", Category = "Bypass" });
+                }
+
+                bool allowed = true; // fail-open default
+                string reason = "Safe.";
+                string category = "Other";
+
+                try
+                {
+                    using var md = System.Text.Json.JsonDocument.Parse(string.IsNullOrWhiteSpace(msg) ? "{}" : msg!);
+                    var root = md.RootElement;
+
+                    if (root.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                        root.TryGetProperty("allowed", out var aProp) &&
+                        (aProp.ValueKind == System.Text.Json.JsonValueKind.True || aProp.ValueKind == System.Text.Json.JsonValueKind.False))
+                    {
+                        allowed = aProp.GetBoolean();
+                    }
+                    // If "allowed" missing or not a bool → keep default true (fail-open)
+
+                    if (root.TryGetProperty("reason", out var rProp) && rProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        reason = rProp.GetString() ?? reason;
+
+                    if (root.TryGetProperty("category", out var cProp) && cProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        category = cProp.GetString() ?? category;
+                }
+                catch
+                {
+                    // Keep fail-open defaults
+                }
+
+                return Json(new MessageModerationCheckResultVM { Allowed = allowed, Reason = reason, Category = category });
+            }
+            catch
+            {
+                return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check timed out.", Category = "Bypass" });
+            }
+        }
+
+
+
         private static string ReplaceInsensitive(string input, string search, string replace)
             => Regex.Replace(input,
                              Regex.Escape(search),

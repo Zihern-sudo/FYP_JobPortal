@@ -7,19 +7,24 @@
     &leftarrow; Back to JobPostTemplates
 </a>
 
-
 <form asp-action="Edit" method="post" class="card p-3 shadow-sm">
+    @Html.AntiForgeryToken()
     <input type="hidden" asp-for="TemplateId" />
+
+    <!-- Show model-level errors from server-side validation -->
+    <div class="mb-2">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    </div>
 
     <div class="mb-3">
         <label asp-for="Name" class="form-label"></label>
-        <input asp-for="Name" class="form-control" />
+        <input asp-for="Name" class="form-control" required />
         <span asp-validation-for="Name" class="text-danger"></span>
     </div>
 
     <div class="mb-3">
         <label asp-for="Title" class="form-label"></label>
-        <input asp-for="Title" class="form-control" />
+        <input asp-for="Title" class="form-control" required />
         <span asp-validation-for="Title" class="text-danger"></span>
     </div>
 
@@ -32,13 +37,15 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label asp-for="JobType" class="form-label"></label>
-            <select asp-for="JobType" class="form-select" asp-items="new SelectList(JobCatalog.Categories)">
+            <select asp-for="JobType" class="form-select" asp-items="new SelectList(JobCatalog.Categories)" required>
+                <option value="">-- Select Employment Type --</option>
             </select>
             <span asp-validation-for="JobType" class="text-danger"></span>
         </div>
         <div class="col-md-6">
             <label asp-for="WorkMode" class="form-label"></label>
-            <select asp-for="WorkMode" class="form-select" asp-items="new SelectList(JobCatalog.WorkModes)">
+            <select asp-for="WorkMode" class="form-select" asp-items="new SelectList(JobCatalog.WorkModes)" required>
+                <option value="">-- Select Work Mode --</option>
             </select>
             <span asp-validation-for="WorkMode" class="text-danger"></span>
         </div>
@@ -46,7 +53,8 @@
 
     <div class="mb-3 mt-3">
         <label asp-for="JobCategory" class="form-label"></label>
-        <select asp-for="JobCategory" class="form-select" asp-items="new SelectList(JobCatalog.JobCategories)">
+        <select asp-for="JobCategory" class="form-select" asp-items="new SelectList(JobCatalog.JobCategories)" required>
+            <option value="">-- Select Job Category --</option>
         </select>
         <span asp-validation-for="JobCategory" class="text-danger"></span>
     </div>
@@ -54,12 +62,12 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label asp-for="SalaryMin" class="form-label"></label>
-            <input asp-for="SalaryMin" class="form-control" />
+            <input asp-for="SalaryMin" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
             <span asp-validation-for="SalaryMin" class="text-danger"></span>
         </div>
         <div class="col-md-6">
             <label asp-for="SalaryMax" class="form-label"></label>
-            <input asp-for="SalaryMax" class="form-control" />
+            <input asp-for="SalaryMax" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
             <span asp-validation-for="SalaryMax" class="text-danger"></span>
         </div>
     </div>
@@ -78,7 +86,7 @@
 
     <div class="mb-3">
         <label asp-for="ExpiryDate" class="form-label"></label>
-        <input asp-for="ExpiryDate" type="date" class="form-control" />
+        <input asp-for="ExpiryDate" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
         <span asp-validation-for="ExpiryDate" class="text-danger"></span>
     </div>
 

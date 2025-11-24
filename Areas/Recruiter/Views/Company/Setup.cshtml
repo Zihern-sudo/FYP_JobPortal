@@ -112,6 +112,8 @@
                                     class="form-control" />
                                 <div class="form-text">Max 2 MB; jpg, jpeg, png, webp.</div>
                                 <span class="text-danger" id="companyPhotoError"></span>
+                                @* NEW: surface server-side photo errors from ModelState ("companyPhoto") *@
+                                <span class="text-danger">@Html.ValidationMessage("companyPhoto")</span>
                                 <button type="button" id="btnCancelPhoto"
                                     class="btn btn-outline-secondary mt-4">Cancel</button>
                             </div>
@@ -123,18 +125,18 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <label asp-for="company_name" class="form-label"></label>
-                                <input asp-for="company_name" class="form-control" />
+                                <input asp-for="company_name" class="form-control" maxlength="160" />
                                 <span asp-validation-for="company_name" class="text-danger"></span>
                             </div>
 
                             <div class="col-md-6">
                                 <label asp-for="company_industry" class="form-label"></label>
-                                <input asp-for="company_industry" class="form-control" />
+                                <input asp-for="company_industry" class="form-control" maxlength="120" />
                                 <span asp-validation-for="company_industry" class="text-danger"></span>
                             </div>
                             <div class="col-md-6">
                                 <label asp-for="company_location" class="form-label"></label>
-                                <input asp-for="company_location" class="form-control" />
+                                <input asp-for="company_location" class="form-control" maxlength="120" />
                                 <span asp-validation-for="company_location" class="text-danger"></span>
                             </div>
 

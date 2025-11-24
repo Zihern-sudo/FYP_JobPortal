@@ -3,15 +3,22 @@
    ====================================================== *@
 @model JobPortal.Areas.Recruiter.Models.CandidatesIndexVM
 @{
-  
+
     var q = Model.Query;
     var stage = Model.Stage;
+
+    // --- Sorting state (ID ASC/DESC) ---
+    var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+    var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+    var arrow = sort == "id_asc" ? "▲" : "▼";
+
     string RoutePreserve(int page) => Url.Action("Index", new
     {
         q = q,
         stage = stage,
         page = page,
-        pageSize = Model.PageSize
+        pageSize = Model.PageSize,
+        sort = sort
     })!;
 }
 
@@ -39,12 +46,21 @@
         <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Export" asp-route-q="@q"
             asp-route-stage="@stage" class="btn btn-success">Export CSV</a>
     </div>
+    @* Preserve current sort when filtering *@
+    <input type="hidden" name="sort" value="@sort" />
 </form>
 
 <table class="table table-hover align-middle">
     <thead class="table-light">
         <tr>
-            <th>#</th>
+            @* MODIFIED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+            <th class="position-relative" style="width:90px;">
+                <span>ID</span>
+                <span class="ms-1">@arrow</span>
+                <a class="stretched-link text-decoration-none" asp-area="Recruiter" asp-controller="Candidates"
+                    asp-action="Index" asp-route-q="@q" asp-route-stage="@stage" asp-route-page="@Model.Page"
+                    asp-route-pageSize="@Model.PageSize" asp-route-sort="@idNext" aria-label="Sort by ID"></a>
+            </th>
             <th>Candidate</th>
             <th>Stage</th>
             <th>Score</th>
@@ -103,7 +119,7 @@
 <nav aria-label="paging">
     <ul class="pagination justify-content-end">
         <li class="page-item @(Model.Page <= 1 ?
-                        "disabled" : "")">
+                                    "disabled" : "")">
             <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
         </li>
         <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
@@ -126,8 +142,7 @@
         <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
             <a class="page-link" href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.Page + 1))">Next</a>
         </li>
-        <li class="page-item @(Model.Page >= Model.TotalPages ?
-                        "disabled" : "")">
+        <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : "")">
             <a class="page-link"
                 href="@(Model.Page >= Model.TotalPages ? "#" : RoutePreserve(Model.TotalPages))">Last</a>
         </li>

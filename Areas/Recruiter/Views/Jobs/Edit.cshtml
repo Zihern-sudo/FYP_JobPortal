@@ -34,6 +34,11 @@
   @Html.AntiForgeryToken()
   <input type="hidden" asp-for="job_listing_id" />
 
+  @* NEW: show model-level errors *@
+  <div class="mb-3">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+  </div>
+
   @* Removed job_status field (recruiters cannot set status) *@
 
   <div class="mb-3">
@@ -64,12 +69,12 @@
     <div class="row g-3">
       <div class="col-md-6">
         <label asp-for="salary_min" class="form-label"></label>
-        <input asp-for="salary_min" class="form-control" />
+        <input asp-for="salary_min" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
         <span asp-validation-for="salary_min" class="text-danger"></span>
       </div>
       <div class="col-md-6">
         <label asp-for="salary_max" class="form-label"></label>
-        <input asp-for="salary_max" class="form-control" />
+        <input asp-for="salary_max" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
         <span asp-validation-for="salary_max" class="text-danger"></span>
       </div>
 
@@ -77,6 +82,7 @@
         <label asp-for="job_type" class="form-label"></label>
         <select asp-for="job_type" class="form-select"
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.Categories)">
+          <option value="">-- Select Employment Type --</option>
         </select>
         <span asp-validation-for="job_type" class="text-danger"></span>
       </div>
@@ -85,6 +91,7 @@
         <label asp-for="work_mode" class="form-label"></label>
         <select asp-for="work_mode" class="form-select"
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.WorkModes)">
+          <option value="">-- Select Work Mode --</option>
         </select>
         <span asp-validation-for="work_mode" class="text-danger"></span>
       </div>
@@ -92,6 +99,7 @@
         <label asp-for="job_category" class="form-label">Job Category</label>
         <select asp-for="job_category" class="form-select"
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.JobCategories)">
+          <option value="">-- Select Job Category --</option>
         </select>
         <span asp-validation-for="job_category" class="text-danger"></span>
       </div>
@@ -101,16 +109,17 @@
 
   <div class="mb-4">
     <label asp-for="expiry_date" class="form-label">Application Deadline</label>
-    <input asp-for="expiry_date" class="form-control" type="date" />
+    <input asp-for="expiry_date" class="form-control" type="date" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
     <span asp-validation-for="expiry_date" class="text-danger"></span>
   </div>
 </form>
 
-@* Single right-aligned toolbar: Green Save + Submit for Approval side-by-side *@
-<div class="d-flex justify-content-end gap-2">
-  <button type="submit" form="editForm" class="btn btn-success">Save</button>
-  <form method="post" asp-area="Recruiter" asp-controller="Jobs" asp-action="SubmitForApproval" asp-antiforgery="true"
-    class="d-inline">
+@* Single right-aligned toolbar: Save + Draft badge + Submit for Approval *@
+<div class="d-flex justify-content-end align-items-center gap-2">
+  <button id="btnSaveJob" type="submit" form="editForm" class="btn btn-success">Save</button>
+  <span id="draftBadge" class="badge bg-warning text-dark" style="display:none;">Draft (unsent)</span>
+  <form id="submitApprovalForm" method="post" asp-area="Recruiter" asp-controller="Jobs" asp-action="SubmitForApproval"
+    asp-antiforgery="true" class="d-inline">
     <input type="hidden" name="id" value="@Model.job_listing_id" />
     @{
       var latestStatus = (string)(ViewBag.ApprovalStatus ?? "");
@@ -120,6 +129,10 @@
       Submit for Approval
     </button>
   </form>
+</div>
+@* NEW: inline helper note (shown when saved as Draft / ChangesRequested) *@
+<div id="afterSaveNote" class="text-muted small mt-1" style="display:none;">
+  Saved as Draft — submit for admin approval to publish.
 </div>
 
 @* Approval info + progress *@
@@ -145,14 +158,24 @@
   : st == "Rejected" ? "bg-danger"
   : "bg-secondary";
 
+  // Tooltip text mirroring Index view
+  var tipText =
+  st == "Approved" ? "Approved by admin. Job can be Open."
+  : st == "ChangesRequested" ? "Admin requested changes. Edit and resubmit for approval."
+  : st == "Pending" ? "Submitted for approval. Waiting for admin review."
+  : st == "Rejected" ? "Rejected by admin. See comments and update."
+  : "No approval request yet.";
+
   <div class="card mt-3">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <strong>Approval Progress</strong>
-        <span class="badge @badgeClass px-3 py-2" id="approvalStatusVal">@st</span>
+        <span class="badge @badgeClass px-3 py-2" id="approvalStatusVal" data-bs-toggle="tooltip" data-bs-placement="top"
+          title="@tipText">@st</span>
       </div>
-      <div class="progress" style="height:6px;">
-        <div class="progress-bar @barClass" role="progressbar" style="width:@pct%"></div>
+      <div class="progress" style="height:6px;" data-bs-toggle="tooltip" data-bs-placement="top" title="@tipText"
+        aria-label="@tipText">
+        <div id="approvalProgressBar" class="progress-bar @barClass" role="progressbar" style="width:@pct%"></div>
       </div>
       <div class="d-flex flex-wrap gap-3 mt-2">
         @if (!string.IsNullOrWhiteSpace((string)ViewBag.ApprovalComments))
@@ -220,6 +243,9 @@
 </div>
 
 @section Scripts {
+  @* enable unobtrusive client-side validation *@
+  <partial name="_ValidationScriptsPartial" />
+
   <script>
     function showToast(msg) {
       const el = document.getElementById('toast-notify');
@@ -229,12 +255,70 @@
       new bootstrap.Toast(el).show();
     }
 
+    // Reset approval UI to ChangesRequested (66%) after a recruiter save
+    function setApprovalChangesRequestedUI() {
+      const statusEl = document.getElementById('approvalStatusVal');
+      const barEl = document.getElementById('approvalProgressBar');
+      const submitBtn = document.getElementById('btnSubmitApproval');
+
+      if (statusEl) {
+        statusEl.textContent = 'ChangesRequested';
+        statusEl.className = 'badge bg-warning text-dark px-3 py-2';
+        statusEl.setAttribute('title', 'Admin requested changes. Edit and resubmit for approval.');
+      }
+      if (barEl) {
+        barEl.style.width = '66%';
+        barEl.className = 'progress-bar bg-warning';
+        const container = barEl.parentElement;
+        if (container) container.setAttribute('title', 'Admin requested changes. Edit and resubmit for approval.');
+      }
+      // Keep submit enabled so user can send for approval after saving edits
+      if (submitBtn) submitBtn.disabled = false;
+    }
+
     (function () {
       const dataEl = document.getElementById('js-data');
       if (!dataEl) return;
 
-      const message = dataEl.dataset.message || '';
-      if (message) showToast(message);
+      // 1) Server message (TempData)
+      const serverMsg = dataEl.dataset.message || '';
+
+      // 2) Client message persisted across redirect by sessionStorage
+      const savedMsgKey = 'jobs_edit_saved_msg';
+      const clientMsg = sessionStorage.getItem(savedMsgKey) || '';
+      const skipDisable = !!clientMsg; // if we just saved, don't auto-disable Submit on "Pending"
+
+      // Badge handle
+      const draftBadge = document.getElementById('draftBadge');
+      function showDraftBadge() { if (draftBadge) draftBadge.style.display = 'inline-block'; }
+      function hideDraftBadge() { if (draftBadge) draftBadge.style.display = 'none'; }
+
+      // NEW: helper note toggle
+      function showAfterSaveNote(show = true) {
+        const el = document.getElementById('afterSaveNote');
+        if (el) el.style.display = show ? 'block' : 'none';
+      }
+
+      // Helper: focus/scroll to the Submit button (nudge next step)
+      function focusSubmit() {
+        const submitBtn = document.getElementById('btnSubmitApproval');
+        if (submitBtn) {
+          submitBtn.focus();
+          try { submitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { }
+        }
+      }
+
+      if (clientMsg) {
+        showToast(clientMsg);
+        // After a successful save, show ChangesRequested, show Draft badge, focus Submit, and show helper note
+        setApprovalChangesRequestedUI();
+        showDraftBadge();
+        focusSubmit();
+        showAfterSaveNote(true);
+        sessionStorage.removeItem(savedMsgKey);
+      } else if (serverMsg) {
+        showToast(serverMsg);
+      }
 
       const jobId = dataEl.dataset.jobId;
       const baseUrl = dataEl.dataset.approvalInfoUrl;
@@ -242,9 +326,22 @@
       const submitBtn = document.getElementById('btnSubmitApproval');
       if (!statusEl || !jobId || !baseUrl) return;
 
-      // Disable submit while Pending or Approved
       let current = (statusEl.textContent || '').trim();
-      if (submitBtn) submitBtn.disabled = (current === 'Pending' || current === 'Approved');
+
+      // NEW: show helper note if already in ChangesRequested
+      if (current === 'ChangesRequested') {
+        showAfterSaveNote(true);
+      }
+
+      // Show badge if not yet submitted; hide when already Pending/Approved
+      if (current === 'Pending' || current === 'Approved') {
+        hideDraftBadge();
+      } else {
+        showDraftBadge();
+      }
+
+      // Only disable when the Pending/Approved state originates from server (not our client reset)
+      if (submitBtn) submitBtn.disabled = !skipDisable && (current === 'Pending' || current === 'Approved');
 
       if (current !== 'Pending') return;
 
@@ -269,10 +366,15 @@
               updEl.textContent = `Updated: ${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
             }
 
-            // Enable/disable submit accordingly
+            // For server-driven transitions, enforce disable on Pending/Approved
             if (submitBtn) submitBtn.disabled = (next === 'Pending' || next === 'Approved');
 
-            // Notify
+            // Hide Draft badge when submitted/approved
+            if (next === 'Pending' || next === 'Approved') {
+              hideDraftBadge();
+              showAfterSaveNote(false); // hide helper note once submitted/approved
+            }
+
             const msg = (next === 'Approved')
               ? 'Your job was approved. Status is now Open.'
               : (next === 'ChangesRequested')
@@ -287,6 +389,32 @@
         } catch { }
         if (tries >= maxTries) clearInterval(interval);
       }, 8000);
+    })();
+
+    // On Save click, set a message to show after redirect and keep Draft
+    (function () {
+      const form = document.getElementById('editForm');
+      if (!form) return;
+      form.addEventListener('submit', function () {
+        sessionStorage.setItem('jobs_edit_saved_msg', 'Your edits have been saved. Please submit for Admin Approval to publish them.');
+      });
+    })();
+
+    // Hide Draft badge AND helper note when user submits for approval
+    (function () {
+      const submitForm = document.getElementById('submitApprovalForm');
+      const draftBadge = document.getElementById('draftBadge');
+      submitForm?.addEventListener('submit', () => {
+        if (draftBadge) draftBadge.style.display = 'none';
+        const note = document.getElementById('afterSaveNote');
+        if (note) note.style.display = 'none';
+      });
+    })();
+
+    // Enable Bootstrap tooltips on this page (for approval status/progress)
+    (function () {
+      var triggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      triggers.forEach(function (el) { new bootstrap.Tooltip(el); });
     })();
 
     async function loadTplModal(jobId, q) {

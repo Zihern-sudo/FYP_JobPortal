@@ -58,6 +58,7 @@ public sealed class ApprovalsIndexViewModel
     public int ChangesRequestedCount { get; init; }
     public int RejectedCount { get; init; }
     public PagedResult<ApprovalRow> Items { get; init; } = new();
+    public string Sort { get; set; } = "id_desc"; // id_asc | id_desc
 }
 
 public sealed class AttentionRow
@@ -434,4 +435,30 @@ public sealed class FlagConversationViewModel : IValidatableObject
         if (string.IsNullOrWhiteSpace(ReasonKey) && string.IsNullOrWhiteSpace(CustomReason))
             yield return new ValidationResult("Please select a reason or provide a custom reason.", new[] { nameof(ReasonKey), nameof(CustomReason) });
     }
+
+
+}
+
+public class AiJobPolicyCheckRequestVM
+{
+    [Required]
+    public int Id { get; set; }
+}
+
+public class AiJobPolicyCheckItemVM
+{
+    [Required]
+    public string Issue { get; set; } = "";
+    // Advice | Warning | Violation
+    [Required]
+    public string Severity { get; set; } = "Advice";
+}
+
+public class AiJobPolicyCheckResultVM
+{
+    public bool Pass { get; set; } = true;
+    public string Summary { get; set; } = "Looks good.";
+    public List<AiJobPolicyCheckItemVM> Items { get; set; } = new();
+    // Optional debugging note (not shown to end users)
+    public string? RawNote { get; set; }
 }

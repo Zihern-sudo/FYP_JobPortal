@@ -163,7 +163,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             foreach (var a in apps)
             {
                 a.application_status = "Shortlisted";
-                a.date_updated = DateTime.Now;
+                a.date_updated = DateTime.UtcNow;
             }
 
             await _db.SaveChangesAsync();
@@ -257,7 +257,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             ms.Position = 0;
-            var outName = $"CVs_{DateTime.Now:yyyyMMdd_HHmm}.zip";
+            var outName = $"CVs_{DateTime.UtcNow:yyyyMMdd_HHmm}.zip";
             return File(ms.ToArray(), "application/zip", outName);
         }
 
@@ -353,8 +353,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                         candidate_id = candidateId,
                         candidate_name = $"{a.user.first_name} {a.user.last_name}".Trim(),
                         job_title = job.job_title,
-                        created_at = DateTime.Now,
-                        last_message_at = DateTime.Now,
+                        created_at = DateTime.UtcNow,
+                        last_message_at = DateTime.UtcNow,
                         last_snippet = "",
                         unread_for_candidate = 0,
                         unread_for_recruiter = 0
@@ -393,7 +393,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     }
                 }
 
-                var now = DateTime.Now;
+                var now = DateTime.UtcNow;
 
                 var msg = new message
                 {

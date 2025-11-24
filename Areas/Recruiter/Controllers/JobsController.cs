@@ -225,7 +225,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_category = vm.job_category,
                 user_id = recruiterId,
                 company_id = gate.CompanyId.Value,
-                date_posted = DateTime.Now,
+                date_posted = DateTime.UtcNow,
                 expiry_date = vm.expiry_date
             };
 
@@ -310,6 +310,18 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 ViewBag.ApprovalUpdatedAt = latestApproval.date_approved;
             }
 
+            // ===== NEW: if the job itself is Draft, force "ChangesRequested" in the view =====
+            // This guarantees the Edit page shows 66% (ChangesRequested) immediately after any save,
+            // even if there is no approval row yet or the latest row was "Pending".
+            if (string.Equals(job.job_status, "Draft", StringComparison.OrdinalIgnoreCase))
+            {
+                ViewBag.ApprovalStatus = "ChangesRequested";
+                if (ViewBag.ApprovalComments == null)
+                    ViewBag.ApprovalComments = "Draft changes saved by recruiter. Resubmit for approval.";
+                if (ViewBag.ApprovalUpdatedAt == null)
+                    ViewBag.ApprovalUpdatedAt = DateTime.UtcNow;
+            }
+
             ViewBag.FromTemplate = fromTemplate;
             return View(vm);
         }
@@ -326,6 +338,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync();
 
             if (job == null) return NotFound();
+
+            // Why: enforce annotations + IValidatableObject before saving
+            if (!ModelState.IsValid)
+                return View(vm);
 
             if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
             {
@@ -581,8 +597,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 template_subject = null,
                 template_body = body,
                 template_status = "Active",
-                date_created = DateTime.Now,
-                date_updated = DateTime.Now
+                date_created = DateTime.UtcNow,
+                date_updated = DateTime.UtcNow
             };
             _db.templates.Add(row);
             await _db.SaveChangesAsync();
@@ -624,7 +640,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
 
             app.application_status = toStage;
-            app.date_updated = DateTime.Now;
+            app.date_updated = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
             return Json(new { ok = true, applicationId, newStage = toStage });
@@ -659,13 +675,13 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 contract_type = vm.ContractType,
                 notes = vm.Notes,
                 candidate_token = Guid.NewGuid(),
-                date_sent = DateTime.Now,
-                date_updated = DateTime.Now
+                date_sent = DateTime.UtcNow,
+                date_updated = DateTime.UtcNow
             };
             _db.job_offers.Add(offer);
 
             app.application_status = "Offer";
-            app.date_updated = DateTime.Now;
+            app.date_updated = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
 
@@ -706,12 +722,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
         // ===========================
         // ===== SCORING RULES =======
         // ===========================
-
-        /// <summary>
-        /// Upsert Scoring Rules for this job (owner = current recruiter).
-        /// Body: weight2=... (multiple) from form.
-        /// Stores JSON: { "weight2": [ ... ] }
-        /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ScoringRules(int id, [FromForm] string[]? weight2)
@@ -744,14 +754,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = recruiterId,
                     job_listing_id = id,
                     rule_json = json,
-                    updated_at = DateTime.Now
+                    updated_at = DateTime.UtcNow
                 };
                 _db.ai_scoring_rules.Add(row);
             }
             else
             {
                 row.rule_json = json;
-                row.updated_at = DateTime.Now;
+                row.updated_at = DateTime.UtcNow;
             }
 
             await _db.SaveChangesAsync();
@@ -759,10 +769,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return Json(new { ok = true, saved = norms.Length });
         }
 
-        /// <summary>
-        /// Read saved rules for job and return weight2 list.
-        /// Front-end will pass weight2 into AiEvaluation/EvaluateJob and show progress overlay.
-        /// </summary>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ReScore(int id)
@@ -825,7 +831,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync();
             if (app is null) return NotFound(new { ok = false, error = "Application not found." });
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
             // Persist override (recency drives sort)
             _db.ai_rank_overrides.Add(new ai_rank_override

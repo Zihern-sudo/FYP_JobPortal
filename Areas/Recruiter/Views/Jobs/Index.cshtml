@@ -112,6 +112,13 @@
               {
                 stText = approvalRawValue;
               }
+
+              // Force "ChangesRequested" when recruiter has saved edits as Draft
+              if (string.Equals(j.job_status, "Draft", StringComparison.OrdinalIgnoreCase))
+              {
+                stText = "ChangesRequested";
+              }
+
               if (string.Equals(stText, "Pending", StringComparison.OrdinalIgnoreCase))
               {
                 pendingIds.Add(j.job_listing_id);
@@ -130,16 +137,26 @@
               : stText == "Rejected" ? "bg-danger"
               : "bg-secondary";
 
+              // Tooltip copy for each approval state
+              var tipText =
+              stText == "Approved" ? "Approved by admin. Job can be Open."
+              : stText == "ChangesRequested" ? "Admin requested changes. Edit and resubmit for approval."
+              : stText == "Pending" ? "Submitted for approval. Waiting for admin review."
+              : stText == "Rejected" ? "Rejected by admin. See comments and update."
+              : "No approval request yet.";
+
               <tr>
                 <td>@j.job_listing_id</td>
 
                 <td>@j.job_title</td>
                 <td>@j.job_category</td>
                 <td style="min-width:200px">
-                  <div class="progress" style="height:6px;">
+                  <div class="progress" style="height:6px;" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="@tipText" aria-label="@tipText">
                     <div class="progress-bar @barClass" role="progressbar" style="width:@pct%"></div>
                   </div>
-                  <small class="@ChipClass(stText) mt-1 d-inline-block" title="Admin approval status">@stText</small>
+                  <small class="@ChipClass(stText) mt-1 d-inline-block" data-bs-toggle="tooltip" data-bs-placement="top"
+                    title="@tipText">@stText</small>
                 </td>
                 <td>@deadline</td>
                 <td>@(j.company?.company_location ?? "")</td>
@@ -260,6 +277,12 @@
         body.textContent = message;
         new bootstrap.Toast(el).show();
       }
+    })();
+
+    // Enable Bootstrap tooltips for approval progress/badges
+    (function () {
+      var triggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      triggers.forEach(function (el) { new bootstrap.Tooltip(el); });
     })();
   </script>
 }

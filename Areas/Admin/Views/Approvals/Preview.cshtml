@@ -67,6 +67,36 @@
     </div>
   </div>
 
+  <div class="col-lg-4">
+    <div class="card shadow-sm mb-3 ai-panel">
+      <div class="card-header bg-white d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="fw-semibold">AI Quality &amp; Policy (Auto)</div>
+        <div class="d-flex gap-2">
+          <button type="button" id="btnCopyIssues" class="btn btn-sm btn-outline-primary">
+            Copy issues to comments
+          </button>
+          <button type="button" id="btnRecheck" class="btn btn-sm btn-outline-secondary">Re-check</button>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div id="aiJobPolicyBox">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <div id="aiPolicyBadge" class="badge text-bg-secondary">Checking…</div>
+            <div id="aiPolicyAudit" class="small text-muted" aria-live="polite"></div>
+          </div>
+
+          <div class="summary-box" role="status" aria-live="polite">
+            <div id="aiPolicySummary" class="mb-0">Running AI check…</div>
+          </div>
+
+          <ul id="aiPolicyList" class="list-group list-group-flush mt-3"></ul>
+        </div>
+
+        @* Hidden anti-forgery token for AJAX *@
+        <form id="aiPolicyTokenForm" method="post" class="d-none">@Html.AntiForgeryToken()</form>
+      </div>
+    </div>
 
     <div class="card shadow-sm">
       <div class="card-header bg-white fw-semibold">Reviewer Action</div>
@@ -84,12 +114,13 @@
         </form>
 
         @* REQUEST CHANGES *@
-        <form asp-area="Admin" asp-controller="Approvals" asp-action="RequestChanges" method="post" class="mb-2">
+        <form asp-area="Admin" asp-controller="Approvals" asp-action="RequestChanges" method="post" class="mb-2"
+          id="formRequestChanges">
           @Html.AntiForgeryToken()
           <input type="hidden" name="id" value="@Model.Id" />
           <div class="mb-2">
             <label class="form-label small">Comments (required)</label>
-            <textarea name="comments" class="form-control" rows="3" placeholder="Specify what to fix"
+            <textarea name="comments" id="rcComments" class="form-control" rows="3" placeholder="Specify what to fix"
               required></textarea>
           </div>
           <button type="submit" class="btn btn-warning w-100">Request Changes</button>
@@ -107,6 +138,174 @@
         </form>
       </div>
     </div>
-
   </div>
 </div>
+
+@section Scripts {
+  <style>
+    /* ---------- AI panel polish ---------- */
+    .ai-panel .summary-box {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: .5rem;
+      padding: .75rem .875rem;
+      margin-top: .5rem;
+    }
+
+    .ai-panel #aiPolicyBadge {
+      font-size: .85rem;
+      padding: .35rem .55rem;
+    }
+
+    .ai-panel #aiPolicyAudit {
+      line-height: 1;
+    }
+
+    .ai-panel #aiPolicyList .list-group-item {
+      display: flex;
+      align-items: flex-start;
+      gap: .5rem;
+      padding: .6rem .25rem;
+      border: 0;
+      border-top: 1px solid #f0f1f3;
+    }
+
+    .ai-panel #aiPolicyList .badge {
+      flex: 0 0 auto;
+    }
+  </style>
+
+  <script>
+    (function () {
+      const badge = document.getElementById('aiPolicyBadge');
+      const audit = document.getElementById('aiPolicyAudit');
+      const summary = document.getElementById('aiPolicySummary');
+      const list = document.getElementById('aiPolicyList');
+      const btnRecheck = document.getElementById('btnRecheck');
+      const btnCopyIssues = document.getElementById('btnCopyIssues');
+      const rcTextarea = document.getElementById('rcComments');
+
+      let lastAi = null;
+
+      function toHHMMSS(dt) {
+        try { return new Date(dt).toLocaleTimeString([], { hour12: false }); } catch { return ''; }
+      }
+
+      function setBadge(pass) {
+        badge.className = 'badge ' + (pass ? 'text-bg-success' : 'text-bg-warning');
+        badge.textContent = pass ? 'Passed' : 'Needs attention';
+      }
+
+      function render(result) {
+        if (!result) return;
+        lastAi = result;
+
+        setBadge(!!result.pass);
+        summary.textContent = result.summary || (result.pass ? 'Looks good.' : 'Issues detected.');
+
+        list.innerHTML = '';
+        const items = Array.isArray(result.items) ? result.items : [];
+        items.slice(0, 8).forEach(it => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
+          const sev = (it.severity || 'Advice').trim();
+          const sevClass = sev === 'Violation' ? 'text-bg-danger' : (sev === 'Warning' ? 'text-bg-warning' : 'text-bg-secondary');
+          li.innerHTML = `<span class="badge ${sevClass} rounded-pill">${sev}</span><span>${(it.issue || '').trim()}</span>`;
+          list.appendChild(li);
+        });
+        if (items.length === 0) {
+          const li = document.createElement('li');
+          li.className = 'list-group-item text-muted';
+          li.textContent = 'No issues found.';
+          list.appendChild(li);
+        }
+
+        const auditText = result.fromCache
+          ? `Cached result from ${toHHMMSS(result.cachedAt)} (use Re-check to refresh)`
+          : `Checked by AI at ${toHHMMSS(result.cachedAt)}`;
+        audit.textContent = auditText;
+      }
+
+      function showChecking() {
+        badge.className = 'badge text-bg-secondary';
+        badge.textContent = 'Checking…';
+        summary.textContent = 'Running AI check…';
+        list.innerHTML = '';
+        audit.textContent = '';
+      }
+
+      async function callCheck(force) {
+        const token = document.querySelector('#aiPolicyTokenForm input[name="__RequestVerificationToken"]')?.value || '';
+        showChecking();
+
+        try {
+          const resp = await fetch('@Url.Action("PolicyCheck", "Approvals", new { area = "Admin" })', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'RequestVerificationToken': token
+            },
+            body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=1' : '')
+          });
+
+          if (!resp.ok) {
+            badge.className = 'badge text-bg-warning';
+            badge.textContent = 'Needs attention';
+            summary.textContent = 'AI check unavailable.';
+            const li = document.createElement('li');
+            li.className = 'list-group-item text-muted';
+            li.textContent = 'Service temporarily unavailable.';
+            list.appendChild(li);
+            audit.textContent = 'Check failed';
+            return;
+          }
+
+          const data = await resp.json();
+          render(data);
+        } catch {
+          badge.className = 'badge text-bg-warning';
+          badge.textContent = 'Needs attention';
+          summary.textContent = 'AI check timed out.';
+          const li = document.createElement('li');
+          li.className = 'list-group-item text-muted';
+          li.textContent = 'Please try again.';
+          list.appendChild(li);
+          audit.textContent = 'Check failed';
+        }
+      }
+
+      function copyIssuesToComments() {
+        const r = lastAi || {};
+        const ta = rcTextarea;
+        if (!ta) return;
+
+        const lines = [];
+        const sum = (r.summary || '').trim();
+        if (sum) lines.push('AI summary: ' + sum);
+
+        const items = Array.isArray(r.items) ? r.items : [];
+        if (items.length > 0) {
+          lines.push('AI detected:');
+          items.slice(0, 8).forEach(it => {
+            const sev = (it.severity || 'Advice').trim();
+            const iss = (it.issue || '').trim();
+            if (iss) lines.push(`- [${sev}] ${iss}`);
+          });
+        }
+
+        const block = lines.join('\n');
+        if (!block) return;
+
+        const existing = ta.value || '';
+        ta.value = existing ? (existing.trimEnd() + '\n\n' + block) : block;
+        ta.focus();
+      }
+
+      btnRecheck?.addEventListener('click', () => callCheck(true));
+      btnCopyIssues?.addEventListener('click', copyIssuesToComments);
+
+      // Initial load (will use cached server result when available)
+      document.addEventListener('DOMContentLoaded', () => callCheck(false));
+    })();
+  </script>
+}

@@ -25,24 +25,31 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         // GET /Recruiter/Candidates?q=&stage=&page=&pageSize=
         [HttpGet]
-        public async Task<IActionResult> Index(string? q, string? stage, int page = 1, int pageSize = DefaultPageSize)
+        public async Task<IActionResult> Index(string? q, string? stage, string? sort, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, MaxPageSize);
 
+            // normalize sort; default newest first by Application ID
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
+
             var baseQuery = BuildQuery(recruiterId, q, stage);
 
             var totalCount = await baseQuery.CountAsync();
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
             if (page > totalPages) page = totalPages;
-
             var skip = (page - 1) * pageSize;
 
+            // === Order by ID per toggle (latest ID on top by default) ===
+            var ordered = sort == "id_asc"
+                ? baseQuery.OrderBy(a => a.application_id)
+                : baseQuery.OrderByDescending(a => a.application_id);
+
             // include job & user ids for score lookup
-            var rows = await baseQuery
-                .OrderByDescending(a => a.date_updated)
+            var rows = await ordered
                 .Skip(skip)
                 .Take(pageSize)
                 .Select(a => new
@@ -58,8 +65,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .AsNoTracking()
                 .ToListAsync();
 
-            // Build score map: for each application, get candidate's latest resume
-            // then the evaluation row for (that resume, that job).
             var userIds = rows.Select(r => r.user_id).Distinct().ToList();
             var jobIds = rows.Select(r => r.job_listing_id).Distinct().ToList();
 
@@ -76,12 +81,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Where(x => x != null)
                 .ToDictionary(x => x.user_id, x => x.resume_id);
 
-            // evaluations for those (resume, job) pairs
             var evals = await _db.ai_resume_evaluations
                 .Where(ev => jobIds.Contains(ev.job_listing_id))
                 .ToListAsync();
 
-            // build map: (userId, jobId) -> score
             var scoreMap = new Dictionary<(int userId, int jobId), int>();
             foreach (var r in rows)
             {
@@ -94,7 +97,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var items = rows.Select(r => new CandidateItemVM(
                 Id: r.application_id,
-                Name: string.IsNullOrWhiteSpace(r.CandidateName) ? $"User" : r.CandidateName,
+                Name: string.IsNullOrWhiteSpace(r.CandidateName) ? "User" : r.CandidateName,
                 Stage: r.application_status ?? "Submitted",
                 Score: scoreMap.TryGetValue((r.user_id, r.job_listing_id), out var sc) ? sc : 0,
                 AppliedAt: r.date_updated.ToString("yyyy-MM-dd"),
@@ -110,7 +113,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 TotalCount = totalCount,
                 TotalPages = totalPages,
                 Query = q ?? string.Empty,
-                Stage = stage ?? string.Empty
+                Stage = stage ?? string.Empty,
+                Sort = sort
             };
 
             return View(vm);
@@ -310,7 +314,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (app == null) return NotFound();
 
             var token = Guid.NewGuid();
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
             DateOnly? startDate = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value) : (DateOnly?)null;
 
@@ -449,14 +453,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = app.user_id,
                     job_listing_id = app.job_listing_id,
                     parsed_json = json,
-                    updated_at = DateTime.Now
+                    updated_at = DateTime.UtcNow
                 };
                 _db.ai_parsed_resumes.Add(row);
             }
             else
             {
                 row.parsed_json = json;
-                row.updated_at = DateTime.Now;
+                row.updated_at = DateTime.UtcNow;
             }
 
             // Leave an audit note
@@ -466,7 +470,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = "[AI] Parsed resume corrected by recruiter.",
-                created_at = DateTime.Now
+                created_at = DateTime.UtcNow
             });
 
             await _db.SaveChangesAsync();
@@ -500,7 +504,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 user_id = recruiterId,
                 direction = (sbyte)dir,
                 reason = reason.Trim(),
-                created_at = DateTime.Now
+                created_at = DateTime.UtcNow
             });
 
             // Keep an inline note for quick visibility
@@ -510,7 +514,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = $"[AI] Manual rank nudge {(dir > 0 ? "↑ up" : "↓ down")}: {reason}".Trim(),
-                created_at = DateTime.Now
+                created_at = DateTime.UtcNow
             });
 
             await _db.SaveChangesAsync();
@@ -569,7 +573,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             app.application_status = nextStatus;
-            app.date_updated = DateTime.Now;
+            app.date_updated = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
 
@@ -598,7 +602,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = text,
-                created_at = DateTime.Now
+                created_at = DateTime.UtcNow
             };
 
             _db.job_seeker_notes.Add(note);

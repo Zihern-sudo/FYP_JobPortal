@@ -144,7 +144,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = $"[AI-Rank-{dir.ToUpper()}] {reason}",
-                created_at = DateTime.Now
+                created_at = DateTime.UtcNow
             };
             _db.job_seeker_notes.Add(note);
             await _db.SaveChangesAsync(ct);
@@ -194,7 +194,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (resume == null)
             {
                 app.application_status = (result.MatchScore <= 0) ? "Rejected" : "AI-Screened";
-                app.date_updated = DateTime.Now;
+                app.date_updated = DateTime.UtcNow;
                 await _db.SaveChangesAsync(ct);
                 return;
             }
@@ -204,7 +204,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var row = await _db.ai_resume_evaluations
                 .FirstOrDefaultAsync(e => e.resume_id == resume.resume_id && e.job_listing_id == app.job_listing_id, ct);
 
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
             if (row == null)
             {
@@ -255,14 +255,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = app.user_id,
                     job_listing_id = app.job_listing_id,
                     parsed_json = parsedJson ?? "{}",
-                    updated_at = DateTime.Now
+                    updated_at = DateTime.UtcNow
                 };
                 _db.ai_parsed_resumes.Add(row);
             }
             else
             {
                 row.parsed_json = parsedJson ?? "{}";
-                row.updated_at = DateTime.Now;
+                row.updated_at = DateTime.UtcNow;
             }
         }
 
