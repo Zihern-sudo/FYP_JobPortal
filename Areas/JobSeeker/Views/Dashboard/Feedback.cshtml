@@ -42,6 +42,45 @@
 
 @section Scripts {
     <script>
+        document.getElementById("resumeFile").addEventListener("change", function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            // ---- Validate MIME type ----
+            if (file.type !== "application/pdf") {
+                Swal.fire({
+                    icon: "error",
+                    title: "Invalid File Type",
+                    text: "Only PDF files are allowed."
+                });
+                this.value = ""; // Reset the input
+                return;
+            }
+
+            // ---- Validate file extension ----
+            const allowedExt = [".pdf"];
+            const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+            if (!allowedExt.includes(ext)) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Invalid File Format",
+                    text: "Please select a PDF file."
+                });
+                this.value = "";
+                return;
+            }
+
+            // ---- Validate size (5MB max) ----
+            if (file.size > 5 * 1024 * 1024) {
+                Swal.fire({
+                    icon: "error",
+                    title: "File Too Large",
+                    text: "Maximum size allowed is 5MB."
+                });
+                this.value = "";
+                return;
+            }
+        });
         const form = document.querySelector("form");
         const fileInput = document.getElementById("resumeFile");
         const uploadArea = document.querySelector(".upload-area");
@@ -126,21 +165,21 @@
                     const feedback = getFeedback(data.overallScore);
 
                     resultDiv.innerHTML = `
-                        <h2>Resume Evaluation Results</h2>
-                        <div class="score-card">
-                            <p><strong>Education:</strong> ${data.education}</p>
-                            <p><strong>Experience:</strong> ${data.experience}</p>
-                            <p><strong>Skills:</strong> ${data.skills}</p>
-                            <p><strong>Certifications:</strong> ${data.certifications}</p>
-                            <hr>
-                            <h3>Overall Score: ${data.overallScore}/10</h3>
-                        </div>
+                            <h2>Resume Evaluation Results</h2>
+                            <div class="score-card">
+                                <p><strong>Education:</strong> ${data.education}</p>
+                                <p><strong>Experience:</strong> ${data.experience}</p>
+                                <p><strong>Skills:</strong> ${data.skills}</p>
+                                <p><strong>Certifications:</strong> ${data.certifications}</p>
+                                <hr>
+                                <h3>Overall Score: ${data.overallScore}/10</h3>
+                            </div>
 
-                        <h2>Feedback</h2>
-                        <div class="ai-feedback-box">
-                            <p>${data.aiFeedback.replace(/\n/g, "<br>")}</p>
-                        </div>
-                    `;
+                            <h2>Feedback</h2>
+                            <div class="ai-feedback-box">
+                                <p>${data.aiFeedback.replace(/\n/g, "<br>")}</p>
+                            </div>
+                        `;
                 } else {
                     resultDiv.innerHTML = `<p class="error-text">Error: ${data.message || "Unable to analyze resume."}</p>`;
                 }

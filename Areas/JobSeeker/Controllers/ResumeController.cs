@@ -33,9 +33,24 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpPost]
         public async Task<IActionResult> GenerateResumeFeedback(IFormFile resumeFile)
         {
+            // 1️⃣ Check file exists
             if (resumeFile == null || resumeFile.Length == 0)
                 return Json(new { success = false, message = "Please upload a valid resume file." });
 
+            // 2️⃣ Validate MIME type
+            if (resumeFile.ContentType != "application/pdf")
+                return Json(new { success = false, message = "Only PDF files are allowed." });
+
+            // 3️⃣ Validate extension
+            var ext = Path.GetExtension(resumeFile.FileName).ToLower();
+            if (ext != ".pdf")
+                return Json(new { success = false, message = "Invalid file format. Please upload a PDF." });
+
+            // 4️⃣ Validate size (5MB max)
+            if (resumeFile.Length > 5 * 1024 * 1024)
+                return Json(new { success = false, message = "File too large. Maximum size is 5MB." });
+
+            // Continue with your extraction...
             string extractedText = "";
 
             // 📌 EXTRACT PDF TEXT

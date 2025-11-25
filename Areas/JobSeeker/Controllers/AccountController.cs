@@ -656,13 +656,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         [HttpGet]
         public async Task<IActionResult> ResetPassword(string email, string token)
         {
+            // 1️⃣ Validate token format
             if (!Guid.TryParse(token, out var guidToken))
             {
                 TempData["Message"] = "Invalid password reset token format.";
                 return RedirectToAction("Login");
             }
 
-            // ✅ Check DB for valid token
+            // 2️⃣ Get the record for this token
             var record = await _db.email_verifications
                 .FirstOrDefaultAsync(v =>
                     v.email == email &&
@@ -671,16 +672,31 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     !v.used &&
                     v.expires_at > DateTime.UtcNow);
 
+            // 3️⃣ If no matching valid record → invalid link
             if (record == null)
             {
                 TempData["Message"] = "Invalid or expired password reset link.";
                 return RedirectToAction("Login");
             }
 
+            // 4️⃣ Ensure this is the NEWEST token generated
+            var latestRecord = await _db.email_verifications
+                .Where(v => v.email == email && v.purpose == "PasswordReset")
+                .OrderByDescending(v => v.created_at)
+                .FirstOrDefaultAsync();
+
+            if (latestRecord == null || latestRecord.token != guidToken)
+            {
+                TempData["Message"] = "A newer password reset link has been issued. Please check your latest email.";
+                return RedirectToAction("Login");
+            }
+
+            // 5️⃣ Valid & newest → allow reset
             ViewBag.Email = email;
             ViewBag.Token = token;
-            return View(); // create ResetPasswordForm.cshtml with fields: newPassword + confirmPassword
+            return View();
         }
+
 
 
         // ===============================
@@ -766,7 +782,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 ViewBag.Token = token;
                 return View();
             }
-            
+
             user.password_hash = hasher.HashPassword(null, newPassword);
 
             // ✅ Set user_status to Active
@@ -821,7 +837,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             // ✅ Create token in DB for recovery (same as password reset flow)
             var token = Guid.NewGuid();
-            var expiry = DateTime.UtcNow.AddMinutes(30);
+            var expiry = DateTime.UtcNow.AddMinutes(5);
 
             var record = new email_verification
             {

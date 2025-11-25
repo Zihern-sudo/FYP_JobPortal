@@ -59,19 +59,16 @@
         <div class="form-group mb-3 text-center">
             <label for="ProfileImage" class="form-label fw-bold">Profile Picture</label><br />
             <img src="@(string.IsNullOrEmpty(Model.ProfilePicturePath) 
-                                                                                                                                                     ? Url.Content("~/images/profile.png") 
-                                                                                                                                                     : Url.Content($"{Model.ProfilePicturePath}?v={Guid.NewGuid()}"))"
+                                                       ? Url.Content("~/images/profile.png") 
+                                                       : Url.Content($"{Model.ProfilePicturePath}?v={Guid.NewGuid()}"))"
                 alt="Profile Picture" id="profilePreview"
                 style="width:100px;height:100px;border-radius:50%;object-fit:cover;margin-bottom:10px;border:2px solid #ccc;" />
             <!-- Hidden File Input -->
             <input asp-for="ProfileImage" type="file" class="form-control d-none" id="ProfileImage" accept="image/*" />
 
             <!-- Upload Button -->
-            <button type="button" class="btn btn-secondary mt-2" id="uploadBtn">
-                <i class="bi bi-upload"></i> Upload New Picture
-            </button>
+            <button type="button" class="btn btn-primary" id="btnUpload">Upload</button>
         </div>
-
 
         <!-- Contact Info -->
         <div class="form-group-row">
@@ -105,19 +102,14 @@
             <label>Preferred Industry</label>
             <select asp-for="TargetIndustry" class="form-control">
                 <option value="">-- Select Industry --</option>
-                <option>Information Technology</option>
-                <option>Finance & Banking</option>
-                <option>Healthcare</option>
-                <option>Retail & E-Commerce</option>
-                <option>Manufacturing</option>
-                <option>Food & Beverage</option>
-                <option>Education</option>
-                <option>Logistics & Transportation</option>
-                <option>Construction & Engineering</option>
-                <option>Hospitality & Tourism</option>
-                <option>Staffing</option>
+
+                @foreach (var category in Model.JobCategories)
+                {
+                    <option value="@category">@category</option>
+                }
             </select>
         </div>
+
 
 
         <div class="form-group">
@@ -188,10 +180,10 @@
                 Swal.fire({
                     title: "Change Password",
                     html: `
-                                                                                                            <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
-                                                                                                            <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
-                                                                                                            <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
-                                                                                                        `,
+                                                                                                                    <input type="password" id="currentPassword" class="swal2-input" placeholder="Current Password">
+                                                                                                                    <input type="password" id="newPassword" class="swal2-input" placeholder="New Password">
+                                                                                                                    <input type="password" id="confirmPassword" class="swal2-input" placeholder="Confirm New Password">
+                                                                                                                `,
                     confirmButtonText: "Update Password",
                     focusConfirm: false,
                     preConfirm: () => {
@@ -249,6 +241,38 @@
                 });
             }
         });
+
+        document.getElementById("btnUpload").addEventListener("click", function () {
+            document.getElementById("ProfileImage").click();
+        });
+
+        document.getElementById("ProfileImage").addEventListener("change", function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // ✅ Validate file type (image only)
+            if (!file.type.startsWith("image/")) {
+                alert("Please select a valid image file (jpg, png, gif, etc.)");
+                e.target.value = ""; // Clear invalid file
+                return;
+            }
+
+            // ✅ Optional: Validate file size (e.g., 2MB max)
+            if (file.size > 2 * 1024 * 1024) {
+                alert("File size must be less than 2MB.");
+                e.target.value = "";
+                return;
+            }
+
+            // Preview image
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                document.getElementById("profilePreview").src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+
         // 🔹 Handle Two-Factor Authentication toggle
         const twoFASwitch = document.querySelector("input[name='TwoFAEnabled']");
 
@@ -268,11 +292,11 @@
                                 Swal.fire({
                                     title: "Enable Two-Factor Authentication",
                                     html: `
-                                                                                            <p>Scan this QR code with <b>Google Authenticator</b>:</p>
-                                                                                            <img src="${data.qrImage}" style="width:200px; margin:10px;">
-                                                                                            <p>Secret Key: <b>${data.secret}</b></p>
-                                                                                            <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
-                                                                                        `,
+                                                                                                    <p>Scan this QR code with <b>Google Authenticator</b>:</p>
+                                                                                                    <img src="${data.qrImage}" style="width:200px; margin:10px;">
+                                                                                                    <p>Secret Key: <b>${data.secret}</b></p>
+                                                                                                    <input type="text" id="verifyCode" class="swal2-input" placeholder="Enter 6-digit code">
+                                                                                                `,
                                     confirmButtonText: "Verify Code",
                                     showCancelButton: true,
                                     cancelButtonText: "Cancel",

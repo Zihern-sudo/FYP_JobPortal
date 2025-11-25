@@ -35,6 +35,9 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
         public async Task<IActionResult> Index(string? search)
         {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            int? userId = string.IsNullOrEmpty(userIdStr) ? null : int.Parse(userIdStr);
+
             var recentJobsQuery = _db.job_listings
                 .Include(j => j.company)
                 .Where(j => j.job_status == "Open")
@@ -47,7 +50,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     j.job_title.Contains(search) ||
                     j.company.company_name.Contains(search) ||
                     j.company.company_industry.Contains(search) ||
-                    j.company.company_location.Contains(search) ||              // ⭐ NEW searchable info
+                    j.company.company_location.Contains(search) ||
                     j.job_type.Contains(search)
                 );
             }
@@ -59,8 +62,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     JobTitle = j.job_title,
                     CompanyName = j.company.company_name,
                     Industry = j.company.company_industry,
-
-                    // ⭐ New fields
                     Location = j.company.company_location,
                     MinSalary = j.salary_min,
                     MaxSalary = j.salary_max,
@@ -68,11 +69,23 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 })
                 .ToListAsync();
 
+            // ✅ Get applied jobs for current user
+            List<int> appliedJobIds = new List<int>();
+            if (userId.HasValue)
+            {
+                appliedJobIds = await _db.job_applications
+                    .Where(a => a.user_id == userId.Value)
+                    .Select(a => a.job_listing_id)
+                    .ToListAsync();
+            }
+
             var model = new DashboardIndexViewModel
             {
                 SearchKeyword = search,
                 RecentJobs = recentJobs
             };
+
+            ViewBag.AppliedJobs = appliedJobIds;
 
             return View(model);
         }
@@ -116,6 +129,15 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             ViewBag.UserResumes = resumes;
 
+            // 🔹 Fetch distinct job categories from job_listing
+            var categories = await _db.job_listings
+                .Where(j => j.job_category != null && j.job_category != "")
+                .Select(j => j.job_category)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToListAsync();
+
+
             var vm = new ProfileViewModel
             {
                 UserId = user.user_id,
@@ -130,17 +152,20 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 WorkExperience = user.work_experience,
                 TargetIndustry = user.target_industry,
 
-
-                // now load from notification_preference table
+                // notification preferences
                 notif_inapp = pref.allow_inApp,
                 notif_job_updates = pref.notif_job_updates,
                 notif_messages = pref.notif_messages,
                 notif_reminders = pref.notif_reminders,
 
                 ProfilePicturePath = string.IsNullOrEmpty(user.profile_picture)
-        ? "/wwwroot/uploads/profile_pictures/test.png"
-        : user.profile_picture
+                    ? "/wwwroot/uploads/profile_pictures/test.png"
+                    : user.profile_picture,
+
+                // 🔹 Add job categories to ViewModel
+                JobCategories = categories
             };
+
 
             return View(vm);
         }
@@ -173,8 +198,8 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 ModelState.AddModelError("Email", "Invalid email format.");
             }
 
-            // Validate Phone (optional +, digits only, length 7–15)
-            if (!Regex.IsMatch(vm.Phone ?? "", @"^\+?\d{7,15}$"))
+            // Validate Phone (optional, + and digits only, length 7–15)
+            if (!string.IsNullOrEmpty(vm.Phone) && !Regex.IsMatch(vm.Phone, @"^\+?\d{7,15}$"))
             {
                 ModelState.AddModelError("Phone", "Phone must contain only digits and be 7 to 15 characters long.");
             }
@@ -188,30 +213,46 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // --- Handle profile picture upload ---
             if (vm.ProfileImage != null && vm.ProfileImage.Length > 0)
             {
-                // Create folder if not exists
-                var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "profile_pictures");
-                if (!Directory.Exists(uploadDir))
-                    Directory.CreateDirectory(uploadDir);
+                // Allowed MIME types
+                var allowedTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
 
-                // Validate size (2MB max)
+                // Allowed extensions
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+
+                var fileExtension = Path.GetExtension(vm.ProfileImage.FileName).ToLower();
+
+                // Validate MIME/type
+                if (!allowedTypes.Contains(vm.ProfileImage.ContentType.ToLower()) ||
+                    !allowedExtensions.Contains(fileExtension))
+                {
+                    ModelState.AddModelError("ProfileImage", "Invalid file type. Only JPG, PNG, GIF, or WebP images are allowed.");
+                    return View(vm);
+                }
+
+                // Max size: 2MB
                 if (vm.ProfileImage.Length > 2 * 1024 * 1024)
                 {
                     ModelState.AddModelError("ProfileImage", "File too large (max 2MB).");
                     return View(vm);
                 }
 
+                // Create folder if not exists
+                var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "profile_pictures");
+                if (!Directory.Exists(uploadDir))
+                    Directory.CreateDirectory(uploadDir);
+
                 // Define standard file name
                 var fileName = $"{user.first_name}_{user.last_name}_Icon.png";
                 var filePath = Path.Combine(uploadDir, fileName);
 
-                // Delete old profile image(s) for the user
+                // Delete old profile images
                 var oldFiles = Directory.GetFiles(uploadDir, $"{user.first_name}_{user.last_name}_Icon.*");
                 foreach (var old in oldFiles)
                 {
                     System.IO.File.Delete(old);
                 }
 
-                // Convert uploaded file to PNG and save
+                // Convert uploaded image to PNG
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     using (var image = System.Drawing.Image.FromStream(vm.ProfileImage.OpenReadStream()))
@@ -220,9 +261,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                     }
                 }
 
-                // Save standardized PNG path to DB
+                // Save standardized path to DB
                 user.profile_picture = $"/uploads/profile_pictures/{fileName}";
             }
+
 
             user.first_name = vm.FirstName;
             user.last_name = vm.LastName;
@@ -930,6 +972,17 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 .Take(pageSize)
                 .ToListAsync();
 
+            // ✅ Get applied job IDs for current user
+            var appliedJobIds = new List<int>();
+            if (userId.HasValue)
+            {
+                appliedJobIds = await _db.job_applications
+                                         .Where(a => a.user_id == userId.Value)
+                                         .Select(a => a.job_listing_id)
+                                         .ToListAsync();
+            }
+            ViewBag.AppliedJobs = appliedJobIds;
+
             // 🪣 Pass filters to view
             ViewBag.CurrentPage = page;
             ViewBag.TotalPages = (int)Math.Ceiling(totalJobs / (double)pageSize);
@@ -1236,7 +1289,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             //  Skills Section
                             if (!string.IsNullOrEmpty(skills))
                             {
-                                left.Item().Text("💡 Skills").Bold().FontSize(12).FontColor(Colors.Black);
+                                left.Item().Text("Skills").Bold().FontSize(12).FontColor(Colors.Black);
                                 foreach (var skill in skills.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries))
                                     left.Item().PaddingLeft(10).Text("• " + skill.Trim());
                             }
@@ -1288,14 +1341,26 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                             {
                                 right.Item().PaddingTop(10).Text("Projects").Bold().FontSize(14);
 
-                                foreach (var proj in projects.Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries))
+                                // Split by double newlines — each project block
+                                foreach (var projBlock in projects.Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries))
                                 {
-                                    right.Item().PaddingLeft(10).Text("• " + proj.Replace("\n", " — ").Trim());
+                                    var lines = projBlock.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                    if (lines.Length > 0)
+                                    {
+                                        // First line is project title + tech stack
+                                        right.Item().PaddingLeft(10).Text(lines[0].Trim());
+
+                                        // Remaining lines are descriptions/achievements
+                                        for (int i = 1; i < lines.Length; i++)
+                                        {
+                                            right.Item().PaddingLeft(10).Text(lines[i].Trim());
+                                        }
+                                    }
                                 }
 
                                 right.Item().PaddingVertical(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
                             }
-
                         });
                     });
                 });
@@ -1319,10 +1384,26 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             int userId = int.Parse(userIdStr);
 
-            // 🖼 Convert image to bytes (optional)
+            // Declare imageBytes first
             byte[]? imageBytes = null;
+
             if (profilePic != null && profilePic.Length > 0)
             {
+                var allowedTypes = new[] { "image/jpeg", "image/png", "image/jpg", "image/webp" };
+
+                if (!allowedTypes.Contains(profilePic.ContentType))
+                {
+                    TempData["Error"] = "Invalid file type. Please upload an image.";
+                    return RedirectToAction("ResumeBuilder");
+                }
+
+                if (profilePic.Length > 2 * 1024 * 1024)
+                {
+                    TempData["Error"] = "Image too large. Maximum allowed size is 2MB.";
+                    return RedirectToAction("ResumeBuilder");
+                }
+
+                // Convert to bytes only if valid
                 using var ms = new MemoryStream();
                 await profilePic.CopyToAsync(ms);
                 imageBytes = ms.ToArray();
@@ -1335,6 +1416,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 "classic" => GenerateClassicResumePDF(imageBytes, fullName, email, phone, address, summary, education, experience, skills, certifications, projects),
                 _ => throw new Exception("Invalid template selected")
             };
+
 
             // Ensure resumes folder exists
             var resumesDir = Path.Combine(_webHostEnvironment.WebRootPath, "resumes");

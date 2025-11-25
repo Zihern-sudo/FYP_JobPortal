@@ -50,6 +50,10 @@
                                 {
                                     <p class="badge bg-info text-dark w-fit">@job.JobType</p>
                                 }
+                                @if (ViewBag.AppliedJobs.Contains(job.JobId))
+                                {
+                                    <span class="badge bg-secondary mt-1">Already Applied</span>
+                                }
 
                                 <a asp-area="JobSeeker" asp-controller="Dashboard" asp-action="JobDetails"
                                     asp-route-id="@job.JobId" class="btn btn-sm btn-primary mt-auto">

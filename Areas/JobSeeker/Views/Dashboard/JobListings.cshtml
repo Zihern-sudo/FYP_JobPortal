@@ -118,6 +118,10 @@
                             <span class="tag tag-orange">@job.work_mode</span>
                             <span class="tag tag-green">RM @(job.salary_min?.ToString("N0") ?? "0") - RM
                                 @(job.salary_max?.ToString("N0") ?? "0")</span>
+                            @if (ViewBag.AppliedJobs.Contains(job.job_listing_id))
+                            {
+                                <span class="badge bg-secondary">Already Applied</span>
+                            }
                         </div>
 
                         <p class="description text-muted">@job.job_description</p>

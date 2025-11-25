@@ -10,6 +10,13 @@
     <form id="resumeForm" method="post" action="/JobSeeker/Dashboard/SaveResumePDF" enctype="multipart/form-data">
         <h3>Personal Information</h3>
 
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger">
+                @TempData["Error"]
+            </div>
+        }
+
         <label for="template">Choose Resume Template</label>
         <select id="template" name="template" class="form-select" required>
             <option value="classic">Classic</option>
@@ -18,11 +25,12 @@
 
         <!-- Profile Picture Upload -->
         <label>Profile Picture</label>
-        <input type="file" id="profilePic" name="profilePic" accept="image/*" />
+        <input type="file" id="profilePic" name="profilePic" accept=".jpg,.jpeg,.png,.webp" />
         <div id="profilePreview" style="margin-top:10px;">
             <img id="previewImg" src="#" alt="Preview"
                 style="display:none; width:120px; height:120px; border-radius:50%; object-fit:cover;" />
         </div>
+
 
         <label>Full Name</label>
         <input type="text" id="fullName" name="fullName" value="@Model.FullName" placeholder="John Doe" readonly />
@@ -31,7 +39,8 @@
         <input type="email" id="email" name="email" value="@Model.Email" placeholder="john@example.com" readonly />
 
         <label>Phone</label>
-        <input type="text" id="phone" name="phone" value="@Model.Phone" placeholder="+60 12-345 6789" readonly />
+        <input type="text" name="phone" class="form-control" value="@(Model.Phone ?? "")" placeholder="+60 123 45678"
+            maxlength="20" @(string.IsNullOrEmpty(Model.Phone) ? "" : "readonly") />
 
         <label>Address</label>
         <input type="text" id="address" name="address" value="@Model.Address" placeholder="Kuala Lumpur, Malaysia" />
@@ -43,29 +52,33 @@
 
         <h3>Education</h3>
         <label>School / University</label>
-        <input type="text" id="school" name="school" placeholder="University of XYZ" pattern="^[a-zA-Z\s.&'-]+$" maxlength="100"/>
+        <input type="text" id="school" name="school" placeholder="University of XYZ" title="Cannot contain only numbers"
+            maxlength="100" />
 
         <label>Degree</label>
-        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science in Computer Science" pattern="^[a-zA-Z\s.&'-]+$" maxlength="100"/>
+        <input type="text" id="degree" name="degree" placeholder="Bachelor of Science in Computer Science"
+            title="Cannot contain only numbers" maxlength="100" />
 
         <label>Year</label>
-        <input type="text" id="eduYear" name="eduYear" placeholder="2020-2024" pattern="^\d{4}(\s*-\s*\d{4})?$" maxlength="9" />
+        <input type="text" id="eduYear" name="eduYear" placeholder="2020-2024" maxlength="9" />
 
         <h3>Work Experience</h3>
         <div id="experienceContainer">
             <div class="experience-entry">
                 <label>Company</label>
-                <input type="text" id="company" name="company" placeholder="ABC Corp" maxlength="100"/>
+                <input type="text" id="company" name="company" placeholder="ABC Corp"
+                    title="Cannot contain only numbers" maxlength="100" />
 
                 <label>Position</label>
-                <input type="text" id="position" name="position" placeholder="Software Intern" maxlength="50"/>
+                <input type="text" id="position" name="position" placeholder="Software Intern"
+                    title="Cannot contain only numbers" maxlength="50" />
 
                 <label>Duration</label>
                 <input type="text" id="duration" name="duration" placeholder="2 years, 6 months" maxlength="30" />
 
                 <label>Responsibilities / Achievements</label>
-                <textarea id="achievements" name="achievements" placeholder="Describe your contributions..." maxlength="300"
-                    rows="3"></textarea>
+                <textarea id="achievements" name="achievements" placeholder="Describe your contributions..."
+                    maxlength="300" rows="3"></textarea>
             </div>
         </div>
 
@@ -76,14 +89,16 @@
         <div id="projectContainer">
             <div class="project-entry">
                 <label>Project Title</label>
-                <input type="text" name="projectTitle" placeholder="Hospital Appointment System" maxlength="50"/>
+                <input type="text" name="projectTitle" placeholder="Hospital Appointment System"
+                    title="Cannot contain only numbers" maxlength="50" />
 
                 <label>Tech Stack</label>
-                <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure" maxlength="100" />
+                <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure"
+                    title="Cannot contain only numbers" maxlength="100" />
 
                 <label>Description / Achievements</label>
-                <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..." maxlength="300"
-                    rows="3"></textarea>
+                <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..."
+                    maxlength="300" rows="3"></textarea>
             </div>
         </div>
 
@@ -95,9 +110,10 @@
 
 
         <h3>Skills & Certifications</h3>
-        <input type="text" id="skills" name="skills" value="@Model.Skills" placeholder="C#, ASP.NET, SQL" maxlength="50" />
-        <input type="text" id="certifications" name="certifications" value="@Model.Certifications" maxlength="100"
-            placeholder="Microsoft Certified: Azure Fundamentals" />
+        <input type="text" id="skills" name="skills" placeholder="C#, ASP.NET, SQL" title="Cannot contain only numbers"
+            maxlength="50" />
+        <input type="text" id="certifications" name="certifications"
+            placeholder="Microsoft Certified: Azure Fundamentals" title="Cannot contain only numbers" maxlength="100" />
 
         <button type="submit" id="downloadServerPDF" style="margin-left:10px;">Generate PDF</button>
 
@@ -107,18 +123,50 @@
 </div>
 
 <script>
-    // 🖼️ Image preview
+    // 🖼️ Profile image upload + validation + preview
     document.getElementById("profilePic").addEventListener("change", function (e) {
         const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function (event) {
-                const img = document.getElementById("previewImg");
-                img.src = event.target.result;
-                img.style.display = "block";
-            };
-            reader.readAsDataURL(file);
+        const img = document.getElementById("previewImg");
+
+        if (!file) {
+            // No file selected -> hide preview
+            img.src = "#";
+            img.style.display = "none";
+            return;
         }
+
+        // ---- Validate file type (must be an image) ----
+        const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+        if (!allowedTypes.includes(file.type)) {
+            Swal.fire({
+                icon: "error",
+                title: "Invalid File",
+                text: "Please upload an image file (JPG, PNG, WebP)."
+            });
+            this.value = "";
+            return;
+        }
+
+        // ---- Validate size (2MB max) ----
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire({
+                icon: "error",
+                title: "File Too Large",
+                text: "Maximum file size is 2MB."
+            });
+            this.value = "";
+            return;
+        }
+
+        // ---- Show preview ----
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            const img = document.getElementById("previewImg");
+            img.src = event.target.result;
+            img.style.display = "block";
+        };
+
+        reader.readAsDataURL(file);
     });
 
     // ➕ Add new experience entry
@@ -131,17 +179,18 @@
         newEntry.innerHTML = `
         <hr style="margin:10px 0;">
         <button type="button" class="removeExperienceBtn" style="margin-bottom:10px;">Remove</button>
+
         <label>Company</label>
-        <input type="text" name="company" placeholder="Company name" />
+        <input type="text" name="company" placeholder="ABC Corp" maxlength="100"  title="Cannot contain only numbers" />
 
         <label>Position</label>
-        <input type="text" name="position" placeholder="Job Title" />
+        <input type="text" name="position" placeholder="Software Intern" maxlength="50"  title="Cannot contain only numbers" />
 
         <label>Duration</label>
-        <input type="text" name="duration" placeholder="1 year, 3 months" />
+        <input type="text" name="duration" placeholder="2 years, 6 months" maxlength="30" />
 
         <label>Responsibilities / Achievements</label>
-        <textarea name="achievements" placeholder="Describe your contributions..." rows="3"></textarea>
+        <textarea name="achievements" placeholder="Describe your contributions..." maxlength="300" rows="3"></textarea>
     `;
         container.appendChild(newEntry);
 
@@ -162,13 +211,13 @@
         <button type="button" class="removeProjectBtn" style="margin-bottom:10px;">Remove</button>
 
         <label>Project Title</label>
-        <input type="text" name="projectTitle" placeholder="Project Name" />
+        <input type="text" name="projectTitle" placeholder="Hospital Appointment System" maxlength="50"  title="Cannot contain only numbers" />
 
         <label>Tech Stack</label>
-        <input type="text" name="projectTech" placeholder="Tools / Languages Used" />
+        <input type="text" name="projectTech" placeholder="C#, ASP.NET, SQL, Azure" maxlength="100" title="Cannot contain only numbers" />
 
         <label>Description / Achievements</label>
-        <textarea name="projectDesc" placeholder="Describe what you built..." rows="3"></textarea>
+        <textarea name="projectDesc" placeholder="Built a full-stack appointment booking system..." maxlength="300" rows="3"></textarea>
     `;
 
         container.appendChild(newEntry);
@@ -227,13 +276,49 @@
         });
 
         document.getElementById("projects").value = projects.join("\n\n");
+        const fileInput = document.getElementById("profilePic");
+        const img = document.getElementById("previewImg");
+        const removeBtn = document.getElementById("removeProfilePicBtn");
+
+        fileInput.addEventListener("change", function (e) {
+            const file = e.target.files[0];
+            if (!file) {
+                // No file selected, hide preview & button
+                img.style.display = "none";
+                removeBtn.style.display = "none";
+                return;
+            }
+
+            // Validate type and size (keep your existing code here)
+            const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+            if (!allowedTypes.includes(file.type) || file.size > 2 * 1024 * 1024) {
+                Swal.fire({
+                    icon: "error",
+                    title: "Invalid file",
+                    text: "File must be JPG, PNG, or WebP and ≤ 2MB"
+                });
+                fileInput.value = "";
+                img.style.display = "none";
+                removeBtn.style.display = "none";
+                return;
+            }
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                img.src = event.target.result;
+                img.style.display = "block";
+                removeBtn.style.display = "block"; // show X button
+            };
+            reader.readAsDataURL(file);
+        });
+
+        removeBtn.addEventListener("click", function () {
+            fileInput.value = ""; // clear selection
+            img.src = "#";
+            img.style.display = "none";
+            removeBtn.style.display = "none";
+        });
+
     });
-    document.getElementById("eduYear").addEventListener("input", function() {
-    const regex = /^\d{4}(\s*-\s*\d{4})?$/;
-    if (!regex.test(this.value)) {
-        this.setCustomValidity("Enter a valid year or range (e.g., 2020 or 2020-2024)");
-    } else {
-        this.setCustomValidity("");
-    }
-});
 </script>

@@ -18,7 +18,7 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string? Education { get; set; }
         public string? WorkExperience { get; set; }
         public string? TargetIndustry { get; set; }
-
+        public List<string> JobCategories { get; set; } = new List<string>();
         public IFormFile? ProfileImage { get; set; }
         public string? ProfilePicturePath { get; set; }
         public bool notif_inapp { get; set; }

@@ -7,6 +7,11 @@
 
 <link rel="stylesheet" href="~/css/dashboard.css" />
 
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
 <section class="my-applications-section">
     <h1 class="page-title">My Applications</h1>
 
@@ -26,27 +31,42 @@
         </div>
     </section>
 
-    <!-- Recent Activity -->
-    <section class="recent-activity mb-4">
-        <h2>Recent Activity</h2>
-        <ul>
+<!-- Recent Activity -->
+<section class="recent-activity mb-4">
+    <h2>Recent Activity</h2>
+    <ul>
+        @if (Model.Dashboard.RecentActivities.Any())
+        {
             @foreach (var activity in Model.Dashboard.RecentActivities)
             {
                 <li>@activity.Message <span>@activity.Date.ToString("yyyy-MM-dd HH:mm")</span></li>
             }
-        </ul>
-    </section>
+        }
+        else
+        {
+            <li>No recent activities.</li>
+        }
+    </ul>
+</section>
 
-    <!-- Recent Notifications -->
-    <section class="recent-notifications mb-4">
-        <h2>Recent Notifications</h2>
-        <ul>
+<!-- Recent Notifications -->
+<section class="recent-notifications mb-4">
+    <h2>Recent Notifications</h2>
+    <ul>
+        @if (Model.Dashboard.RecentNotifications.Any())
+        {
             @foreach (var notif in Model.Dashboard.RecentNotifications)
             {
                 <li>@notif.Message <span>@notif.Date.ToString("yyyy-MM-dd HH:mm")</span></li>
             }
-        </ul>
-    </section>
+        }
+        else
+        {
+            <li>No notifications yet.</li>
+        }
+    </ul>
+</section>
+
 
 <form method="get" asp-controller="Dashboard" asp-action="Applications"
       class="d-flex align-items-center gap-3 mb-3">
