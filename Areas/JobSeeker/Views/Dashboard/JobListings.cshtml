@@ -107,7 +107,7 @@
                         <h3 class="fw-bold mb-1">@job.job_title</h3>
                         <p class="company mb-1">
                             @job.company.company_name
-                            <span class="industry text-muted">· @job.company.company_industry</span>
+                            <span class="industry text-muted">· @job.job_category</span>
                         </p>
                         <p class="details text-muted mb-2">
                             @job.company.company_location · @job.date_posted.ToString("MMM dd, yyyy") · @job.job_status

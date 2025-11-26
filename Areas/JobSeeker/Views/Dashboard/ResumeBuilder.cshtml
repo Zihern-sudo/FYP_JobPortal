@@ -61,6 +61,7 @@
 
         <label>Year</label>
         <input type="text" id="eduYear" name="eduYear" placeholder="2020-2024" maxlength="9" />
+        <div id="eduError" style="color:red; margin-top:5px;"></div>
 
         <h3>Work Experience</h3>
         <div id="experienceContainer">
@@ -230,10 +231,39 @@
 
 
     // 🧩 Combine for submission (for PDF generation)
-    document.getElementById("resumeForm").addEventListener("submit", function () {
+    document.getElementById("resumeForm").addEventListener("submit", function (e) {
         const school = document.getElementById("school").value.trim();
         const degree = document.getElementById("degree").value.trim();
         const eduYear = document.getElementById("eduYear").value.trim();
+        const errorDiv = document.getElementById("eduError");
+        errorDiv.textContent = "";
+
+        if (eduYear) {
+            const match = eduYear.match(/^(\d{4})(-(\d{4}))?$/);
+            if (match) {
+                const startYear = parseInt(match[1]);
+                if (startYear > new Date().getFullYear()) {
+                    errorDiv.textContent = `Start year cannot be later than ${new Date().getFullYear()}.`;
+                    e.preventDefault(); // stop form submission
+                    errorDiv.scrollIntoView({ behavior: "smooth", block: "center" });
+                    return;
+                }
+                if (match[3]) {
+                    const endYear = parseInt(match[3]);
+                    if (endYear > new Date().getFullYear()) {
+                        errorDiv.textContent = `End year cannot be later than ${new Date().getFullYear()}.`;
+                        e.preventDefault();
+                        errorDiv.scrollIntoView({ behavior: "smooth", block: "center" });
+                        return;
+                    }
+                }
+            } else {
+                errorDiv.textContent = "Invalid format. Use YYYY or YYYY-YYYY.";
+                e.preventDefault();
+                errorDiv.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+        }
 
         // 🎓 Education
         if (degree || school || eduYear) {

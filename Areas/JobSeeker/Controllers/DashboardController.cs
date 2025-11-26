@@ -680,16 +680,40 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // CASE 2: New file uploaded (always rename)
             if (model.ResumeFile != null && model.ResumeFile.Length > 0)
             {
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "user_resumes");
+                // 🔐 Validate file extension
+                var allowedExtensions = new[] { ".pdf" };
+                string extension = Path.GetExtension(model.ResumeFile.FileName).ToLower();
+
+                if (!allowedExtensions.Contains(extension))
+                {
+                    TempData["ResumeError"] = "Only PDF files are allowed.";
+
+                    model.ExistingResumes = await _db.resumes
+                        .Where(r => r.user_id == userId)
+                        .ToListAsync();
+
+                    return View("Apply", model);
+                }
+
+                // 🔐 Validate file size (optional but recommended)
+                if (model.ResumeFile.Length > 5 * 1024 * 1024) // 5 MB
+                {
+                    TempData["ResumeError"] = "File too large. Max 5MB allowed.";
+
+                    model.ExistingResumes = await _db.resumes
+                        .Where(r => r.user_id == userId)
+                        .ToListAsync();
+
+                    return View("Apply", model);
+                }
+
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(),
+                                              "wwwroot", "uploads", "user_resumes");
                 Directory.CreateDirectory(uploadsDir);
 
-                // Get the user info
                 var user = await _db.users.FindAsync(userId);
                 string firstNameSafe = string.Concat(user.first_name.Where(c => !char.IsWhiteSpace(c)));
 
-                string extension = Path.GetExtension(model.ResumeFile.FileName);
-
-                // New filename: UserID_FirstName_Date
                 string safeFileName = $"{firstNameSafe}_{DateTime.Now:yyyyMMddHHmmss}{extension}";
 
                 string fullPath = Path.Combine(uploadsDir, safeFileName);
@@ -700,7 +724,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
                 relativePath = $"/uploads/user_resumes/{safeFileName}";
 
-                // Save to resumes table
+                // Save to DB
                 var newResume = new resume
                 {
                     user_id = userId,
@@ -710,6 +734,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 _db.resumes.Add(newResume);
                 await _db.SaveChangesAsync();
             }
+
 
             // Create job application
             var application = new job_application
@@ -926,13 +951,15 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (!string.IsNullOrEmpty(targetIndustry))
             {
                 jobsQuery = jobsQuery
-                    .OrderByDescending(j => j.company.company_industry == targetIndustry) // true comes first
-                    .ThenByDescending(j => j.date_posted); // then sort by date posted
+                    .OrderByDescending(j =>
+                        j.job_category.Trim().ToLower().Equals(targetIndustry.Trim().ToLower()))
+                    .ThenByDescending(j => j.date_posted);
             }
             else
             {
                 jobsQuery = jobsQuery.OrderByDescending(j => j.date_posted);
             }
+
 
 
             // 🧭 Filter by salary range
@@ -967,10 +994,10 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             // 📄 Pagination
             int totalJobs = await jobsQuery.CountAsync();
             var jobList = await jobsQuery
-                .OrderByDescending(j => j.date_posted)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
+
 
             // ✅ Get applied job IDs for current user
             var appliedJobIds = new List<int>();
@@ -1383,6 +1410,35 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
 
             int userId = int.Parse(userIdStr);
+            if (!string.IsNullOrWhiteSpace(education))
+            {
+                // Look for year(s) inside parentheses, e.g., "(2020-2024)"
+                var match = Regex.Match(education, @"\((\d{4})(-(\d{4}))?\)");
+                if (match.Success)
+                {
+                    int startYear = int.Parse(match.Groups[1].Value);
+                    if (startYear > DateTime.Now.Year)
+                    {
+                        TempData["Error"] = $"Education year cannot be later than {DateTime.Now.Year}.";
+                        return RedirectToAction("ResumeBuilder");
+                    }
+
+                    if (match.Groups[3].Success)
+                    {
+                        int endYear = int.Parse(match.Groups[3].Value);
+                        if (endYear > DateTime.Now.Year)
+                        {
+                            TempData["Error"] = $"Education year cannot be later than {DateTime.Now.Year}.";
+                            return RedirectToAction("ResumeBuilder");
+                        }
+                    }
+                }
+                else
+                {
+                    TempData["Error"] = "Invalid education year format. Use YYYY or YYYY-YYYY.";
+                    return RedirectToAction("ResumeBuilder");
+                }
+            }
 
             // Declare imageBytes first
             byte[]? imageBytes = null;
