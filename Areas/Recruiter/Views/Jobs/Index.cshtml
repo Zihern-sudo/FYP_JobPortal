@@ -113,11 +113,19 @@
                 stText = approvalRawValue;
               }
 
-              // Force "ChangesRequested" when recruiter has saved edits as Draft
+              // Corrected: Only nudge to "ChangesRequested" when a Draft is an edit to an already APPROVED job.
+              // Brand-new unsent Draft => stays "None". If (re)submitted => stays "Pending".
               if (string.Equals(j.job_status, "Draft", StringComparison.OrdinalIgnoreCase))
               {
-                stText = "ChangesRequested";
+                if (string.Equals(stText, "Approved", StringComparison.OrdinalIgnoreCase))
+                {
+                  // Previously approved, recruiter saved edits as Draft (needs re-submit)
+                  stText = "ChangesRequested";
+                }
+                // else: keep stText as "None" (brand-new unsent), "Pending" (already submitted),
+                // "Rejected" or existing "ChangesRequested" as-is.
               }
+
 
               if (string.Equals(stText, "Pending", StringComparison.OrdinalIgnoreCase))
               {

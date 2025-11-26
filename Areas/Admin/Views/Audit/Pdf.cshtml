@@ -1,6 +1,7 @@
 @* ================================
    File: Areas/Admin/Views/Audit/Pdf.cshtml
    ================================ *@
+@using JobPortal.Areas.Shared.Extensions
 @model IEnumerable<JobPortal.Areas.Admin.Models.AuditLogViewModel>
 @{
     Layout = null;
@@ -10,7 +11,6 @@
     DateTime? dateTo = ViewBag.DateTo as DateTime?;
     string actor = ViewBag.Actor as string ?? "All";
     string action = ViewBag.Action as string ?? "All";
-    string target = ViewBag.Target as string ?? "All";
     DateTime generatedAt = (ViewBag.GeneratedAt as DateTime?) ?? DateTime.UtcNow;
 
     var total = items.Count;
@@ -25,12 +25,17 @@
         return "All dates";
     }
 }
+
+@{
+    // If generatedAt is the existing UTC value
+    var generatedAtMY = MyTime.ToMalaysiaTime(generatedAt);
+}
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="utf-8" />
-    <title>Audit Log Report</title>
+    <title>Audit Log</title>
     <style>
         :root {
             --text: #1f2937;
@@ -89,7 +94,7 @@
         }
 
         .filters {
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
         }
 
         .stats {
@@ -131,10 +136,6 @@
             white-space: nowrap;
         }
 
-        .notes {
-            white-space: pre-wrap;
-        }
-
         .section {
             margin-top: 20px;
         }
@@ -158,8 +159,8 @@
 
 <body>
     <header style="margin-bottom:14px;">
-        <h1>Audit Log Report</h1>
-        <div class="small muted">Generated @generatedAt.ToString("yyyy-MM-dd HH:mm 'UTC'")</div>
+        <h1>Audit Log</h1>
+        <div class="small muted">Generated @generatedAtMY.ToString("yyyy-MM-dd HH:mm") MYT</div>
     </header>
 
     <section class="card section">
@@ -176,10 +177,6 @@
             <div>
                 <div class="tiny muted">Action</div>
                 <div>@action</div>
-            </div>
-            <div>
-                <div class="tiny muted">Target</div>
-                <div>@target</div>
             </div>
         </div>
     </section>
@@ -208,16 +205,14 @@
                 <tr>
                     <th style="width:150px">When</th>
                     <th style="width:160px">Actor</th>
-                    <th style="width:200px">Action</th>
-                    <th style="width:160px">Target</th>
-                    <th>Notes</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 @if (!items.Any())
                 {
                     <tr>
-                        <td colspan="5" class="muted">No log entries found for the selected filters.</td>
+                        <td colspan="3" class="muted">No log entries found for the selected filters.</td>
                     </tr>
                 }
                 else
@@ -228,8 +223,6 @@
                             <td class="nowrap">@row.When.ToString("yyyy-MM-dd HH:mm")</td>
                             <td>@row.Actor</td>
                             <td><span class="chip">@row.Action</span></td>
-                            <td>@(string.IsNullOrWhiteSpace(row.Target) ? "—" : row.Target)</td>
-                            <td class="notes">@row.Notes</td>
                         </tr>
                     }
                 }

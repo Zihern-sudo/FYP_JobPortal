@@ -1,4 +1,3 @@
-
 @model JobPortal.Areas.Admin.Models.CompanyPreviewViewModel
 @{
     ViewData["Title"] = "Company Preview";
@@ -10,7 +9,7 @@
         _ => "badge text-bg-secondary"
     };
 
-    // --- NEW: Resolve photo from the model (works with common property names) ---
+    // --- Resolve photo from the model (works with common property names) ---
     string? companyPhotoUrl = null;
     string? TryGetPhoto(object src)
     {
@@ -36,8 +35,12 @@
     }
     companyPhotoUrl = TryGetPhoto(Model);
 
-    // --- ONE-LINER ADD: also accept controller-provided ViewBag.CompanyPhotoUrl ---
+    // also accept controller-provided ViewBag.CompanyPhotoUrl
     if (string.IsNullOrWhiteSpace(companyPhotoUrl)) { companyPhotoUrl = ViewBag.CompanyPhotoUrl as string; }
+
+    // NEW: draft preview flags from controller
+    bool usingDraft = (ViewBag.UsingDraft as bool?) ?? false;
+    DateTime? draftSavedAt = ViewBag.DraftSavedAt as DateTime?;
 }
 
 <a asp-area="Admin" asp-controller="Companies" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
@@ -47,20 +50,35 @@
 <div class="row g-3">
     <div class="col-lg-8">
         <div class="card shadow-sm">
-            <div class="card-header bg-white fw-semibold">Company Profile</div>
+            <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <span>Company Profile</span>
+
+                @* NEW: Draft preview hint *@
+                @if (usingDraft)
+                {
+                    <span class="badge text-bg-info">
+                        Showing <strong>draft</strong> submitted
+                        @if (draftSavedAt.HasValue)
+                        {
+                            @:on @draftSavedAt.Value.ToString("yyyy-MM-dd HH:mm") MYT
+                        }
+                    </span>
+                }
+            </div>
             <div class="card-body">
-                @* NEW: Show company photo/banner if available *@
+                @* Show company photo/banner if available *@
                 @if (!string.IsNullOrWhiteSpace(companyPhotoUrl))
                 {
                     <div class="mb-3">
                         <img src="@companyPhotoUrl" alt="Company photo"
-                             style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
+                            style="max-width:260px;height:auto;border-radius:10px;border:1px solid #eee;" />
                     </div>
                 }
 
                 <div class="mb-2 d-flex align-items-center gap-2">
                     <strong class="fs-5">@Model.Name</strong>
-                    <span class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status : "Unverified")</span>
+                    <span class="@Chip(Model.Status)">@(!string.IsNullOrWhiteSpace(Model.Status) ? Model.Status :
+                                                "Unverified")</span>
                 </div>
 
                 <div class="text-muted small mb-1">Industry: @Model.Industry</div>
@@ -108,7 +126,7 @@
                                     <td>@j.Date?.ToString("g")</td>
                                     <td class="text-end">
                                         <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Approvals"
-                                           asp-action="Preview" asp-route-id="@j.Id">Open Job</a>
+                                            asp-action="Preview" asp-route-id="@j.Id">Open Job</a>
                                     </td>
                                 </tr>
                             }
@@ -120,7 +138,7 @@
     </div>
 
     <div class="col-lg-4">
-        @* ================== NEW: AI Company Profile Check ================== *@
+        @* ================== AI Company Profile Check ================== *@
         <div class="card shadow-sm mb-3">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -133,14 +151,6 @@
                             Re-check
                         </button>
                     </div>
-                </div>
-
-                @* Legend for severities *@
-                <div class="mt-2 small text-muted d-flex align-items-center gap-2 flex-wrap">
-                    <span class="me-1">Legend:</span>
-                    <span class="badge rounded-pill text-bg-secondary">Advice</span>
-                    <span class="badge rounded-pill text-bg-warning">Warning</span>
-                    <span class="badge rounded-pill text-bg-danger">Violation</span>
                 </div>
 
                 <div id="aiCompanyBox" class="mt-2">
@@ -179,7 +189,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
                     <textarea name="comments" id="adminComments" class="form-control" rows="3"
-                              placeholder="Reason (optional)"></textarea>
+                        placeholder="Reason (optional)"></textarea>
                     <button class="btn btn-outline-danger" type="submit">Reject</button>
                 </form>
             </div>
@@ -190,8 +200,13 @@
 @section Scripts {
     <style>
         /* tiny breathing room so the list doesn’t feel cramped */
-        #aiCompanyList { padding-left: 1rem; }
-        #aiCompanyList > li { margin-bottom: .35rem; }
+        #aiCompanyList {
+            padding-left: 1rem;
+        }
+
+        #aiCompanyList>li {
+            margin-bottom: .35rem;
+        }
     </style>
     <script>
         (function () {
@@ -233,7 +248,6 @@
                 const items = Array.isArray(r.items) ? r.items : [];
                 const showGreen = !!r.pass && onlyAdviceOrEmpty(items);
 
-                // success hint
                 successNote.classList.toggle('d-none', !showGreen);
 
                 summary.textContent = r.summary || (r.pass ? 'Profile looks professional.' : 'Potential issues detected.');
@@ -243,9 +257,8 @@
                     const sev = (it.severity || 'Advice').trim();
                     const li = document.createElement('li');
                     li.innerHTML =
-                        `<span class="badge rounded-pill me-2 ${
-                            sev === 'Violation' ? 'text-bg-danger'
-                            : (sev === 'Warning' ? 'text-bg-warning' : 'text-bg-secondary')
+                        `<span class="badge rounded-pill me-2 ${sev === 'Violation' ? 'text-bg-danger' :
+                            (sev === 'Warning' ? 'text-bg-warning' : 'text-bg-secondary')
                         }">${sev}</span>${(it.issue || '').trim()}`;
                     list.appendChild(li);
                 });
@@ -280,9 +293,10 @@
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                            'RequestVerificationToken': token
+                            'RequestVerificationToken': token,
+                            'Cache-Control': 'no-cache'
                         },
-                        body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=1' : '')
+                        body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=true' : '')
                     });
                     const data = await resp.json();
                     render(data);
@@ -327,4 +341,3 @@
         })();
     </script>
 }
-

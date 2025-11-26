@@ -1,3 +1,4 @@
+// File: Areas/Shared/AI/ScoringService.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -146,14 +147,20 @@ namespace JobPortal.Areas.Shared.AI
         private static string StripCodeFence(string s)
         {
             if (string.IsNullOrEmpty(s)) return s;
-            s = s.Trim();
-            if (s.StartsWith("```"))
-            {
-                var idx = s.IndexOf('\n');
-                if (idx >= 0) s = s[(idx + 1)..];
-                if (s.EndsWith("```")) s = s[..^3];
-            }
+            s = TrimFence(s);
             return s;
+
+            static string TrimFence(string s)
+            {
+                s = s.Trim();
+                if (s.StartsWith("```"))
+                {
+                    var idx = s.IndexOf('\n');
+                    if (idx >= 0) s = s[(idx + 1)..];
+                    if (s.EndsWith("```")) s = s[..^3];
+                }
+                return s;
+            }
         }
 
         private static double Clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);

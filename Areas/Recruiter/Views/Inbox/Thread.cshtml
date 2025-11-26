@@ -73,12 +73,19 @@
       placeholder="@(isBlocked ? "Chat is blocked by admin." : "Type a message…")" @(isBlocked ? "readonly disabled" :
       "")>@(isBlocked ? "" : draft)</textarea>
   </div>
-  <div class="card-footer d-flex justify-content-end gap-2">
+  <div class="card-footer d-flex justify-content-end align-items-center gap-2">
     <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveTplModal">
       Save as Template
     </button>
-    <button class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" : "")>Send</button>
+
+    <span id="sendStatus" class="small text-muted d-none me-2">Sending…</span> <!-- ADD: status -->
+
+    <button id="sendBtn" class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" : "")>
+      <span class="js-send-text">Send</span>
+      <span class="spinner-border spinner-border-sm ms-1 d-none js-send-spin" role="status" aria-hidden="true"></span>
+    </button> <!-- ADD: spinner inside button -->
   </div>
+
 </form>
 
 <!-- (modal markup unchanged) -->
@@ -91,6 +98,11 @@
       const fields = document.getElementById('token-fields');
       const sendForm = document.getElementById('sendForm');
       const aiWarn = document.getElementById('aiWarn');
+      const sendBtn = document.getElementById('sendBtn');            // ADD
+      const sendSpin = sendBtn ? sendBtn.querySelector('.js-send-spin') : null; // ADD
+      const sendTxt = sendBtn ? sendBtn.querySelector('.js-send-text') : null;  // ADD
+      const sendStatus = document.getElementById('sendStatus');      // ADD
+
 
       const ctx = {
         FirstName: '@otherFirst',
@@ -146,9 +158,9 @@
           if (tok.toLowerCase() === 'date' || tok.toLowerCase() === 'duedate') inputType = 'date';
           else if (tok.toLowerCase() === 'time') inputType = 'time';
           col.innerHTML = `
-                <label class="form-label mb-0 small">${tok}</label>
-                <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
-              `;
+                        <label class="form-label mb-0 small">${tok}</label>
+                        <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
+                      `;
           fields.appendChild(col);
         });
       }
@@ -178,7 +190,6 @@
         return await resp.json();
       }
 
-      // Intercept send
       sendForm.addEventListener('submit', async function (e) {
         if (@(isBlocked ? "true" : "false")) return;
         e.preventDefault();
@@ -194,20 +205,92 @@
           return;
         }
 
+        // UI: start loading
+        if (sendBtn) sendBtn.disabled = true;
+        if (sendSpin) sendSpin.classList.remove('d-none');
+        if (sendTxt) sendTxt.textContent = 'Sending';
+        if (sendStatus) {
+          sendStatus.classList.remove('d-none', 'text-success');
+          sendStatus.classList.add('text-muted');
+          sendStatus.textContent = 'Checking…';
+        }
+
+        // 1) AI moderation
         try {
           const result = await moderateText();
           if (result && result.allowed === false) {
             const cat = result.category ? ` <span class="badge bg-warning text-dark ms-2">Violation: ${result.category}</span>` : '';
             aiWarn.innerHTML = `<strong>Message blocked by policy:</strong> ${result.reason || 'Not allowed.'}${cat}`;
             aiWarn.classList.remove('d-none');
-            composer.focus();
-            return; // block send
-          }
-        } catch { /* fail open */ }
 
-        sendForm.removeEventListener('submit', arguments.callee);
-        sendForm.submit();
+            // reset UI
+            if (sendSpin) sendSpin.classList.add('d-none');
+            if (sendTxt) sendTxt.textContent = 'Send';
+            if (sendBtn) sendBtn.disabled = false;
+            if (sendStatus) {
+              sendStatus.textContent = 'Blocked';
+              sendStatus.classList.remove('text-muted');
+              sendStatus.classList.add('text-danger');
+              setTimeout(() => sendStatus.classList.add('d-none'), 2000);
+            }
+            composer.focus();
+            return;
+          }
+        } catch { /* fail-open */ }
+
+        if (sendStatus) sendStatus.textContent = 'Sending…';
+
+        // 2) Send via AJAX (stay on page)
+        try {
+          const formData = new FormData(sendForm); // includes __RequestVerificationToken
+          const body = new URLSearchParams(formData);
+
+          const resp = await fetch('@Url.Action("Send", "Inbox", new { area = "Recruiter" })', {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest' // ask server to JSON-return
+            },
+            body
+          });
+
+          let ok = false;
+          try {
+            const data = await resp.json();
+            ok = !!data.ok;
+          } catch {
+            ok = resp.ok; // treat 200 non-JSON as success fallback
+          }
+
+          if (ok) {
+            if (sendStatus) {
+              sendStatus.textContent = 'Delivered';
+              sendStatus.classList.remove('text-muted');
+              sendStatus.classList.add('text-success');
+            }
+            // Show delivered briefly then reload so the new message appears
+            setTimeout(() => { window.location.reload(); }, 150);
+          } else {
+
+            if (sendStatus) {
+              sendStatus.textContent = 'Failed to send';
+              sendStatus.classList.remove('text-muted');
+              sendStatus.classList.add('text-danger');
+            }
+          }
+        } catch {
+          if (sendStatus) {
+            sendStatus.textContent = 'Failed to send';
+            sendStatus.classList.remove('text-muted');
+            sendStatus.classList.add('text-danger');
+          }
+        } finally {
+          if (sendSpin) sendSpin.classList.add('d-none');
+          if (sendTxt) sendTxt.textContent = 'Send';
+          if (sendBtn) sendBtn.disabled = false;
+          if (sendStatus) setTimeout(() => sendStatus.classList.add('d-none'), 1800);
+        }
       });
+
 
       function init() {
         ensureFriendlyDefaults();

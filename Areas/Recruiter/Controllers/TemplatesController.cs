@@ -167,7 +167,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (row == null) return NotFound();
 
             row.template_status = "Active";
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
             await _db.SaveChangesAsync();
 
             TempData["Message"] = "Template restored.";
@@ -241,8 +241,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 template_subject = string.IsNullOrWhiteSpace(vm.Subject) ? null : vm.Subject!.Trim(),
                 template_body = vm.Body ?? "",
                 template_status = vm.Status ?? "Active",
-                date_created = DateTime.UtcNow,
-                date_updated = DateTime.UtcNow
+                date_created = MyTime.NowMalaysia(),
+                date_updated = MyTime.NowMalaysia()
             };
 
             _db.templates.Add(row);
@@ -295,7 +295,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             row.template_subject = string.IsNullOrWhiteSpace(vm.Subject) ? null : vm.Subject!.Trim();
             row.template_body = vm.Body ?? "";
             row.template_status = vm.Status ?? "Active";
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
 
             await _db.SaveChangesAsync();
 
@@ -314,7 +314,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (row == null) return NotFound();
 
             row.template_status = "Archived";
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
 
             await _db.SaveChangesAsync();
 
@@ -341,8 +341,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 template_subject = string.IsNullOrWhiteSpace(subject) ? null : subject!.Trim(),
                 template_body = body,
                 template_status = "Active",
-                date_created = DateTime.UtcNow,
-                date_updated = DateTime.UtcNow
+                date_created = MyTime.NowMalaysia(),
+                date_updated = MyTime.NowMalaysia()
             };
 
             _db.templates.Add(row);

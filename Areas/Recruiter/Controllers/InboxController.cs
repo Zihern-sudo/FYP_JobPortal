@@ -18,6 +18,9 @@ using JobPortal.Areas.Shared.Models;          // DbContext + entities
 using JobPortal.Areas.Recruiter.Models;       // VMs
 using JobPortal.Areas.Shared.Extensions;      // TryGetUserId extension
 using JobPortal.Areas.Shared.Options;         // OpenAIOptions (already registered)
+using Microsoft.Extensions.Logging;           // ILogger<T> (NEW)
+using JobPortal.Services;                     // INotificationService (NEW)
+using JobPortal.Areas.Shared.Models.Extensions; // TryNotifyAsync() (NEW)
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -33,12 +36,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private readonly IHttpClientFactory _httpFactory;
         private readonly IOptions<OpenAIOptions> _openAi;
 
+        // NEW: notifications + logging
+        private readonly INotificationService _notif;
+        private readonly ILogger<InboxController> _logger;
+
         // OLD ctor kept; wire new DI
-        public InboxController(AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi)
+        public InboxController(AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi,
+                               INotificationService notif, ILogger<InboxController> logger)
         {
             _db = db;
             _httpFactory = httpFactory;
             _openAi = openAi;
+            _notif = notif;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -231,6 +241,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (string.IsNullOrWhiteSpace(text))
             {
                 TempData["Message"] = "Message is empty.";
+                // If AJAX request, return JSON; otherwise do normal redirect
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    return Json(new { ok = true });
+
                 return RedirectToAction(nameof(Thread), new { id });
             }
 
@@ -317,7 +331,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 }
             }
 
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
 
             var msg = new message
             {
@@ -358,8 +372,126 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             await _db.SaveChangesAsync();
 
+            // NEW: notify candidate about the new message (non-blocking)
+            var preview = processed.Length > 140 ? processed.Substring(0, 140) + "…" : processed;
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: otherId,
+                    title: "New message from recruiter",
+                    message: preview,
+                    type: "Message"
+                )
+            );
+
             return RedirectToAction(nameof(Thread), new { id });
         }
+
+
+
+
+
+        // === NEW: Start a new (or reuse existing) conversation by application ===
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartFromApplication([FromForm] NewConversationPostVM vm)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            if (vm is null || vm.ApplicationId <= 0) return BadRequest();
+
+            // Load application + assert recruiter owns the job
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == vm.ApplicationId);
+
+            if (app == null) return NotFound();
+
+            var job = app.job_listing;
+            if (job == null || job.user_id != recruiterId)
+            {
+                // Why: recruiter must own the job to chat the applicant
+                return Forbid();
+            }
+
+            var candidateId = app.user_id;
+
+            // Try find existing thread for this job & candidate
+            var existing = await _db.conversations
+                .Where(c => c.job_listing_id == job.job_listing_id && c.candidate_id == candidateId)
+                .OrderByDescending(c => c.conversation_id)
+                .FirstOrDefaultAsync();
+
+            if (existing != null)
+            {
+                var url = Url.Action(nameof(Thread), new { id = existing.conversation_id });
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    return Json(new { ok = true, url });
+                return Redirect(url!);
+            }
+
+
+            // Create scaffold conversation
+            var candidate = await _db.users
+                .Where(u => u.user_id == candidateId)
+                .Select(u => new { u.first_name, u.last_name })
+                .FirstOrDefaultAsync();
+
+            var now = MyTime.NowMalaysia();
+
+            var conv = new conversation
+            {
+                job_listing_id = job.job_listing_id,
+                recruiter_id = recruiterId,              // set recruiter to owner
+                candidate_id = candidateId,
+                job_title = job.job_title,
+                candidate_name = candidate != null ? $"{candidate.first_name} {candidate.last_name}".Trim() : null,
+                created_at = now,
+                last_message_at = null,
+                last_snippet = null,
+                unread_for_candidate = 0,
+                unread_for_recruiter = 0,
+                is_blocked = false
+            };
+
+            _db.conversations.Add(conv);
+            await _db.SaveChangesAsync();
+
+            var createdUrl = Url.Action(nameof(Thread), new { id = conv.conversation_id });
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                return Json(new { ok = true, url = createdUrl });
+            return Redirect(createdUrl!);
+        }
+
+
+        // === NEW: check if a thread already exists for this application (JSON only) ===
+        [HttpGet]
+        public async Task<IActionResult> ExistsForApplication(int applicationId)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == applicationId);
+
+            if (app == null || app.job_listing.user_id != recruiterId)
+                return Json(new { exists = false });
+
+            var existing = await _db.conversations
+                .Where(c => c.job_listing_id == app.job_listing_id && c.candidate_id == app.user_id)
+                .OrderByDescending(c => c.conversation_id)
+                .FirstOrDefaultAsync();
+
+            if (existing == null) return Json(new { exists = false });
+
+            var url = Url.Action(nameof(Thread), new { id = existing.conversation_id });
+            return Json(new { exists = true, url });
+        }
+
+
+
+
+
+
+
         // Areas/Recruiter/Controllers/InboxController.cs
         // === Client-side AI message monitoring endpoint (AI-only + robust JSON parse, fail-open) ===
         [HttpPost]

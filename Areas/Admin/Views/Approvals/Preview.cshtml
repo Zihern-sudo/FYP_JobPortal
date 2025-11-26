@@ -196,6 +196,11 @@
         badge.textContent = pass ? 'Passed' : 'Needs attention';
       }
 
+      function setButtons(disabled) {
+        if (btnRecheck) btnRecheck.disabled = disabled;
+        if (btnCopyIssues) btnCopyIssues.disabled = disabled;
+      }
+
       function render(result) {
         if (!result) return;
         lastAi = result;
@@ -227,6 +232,7 @@
       }
 
       function showChecking() {
+        setButtons(true);
         badge.className = 'badge text-bg-secondary';
         badge.textContent = 'Checking…';
         summary.textContent = 'Running AI check…';
@@ -243,9 +249,10 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-              'RequestVerificationToken': token
+              'RequestVerificationToken': token,
+              'Cache-Control': 'no-cache'
             },
-            body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=1' : '')
+            body: 'id=' + encodeURIComponent(@Model.Id) + (force ? '&force=true' : '')
           });
 
           if (!resp.ok) {
@@ -271,6 +278,8 @@
           li.textContent = 'Please try again.';
           list.appendChild(li);
           audit.textContent = 'Check failed';
+        } finally {
+          setButtons(false);
         }
       }
 

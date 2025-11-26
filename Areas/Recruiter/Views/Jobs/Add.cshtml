@@ -15,7 +15,7 @@
     &leftarrow; Back to Jobs
 </a>
 
-<form asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post" novalidate>
+<form id="addForm" asp-area="Recruiter" asp-controller="Jobs" asp-action="Add" method="post" novalidate>
     @Html.AntiForgeryToken()
 
     @* Show model-level errors (e.g., from IValidatableObject) *@
@@ -87,15 +87,46 @@
                 <span asp-validation-for="work_mode" class="text-danger"></span>
             </div>
 
-            <!-- Job Category (Domain) -->
-            <div class="col-md-6">
+            <!-- Job Category (Domain) : dropdown with in-panel search -->
+            <div class="col-md-6 position-relative">
                 <label asp-for="job_category" class="form-label">Job Category</label>
-                <select asp-for="job_category" class="form-select"
+
+                <!-- Visible trigger (readonly) -->
+                <div id="jobCategoryTrigger" class="input-group">
+                    <input id="jobCategoryDisplay" type="text" class="form-control" placeholder="Select a category"
+                        readonly />
+                    <span class="input-group-text">&#9662;</span>
+                </div>
+
+
+                <!-- Dropdown panel -->
+                <div id="jobCategoryMenu" class="bg-white border rounded-2 shadow position-absolute w-100"
+                    style="display:none; z-index:1050; max-height:220px; overflow-y:auto;">
+
+                    <div class="p-2 border-bottom bg-light sticky-top">
+                        <input id="jobCategorySearch" type="text" class="form-control" placeholder="Search categories…"
+                            autocomplete="off" />
+                    </div>
+                    <div id="jobCategoryList" class="list-group" style="max-height:180px; overflow-y:auto;"></div>
+
+                </div>
+
+                <!-- Hidden bound select (kept for model binding) -->
+                <select id="job_category" asp-for="job_category" class="d-none"
                     asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.JobCategories)">
                     <option value="">-- Select Job Category --</option>
                 </select>
                 <span asp-validation-for="job_category" class="text-danger"></span>
+
+                <!-- Custom category (only when 'Other' is chosen explicitly) -->
+                <div id="otherCategoryWrap" class="mt-2" style="display:none;">
+                    <input id="otherCategory" type="text" class="form-control"
+                        placeholder="Enter custom job category" />
+                    <div class="form-text">Provide a category not in the list.</div>
+                </div>
             </div>
+
+
 
         </div>
     </div>
@@ -107,6 +138,9 @@
         <span asp-validation-for="expiry_date" class="text-danger"></span>
     </div>
 
+    @* carry current category for JS prefill on invalid postback/custom *@
+    <div id="jobCategoryData" data-current="@Model.job_category"></div>
+
     <div class="text-end">
         <button class="btn btn-success" type="submit">Create Job</button>
     </div>
@@ -114,4 +148,74 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (function categoryDropdown_Add() {
+            const form = document.getElementById('addForm');
+            const sel = document.getElementById('job_category');
+            const trigger = document.getElementById('jobCategoryTrigger');
+            const disp = document.getElementById('jobCategoryDisplay');
+            const panel = document.getElementById('jobCategoryMenu');
+            const search = document.getElementById('jobCategorySearch');
+            const list = document.getElementById('jobCategoryList');
+            const wrap = document.getElementById('otherCategoryWrap');
+            const other = document.getElementById('otherCategory');
+            if (!form || !sel || !trigger || !disp || !panel || !search || !list || !wrap || !other) return;
+
+            const options = Array.from(sel.options).map(o => o.value).filter(v => v && v.trim() !== "");
+            const isStandard = v => options.some(o => o.toLowerCase() === (v || '').trim().toLowerCase());
+
+            function openPanel() { panel.style.display = 'block'; setTimeout(() => search.focus(), 0); render(''); }
+            function closePanel() { panel.style.display = 'none'; }
+
+            function setValue(val) {
+                const exact = options.find(o => o.toLowerCase() === (val || '').trim().toLowerCase());
+                const actual = exact || (val || '').trim();
+                sel.value = actual;
+                disp.value = actual || '';
+                disp.classList.remove('is-invalid'); // clear any invalid hint
+                const showOther = exact === 'Other';
+                wrap.style.display = showOther ? 'block' : 'none';
+                if (showOther && !other.value) other.focus();
+            }
+
+            function render(filter) {
+                const q = (filter || '').trim().toLowerCase();
+                const found = options.filter(v => v.toLowerCase().includes(q));
+                const rows = [];
+                found.forEach(v => rows.push(`<button type="button" class="list-group-item list-group-item-action" data-val="${v.replace(/"/g, '&quot;')}">${v}</button>`));
+                if (q && !isStandard(filter)) {
+                    const safe = (filter || '').replace(/"/g, '&quot;');
+                    rows.unshift(`<button type="button" class="list-group-item list-group-item-action" data-val="${safe}">Use “${safe}” (custom)</button>`);
+                }
+                list.innerHTML = rows.join('') || `<div class="list-group-item text-muted">No matches</div>`;
+            }
+
+            // Events
+            trigger.addEventListener('click', () => { (panel.style.display === 'block') ? closePanel() : openPanel(); });
+            search.addEventListener('input', () => render(search.value));
+            list.addEventListener('click', e => {
+                const btn = e.target.closest('button[data-val]'); if (!btn) return;
+                setValue(btn.getAttribute('data-val') || ''); closePanel();
+            });
+            document.addEventListener('click', e => { if (!panel.contains(e.target) && !trigger.contains(e.target)) closePanel(); });
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+            // Init from model
+            (function init() { const current = (sel.value || '').trim(); if (current) setValue(current); })();
+
+            // Submit mapping + required guard (client-side)
+            form.addEventListener('submit', (ev) => {
+                if (!sel.value || !sel.value.trim()) {
+                    ev.preventDefault(); openPanel(); disp.classList.add('is-invalid'); search.focus(); return;
+                }
+                if ((sel.value || '') === 'Other') {
+                    const custom = (other.value || '').trim();
+                    if (custom) { sel.value = custom; disp.value = custom; }
+                }
+            });
+        })();
+    </script>
+
+
 }

@@ -1,3 +1,4 @@
+// File: Areas/Recruiter/Controllers/AiEvaluationController.cs
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,6 +29,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             _parser = parser;
         }
 
+        // NOTE: kept for backward compatibility (no longer used by UI)
         [HttpGet]
         public async Task<IActionResult> ParsedJson(int applicationId, CancellationToken ct)
         {
@@ -42,6 +44,52 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var json = await GetOrParseResumeJsonAsync(app, ct);
             return Content(json ?? "{}", "application/json");
+        }
+
+        // NEW: read-only Score Breakdown endpoint for Candidate Detail
+        // GET: /Recruiter/AiEvaluation/Breakdown?applicationId=123
+        [HttpGet]
+        public async Task<IActionResult> Breakdown(int applicationId, CancellationToken ct)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var app = await _db.job_applications
+                .Include(a => a.job_listing)
+                .FirstOrDefaultAsync(a => a.application_id == applicationId, ct);
+
+            if (app == null) return NotFound();
+            if (app.job_listing?.user_id != recruiterId) return Forbid();
+
+            var latestResumeId = await _db.resumes
+                .Where(r => r.user_id == app.user_id)
+                .OrderByDescending(r => r.upload_date)
+                .Select(r => (int?)r.resume_id)
+                .FirstOrDefaultAsync(ct);
+
+            if (!latestResumeId.HasValue) return Json(new { ok = false });
+
+            var eval = await _db.ai_resume_evaluations
+                .Where(e => e.resume_id == latestResumeId.Value && e.job_listing_id == app.job_listing_id)
+                .Select(e => new
+                {
+                    e.match_score,
+                    e.date_evaluated,
+                    e.explanation,
+                    e.breakdown_json
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (eval == null || string.IsNullOrWhiteSpace(eval.breakdown_json))
+                return Json(new { ok = false });
+
+            return Content(JsonSerializer.Serialize(new
+            {
+                ok = true,
+                total = eval.match_score ?? 0,
+                evaluatedAt = eval.date_evaluated,
+                explanation = eval.explanation ?? "",
+                breakdown = JsonDocument.Parse(eval.breakdown_json!).RootElement
+            }), "application/json");
         }
 
         [HttpPost]
@@ -64,6 +112,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var (jobTitle, baseReqs) = ExtractJob(app.job_listing);
             var reqs = ApplyWeights(baseReqs, weight2);
 
+            // Even though UI no longer allows editing, keep override param harmlessly
             var resumeJson = string.IsNullOrWhiteSpace(resumeJsonOverride)
                 ? await GetOrParseResumeJsonAsync(app, ct)
                 : resumeJsonOverride;
@@ -144,7 +193,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = $"[AI-Rank-{dir.ToUpper()}] {reason}",
-                created_at = DateTime.UtcNow
+                created_at = MyTime.NowMalaysia()
             };
             _db.job_seeker_notes.Add(note);
             await _db.SaveChangesAsync(ct);
@@ -194,7 +243,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (resume == null)
             {
                 app.application_status = (result.MatchScore <= 0) ? "Rejected" : "AI-Screened";
-                app.date_updated = DateTime.UtcNow;
+                app.date_updated = MyTime.NowMalaysia();
                 await _db.SaveChangesAsync(ct);
                 return;
             }
@@ -204,8 +253,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var row = await _db.ai_resume_evaluations
                 .FirstOrDefaultAsync(e => e.resume_id == resume.resume_id && e.job_listing_id == app.job_listing_id, ct);
 
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
 
+            var breakdownJson = JsonSerializer.Serialize(result.Breakdown); // store full breakdown for UI
             if (row == null)
             {
                 row = new ai_resume_evaluation
@@ -213,7 +263,10 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     resume_id = resume.resume_id,
                     job_listing_id = app.job_listing_id,
                     match_score = result.MatchScore,
-                    date_evaluated = now
+                    date_evaluated = now,
+                    // NEW
+                    breakdown_json = breakdownJson,
+                    explanation = string.IsNullOrWhiteSpace(result.Explanation) ? null : result.Explanation
                 };
                 _db.ai_resume_evaluations.Add(row);
             }
@@ -221,6 +274,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
             {
                 row.match_score = result.MatchScore;
                 row.date_evaluated = now;
+                // NEW
+                row.breakdown_json = breakdownJson;
+                row.explanation = string.IsNullOrWhiteSpace(result.Explanation) ? row.explanation : result.Explanation;
             }
 
             if (!string.IsNullOrWhiteSpace(result.Explanation))
@@ -255,14 +311,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = app.user_id,
                     job_listing_id = app.job_listing_id,
                     parsed_json = parsedJson ?? "{}",
-                    updated_at = DateTime.UtcNow
+                    updated_at = MyTime.NowMalaysia()
                 };
                 _db.ai_parsed_resumes.Add(row);
             }
             else
             {
                 row.parsed_json = parsedJson ?? "{}";
-                row.updated_at = DateTime.UtcNow;
+                row.updated_at = MyTime.NowMalaysia();
             }
         }
 
@@ -331,43 +387,37 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             var sp = storedPath.Trim();
 
-            // web-style path like "/uploads/..." or "\uploads\..."
             bool webRelative = sp.StartsWith("/") || sp.StartsWith("\\");
             bool hasDrive = sp.Length >= 2 && char.IsLetter(sp[0]) && sp[1] == ':';
 
-            // Try 1: absolute native path that already exists
-            if (!webRelative && System.IO.Path.IsPathRooted(sp) && global::System.IO.File.Exists(sp))
+            if (!webRelative && Path.IsPathRooted(sp) && global::System.IO.File.Exists(sp))
                 return sp;
 
-            // Try 2: CWD + as-is (covers "uploads/..."/"~/uploads/...")
-            var try1 = System.IO.Path.Combine(
-                System.IO.Directory.GetCurrentDirectory(),
-                sp.TrimStart(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)
-                  .Replace('/', System.IO.Path.DirectorySeparatorChar)
+            var try1 = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                sp.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                  .Replace('/', Path.DirectorySeparatorChar)
             );
             if (global::System.IO.File.Exists(try1)) return try1;
 
-            // Try 3: wwwroot + web-relative (covers "/uploads/...")
-            var try2 = System.IO.Path.Combine(
-                System.IO.Directory.GetCurrentDirectory(),
+            var try2 = Path.Combine(
+                Directory.GetCurrentDirectory(),
                 "wwwroot",
-                sp.TrimStart(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)
-                  .Replace('/', System.IO.Path.DirectorySeparatorChar)
+                sp.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                  .Replace('/', Path.DirectorySeparatorChar)
             );
             if (global::System.IO.File.Exists(try2)) return try2;
 
-            // Try 4: remove leading slash without wwwroot (Windows dev quirk)
             if (webRelative && !hasDrive)
             {
-                var try3 = System.IO.Path.Combine(
-                    System.IO.Directory.GetCurrentDirectory(),
-                    sp.TrimStart(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)
-                      .Replace('/', System.IO.Path.DirectorySeparatorChar)
+                var try3 = Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    sp.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                      .Replace('/', Path.DirectorySeparatorChar)
                 );
                 if (global::System.IO.File.Exists(try3)) return try3;
             }
 
-            // last resort: return original so you can see what failed in logs
             return sp;
         }
 

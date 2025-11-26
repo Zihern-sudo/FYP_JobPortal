@@ -15,6 +15,8 @@ using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using System.Globalization;
 using Microsoft.AspNetCore.Hosting; // inject env for logo
+using JobPortal.Areas.Shared.Extensions; // MyTime
+
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -115,7 +117,7 @@ namespace JobPortal.Areas.Admin.Controllers
         // Daily rows (honor filters)
         private IReadOnlyList<DailyReportRow> GetDailyData(ReportFilterViewModel filters)
         {
-            var to = (filters.DateTo?.Date ?? DateTime.UtcNow.Date);
+            var to = (filters.DateTo?.Date ?? MyTime.NowMalaysia());
             var from = (filters.DateFrom?.Date ?? to.AddDays(-29));
             if (from > to) (from, to) = (to, from);
 
@@ -219,7 +221,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             var sb = new StringBuilder();
             sb.AppendLine(Q("JobPortal Admin Report"));
-            sb.AppendLine($"{Q("Generated")},{Q(DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'"))}");
+            sb.AppendLine($"{Q("Generated")},{Q(MyTime.NowMalaysia().ToString("yyyy-MM-dd HH:mm "))}");
             sb.AppendLine();
 
             sb.AppendLine(Q("Filters"));
@@ -260,7 +262,7 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             var csv = Encoding.UTF8.GetBytes(sb.ToString());
-            return File(csv, "text/csv", $"JobPortal_Report_{DateTime.UtcNow:yyyyMMdd}.csv");
+            return File(csv, "text/csv", $"JobPortal_Report_{MyTime.NowMalaysia():yyyyMMdd}.csv");
         }
 
         // PDF (filtered) — table-less view; embeds logo via base64; adds insights
@@ -281,7 +283,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 StatCards = cards,
                 DailyRows = dailyRows,
                 TopCompanies = tops,
-                ReportDate = DateTime.UtcNow
+                ReportDate = MyTime.NowMalaysia()
             };
 
             // ----- Build Insights & KPIs -----
@@ -446,7 +448,7 @@ namespace JobPortal.Areas.Admin.Controllers
             converter.Header.Add(new PdfHtmlSection(
                 $"<div style='font-family:Arial; font-size:11px; width:100%'>" +
                 $"  <div style='float:left'>JobPortal — Admin Report</div>" +
-                $"  <div style='float:right'>{pdfViewModel.ReportDate:yyyy-MM-dd HH:mm} UTC</div>" +
+                $"  <div style='float:right'>{pdfViewModel.ReportDate:yyyy-MM-dd HH:mm} </div>" +
                 $"  <div style='clear:both'></div>" +
                 $"</div>", string.Empty));
 
@@ -468,7 +470,7 @@ namespace JobPortal.Areas.Admin.Controllers
             var pdfBytes = pdfDoc.Save();
             pdfDoc.Close();
 
-            return File(pdfBytes, "application/pdf", $"JobPortal_Report_{DateTime.UtcNow:yyyyMMdd}.pdf");
+            return File(pdfBytes, "application/pdf", $"JobPortal_Report_{MyTime.NowMalaysia():yyyyMMdd}.pdf");
         }
 
         private string? BuildLogoDataUrl()

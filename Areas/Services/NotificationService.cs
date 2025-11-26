@@ -1,6 +1,7 @@
 // File: Areas/Shared/Services/NotificationService.cs
 using JobPortal.Areas.Shared.Models; // AppDbContext, notification, user, company, etc.
 using Microsoft.EntityFrameworkCore;
+using JobPortal.Areas.Shared.Extensions;
 
 namespace JobPortal.Services
 {
@@ -36,7 +37,7 @@ namespace JobPortal.Services
                 notification_title = title ?? string.Empty,
                 notification_msg = message ?? string.Empty,
                 notification_type = type ?? "General",
-                notification_date_created = (createdAt ?? DateTime.UtcNow),
+                notification_date_created = (createdAt ?? MyTime.NowMalaysia()),
                 notification_read_status = false
             };
             _db.notifications.Add(n);
@@ -45,7 +46,7 @@ namespace JobPortal.Services
 
         public async Task<int> SendManyAsync(IEnumerable<int> userIds, string title, string message, string? type = null, DateTime? createdAt = null)
         {
-            var when = createdAt ?? DateTime.UtcNow;
+            var when = createdAt ?? MyTime.NowMalaysia();
             var list = userIds.Where(id => id > 0)
                               .Select(id => new notification
                               {

@@ -2,12 +2,22 @@
 @model JobPortal.Areas.Recruiter.Models.JobEditVm
 
 
-<a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
+<a id="backLink" asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
+  class="d-inline-block text-decoration-none mb-3">
   &leftarrow; Back to Jobs
 </a>
 
+
+<button id="undoSaveBtn" type="button" class="btn btn-link btn-sm align-baseline ms-2" style="display:none"
+  title="Undo the last saved changes on this page">
+  Undo last Save
+</button>
+
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">Edit Job</h2>
+
+
   <div class="d-flex gap-2">
     <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#applyTplModal"
       onclick="loadTplModal(@Model.job_listing_id, '');">
@@ -95,14 +105,39 @@
         </select>
         <span asp-validation-for="work_mode" class="text-danger"></span>
       </div>
-      <div class="mb-3">
+      <div class="mb-3 position-relative">
         <label asp-for="job_category" class="form-label">Job Category</label>
-        <select asp-for="job_category" class="form-select"
+
+        <div id="jobCategoryTrigger" class="input-group">
+          <input id="jobCategoryDisplay" type="text" class="form-control" placeholder="Select a category" readonly />
+          <span class="input-group-text">&#9662;</span>
+        </div>
+
+
+        <div id="jobCategoryMenu" class="bg-white border rounded-2 shadow position-absolute w-100"
+          style="display:none; z-index:1050; max-height:220px; overflow-y:auto;">
+
+          <div class="p-2 border-bottom bg-light sticky-top">
+            <input id="jobCategorySearch" type="text" class="form-control" placeholder="Search categories…"
+              autocomplete="off" />
+          </div>
+          <div id="jobCategoryList" class="list-group" style="max-height:180px; overflow-y:auto;"></div>
+
+        </div>
+
+        <select id="job_category" asp-for="job_category" class="d-none"
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.JobCategories)">
           <option value="">-- Select Job Category --</option>
         </select>
         <span asp-validation-for="job_category" class="text-danger"></span>
+
+        <div id="otherCategoryWrap" class="mt-2" style="display:none;">
+          <input id="otherCategory" type="text" class="form-control" placeholder="Enter custom job category" />
+          <div class="form-text">Provide a category not in the list.</div>
+        </div>
       </div>
+
+
 
     </div>
   </div>
@@ -114,22 +149,61 @@
   </div>
 </form>
 
-@* Single right-aligned toolbar: Save + Draft badge + Submit for Approval *@
-<div class="d-flex justify-content-end align-items-center gap-2">
-  <button id="btnSaveJob" type="submit" form="editForm" class="btn btn-success">Save</button>
-  <span id="draftBadge" class="badge bg-warning text-dark" style="display:none;">Draft (unsent)</span>
-  <form id="submitApprovalForm" method="post" asp-area="Recruiter" asp-controller="Jobs" asp-action="SubmitForApproval"
-    asp-antiforgery="true" class="d-inline">
-    <input type="hidden" name="id" value="@Model.job_listing_id" />
-    @{
-      var latestStatus = (string)(ViewBag.ApprovalStatus ?? "");
-      var disableSubmit = string.Equals(latestStatus, "Pending", StringComparison.OrdinalIgnoreCase);
-    }
-    <button id="btnSubmitApproval" type="submit" class="btn btn-outline-primary" @(disableSubmit ? "disabled" : null)>
-      Submit for Approval
-    </button>
-  </form>
+@* Single right-aligned toolbar WITH unified status chip *@
+@{
+  var __serverApproval = ((string)(ViewBag.ApprovalStatus ?? "None")).Trim();
+  var __uiStatus = (string)(ViewBag.UiStatus ?? "");
+  string __chipText = (__serverApproval == "None" && string.Equals(__uiStatus, "PendingApproval",
+  StringComparison.OrdinalIgnoreCase))
+  ? "Pending Approval"
+  : string.IsNullOrWhiteSpace(__serverApproval) ? "None" : __serverApproval;
+
+  string __chipClass = __chipText switch
+  {
+    "Approved" => "bg-success",
+    "Rejected" => "bg-danger",
+    "ChangesRequested" => "bg-warning text-dark",
+    "Pending" => "bg-secondary",
+    "Pending Approval" => "bg-secondary",
+    _ => "bg-light text-dark"
+  };
+  string __chipHint = __chipText switch
+  {
+    "Approved" => "Approved by admin. Job can be Open.",
+    "Rejected" => "Rejected by admin. See comments and update.",
+    "ChangesRequested" => "Admin requested changes. Edit and resubmit.",
+    "Pending" => "Submitted. Waiting for admin review.",
+    "Pending Approval" => "Review fields, then submit to admin.",
+    _ => "No approval request yet."
+  };
+}
+<div class="d-flex justify-content-between align-items-center gap-2">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <span id="statusChip" class="badge rounded-pill px-3 py-2 @__chipClass">@__chipText</span>
+    <span id="statusHint" class="text-muted small">@__chipHint</span>
+  </div>
+
+  <div class="d-flex justify-content-end align-items-center gap-2">
+    <button id="btnSaveJob" type="submit" form="editForm" class="btn btn-success" disabled>Save</button>
+    <form id="submitApprovalForm" method="post" asp-area="Recruiter" asp-controller="Jobs"
+      asp-action="SubmitForApproval" asp-antiforgery="true" class="d-inline">
+      <input type="hidden" name="id" value="@Model.job_listing_id" />
+      @{
+        var latestStatus = (string)(ViewBag.ApprovalStatus ?? "");
+        var uiStatus = (string)(ViewBag.UiStatus ?? "");
+        var enableSubmitNow = string.Equals(uiStatus, "PendingApproval", StringComparison.OrdinalIgnoreCase);
+        var disableSubmit = !enableSubmitNow && string.Equals(latestStatus, "Pending",
+        StringComparison.OrdinalIgnoreCase);
+      }
+      <button id="btnSubmitApproval" type="submit" class="btn btn-primary" @(disableSubmit ? "disabled" :
+                                                                                   (enableSubmitNow ? null : "disabled"))>
+        Submit for Approval
+      </button>
+    </form>
+  </div>
 </div>
+
+
 @* NEW: inline helper note (shown when saved as Draft / ChangesRequested) *@
 <div id="afterSaveNote" class="text-muted small mt-1" style="display:none;">
   Saved as Draft — submit for admin approval to publish.
@@ -242,9 +316,103 @@
   data-message="@TempData["Message"]" data-status="@((string)(ViewBag.ApprovalStatus ?? ""))">
 </div>
 
+@* carry current category for JS prefill when the existing value is custom *@
+<div id="jobCategoryData" data-current="@Model.job_category"></div>
+
+
 @section Scripts {
   @* enable unobtrusive client-side validation *@
   <partial name="_ValidationScriptsPartial" />
+
+  <script>
+    // ---- unified status chip helpers (chip beside Save/Submit) ----
+    function setChip(text, klass, hint) {
+      const chip = document.getElementById('statusChip');
+      const hintEl = document.getElementById('statusHint');
+      if (chip) chip.className = 'badge rounded-pill px-3 py-2 ' + (klass || 'bg-light text-dark');
+      if (chip) chip.textContent = text || 'None';
+      if (hintEl && typeof hint === 'string') hintEl.textContent = hint;
+    }
+    function mapStatusToUi(statusText) {
+      const s = (statusText || '').trim();
+      switch (s) {
+        case 'Approved': return { c: 'bg-success', h: 'Approved by admin. Job can be Open.' };
+        case 'Rejected': return { c: 'bg-danger', h: 'Rejected by admin. See comments and update.' };
+        case 'ChangesRequested': return { c: 'bg-warning text-dark', h: 'Admin requested changes. Edit and resubmit.' };
+        case 'Pending': return { c: 'bg-secondary', h: 'Submitted. Waiting for admin review.' };
+        case 'Pending Approval': return { c: 'bg-secondary', h: 'Review fields, then submit to admin.' };
+        default: return { c: 'bg-light text-dark', h: 'No approval request yet.' };
+      }
+    }
+  </script>
+
+  <script>
+    (function enforceSaveThenSubmit() {
+      const form = document.getElementById('editForm');
+      const btnSave = document.getElementById('btnSaveJob');
+      const btnSubmit = document.getElementById('btnSubmitApproval');
+      if (!form || !btnSave || !btnSubmit) return;
+
+      const dataEl = document.getElementById('js-data');
+      const latestApproval = (dataEl?.dataset.status || '').trim(); // "Pending"|"Approved"|...
+      const uiStatus = '@(ViewBag.UiStatus ?? "")';
+
+      // Initial state:
+      // - If UI PendingApproval (just created): allow Submit, keep Save disabled until change
+      // - If server Pending: disable both
+      // - Else: disable both until form becomes dirty
+      if (uiStatus === 'PendingApproval') {
+        btnSubmit.disabled = false;
+        btnSave.disabled = true;
+      } else if (latestApproval === 'Pending') {
+        btnSubmit.disabled = true;
+        btnSave.disabled = true;
+      } else {
+        btnSubmit.disabled = true;
+        btnSave.disabled = true;
+      }
+
+      // Track pristine snapshot
+      const initial = new FormData(form);
+      function isDirty() {
+        const now = new FormData(form);
+        for (const [k, v] of now.entries()) {
+          if ((initial.get(k) || '') !== (v || '')) return true;
+        }
+        return false;
+      }
+
+      // Enable Save on any change; for PendingApproval state, typing disables Submit until saved.
+      form.addEventListener('input', () => {
+        if (latestApproval === 'Pending') return; // locked while waiting admin
+        const dirty = isDirty();
+        if (uiStatus === 'PendingApproval') {
+          btnSave.disabled = !dirty;
+          btnSubmit.disabled = dirty ? true : false; // if edited -> must save first
+          return;
+        }
+        btnSave.disabled = !dirty;
+        if (dirty) btnSubmit.disabled = true;
+      });
+
+      // After Save redirect, controller sets TempData["SavedOnce"]; we mirror with sessionStorage
+      (function enableSubmitAfterSave() {
+        const savedOnce = sessionStorage.getItem('jobs_edit_saved_msg');
+        if (savedOnce && latestApproval !== 'Pending') {
+          btnSubmit.disabled = false;
+        }
+      })();
+
+      // On Submit click, lock both + set chip to Pending immediately
+      const submitForm = document.getElementById('submitApprovalForm');
+      submitForm?.addEventListener('submit', () => {
+        btnSave.disabled = true;
+        btnSubmit.disabled = true;
+        const ui = mapStatusToUi('Pending');
+        setChip('Pending', ui.c, ui.h);
+      });
+    })();
+  </script>
 
   <script>
     function showToast(msg) {
@@ -254,7 +422,10 @@
       body.textContent = msg;
       new bootstrap.Toast(el).show();
     }
+    // ... (unchanged scripts below)
+  </script>
 
+  <script>
     // Reset approval UI to ChangesRequested (66%) after a recruiter save
     function setApprovalChangesRequestedUI() {
       const statusEl = document.getElementById('approvalStatusVal');
@@ -288,11 +459,6 @@
       const clientMsg = sessionStorage.getItem(savedMsgKey) || '';
       const skipDisable = !!clientMsg; // if we just saved, don't auto-disable Submit on "Pending"
 
-      // Badge handle
-      const draftBadge = document.getElementById('draftBadge');
-      function showDraftBadge() { if (draftBadge) draftBadge.style.display = 'inline-block'; }
-      function hideDraftBadge() { if (draftBadge) draftBadge.style.display = 'none'; }
-
       // NEW: helper note toggle
       function showAfterSaveNote(show = true) {
         const el = document.getElementById('afterSaveNote');
@@ -310,13 +476,31 @@
 
       if (clientMsg) {
         showToast(clientMsg);
-        // After a successful save, show ChangesRequested, show Draft badge, focus Submit, and show helper note
-        setApprovalChangesRequestedUI();
-        showDraftBadge();
+
+        // Only force the UI to “ChangesRequested” if this job ALREADY had an approval
+        // (Approved / Rejected / ChangesRequested). For a brand-new job (UiStatus = PendingApproval)
+        // or while an approval is Pending, do NOT override the progress UI.
+        const uiStatus = '@(ViewBag.UiStatus ?? "").Trim()';
+        const currentServerStatus = (document.getElementById('approvalStatusVal')?.textContent || '').trim();
+
+        const hadRealApprovalBefore =
+          currentServerStatus === 'Approved' ||
+          currentServerStatus === 'Rejected' ||
+          currentServerStatus === 'ChangesRequested';
+
+        if (hadRealApprovalBefore) {
+          setApprovalChangesRequestedUI();
+          const ui = mapStatusToUi('ChangesRequested');
+          setChip('ChangesRequested', ui.c, ui.h);
+          const btnSubmit = document.getElementById('btnSubmitApproval');
+          if (btnSubmit) btnSubmit.disabled = false;
+        }
+
         focusSubmit();
         showAfterSaveNote(true);
         sessionStorage.removeItem(savedMsgKey);
-      } else if (serverMsg) {
+      }
+      else if (serverMsg) {
         showToast(serverMsg);
       }
 
@@ -331,13 +515,6 @@
       // NEW: show helper note if already in ChangesRequested
       if (current === 'ChangesRequested') {
         showAfterSaveNote(true);
-      }
-
-      // Show badge if not yet submitted; hide when already Pending/Approved
-      if (current === 'Pending' || current === 'Approved') {
-        hideDraftBadge();
-      } else {
-        showDraftBadge();
       }
 
       // Only disable when the Pending/Approved state originates from server (not our client reset)
@@ -355,7 +532,7 @@
           const next = (data && data.status ? String(data.status) : 'None').trim();
 
           if (next && next !== current) {
-            // Update UI
+            // Update UI (progress card)
             statusEl.textContent = next;
             const cmtEl = document.getElementById('approvalCommentsVal');
             if (cmtEl && typeof data.comments === 'string') cmtEl.textContent = data.comments ?? '';
@@ -366,13 +543,16 @@
               updEl.textContent = `Updated: ${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
             }
 
+            // Update unified chip beside buttons
+            const mapped = mapStatusToUi(next === 'None' ? 'Pending Approval' : next);
+            setChip(next === 'None' ? 'Pending Approval' : next, mapped.c, mapped.h);
+
             // For server-driven transitions, enforce disable on Pending/Approved
             if (submitBtn) submitBtn.disabled = (next === 'Pending' || next === 'Approved');
 
-            // Hide Draft badge when submitted/approved
+            // Hide helper note once submitted/approved
             if (next === 'Pending' || next === 'Approved') {
-              hideDraftBadge();
-              showAfterSaveNote(false); // hide helper note once submitted/approved
+              showAfterSaveNote(false);
             }
 
             const msg = (next === 'Approved')
@@ -391,26 +571,30 @@
       }, 8000);
     })();
 
-    // On Save click, set a message to show after redirect and keep Draft
+    // On Save click, set a message to show after redirect (used to re-enable Submit)
+    // ALSO: capture pre-save snapshot & set guard to disable Back link after redirect
     (function () {
       const form = document.getElementById('editForm');
       if (!form) return;
+      const jobId = (document.getElementById('js-data')?.dataset.jobId || '').trim();
+
       form.addEventListener('submit', function () {
+        // existing toast message
         sessionStorage.setItem('jobs_edit_saved_msg', 'Your edits have been saved. Please submit for Admin Approval to publish them.');
+
+        // store snapshot BEFORE submit so we can undo after reload
+        try {
+          const snapshot = __serializeForm(form);
+          sessionStorage.setItem(`jobs_edit_prev_snapshot_${jobId}`, JSON.stringify(snapshot));
+        } catch { }
+
+        // flag to disable back link on next load
+        sessionStorage.setItem(`jobs_edit_disable_back_${jobId}`, '1');
       });
     })();
+  </script>
 
-    // Hide Draft badge AND helper note when user submits for approval
-    (function () {
-      const submitForm = document.getElementById('submitApprovalForm');
-      const draftBadge = document.getElementById('draftBadge');
-      submitForm?.addEventListener('submit', () => {
-        if (draftBadge) draftBadge.style.display = 'none';
-        const note = document.getElementById('afterSaveNote');
-        if (note) note.style.display = 'none';
-      });
-    })();
-
+  <script>
     // Enable Bootstrap tooltips on this page (for approval status/progress)
     (function () {
       var triggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -433,5 +617,203 @@
       }
       return false;
     }
+  </script>
+
+
+  <script>
+    (function categoryDropdown_Edit() {
+      const form = document.getElementById('editForm');
+      const sel = document.getElementById('job_category');
+      const trigger = document.getElementById('jobCategoryTrigger');
+      const disp = document.getElementById('jobCategoryDisplay');
+      const panel = document.getElementById('jobCategoryMenu');
+      const search = document.getElementById('jobCategorySearch');
+      const list = document.getElementById('jobCategoryList');
+      const wrap = document.getElementById('otherCategoryWrap');
+      const other = document.getElementById('otherCategory');
+      if (!form || !sel || !trigger || !disp || !panel || !search || !list || !wrap || !other) return;
+
+      const options = Array.from(sel.options).map(o => o.value).filter(v => v && v.trim() !== "");
+      const isStandard = v => options.some(o => o.toLowerCase() === (v || '').trim().toLowerCase());
+
+      function openPanel() { panel.style.display = 'block'; setTimeout(() => search.focus(), 0); render(''); }
+      function closePanel() { panel.style.display = 'none'; }
+
+      function setValue(val) {
+        const exact = options.find(o => o.toLowerCase() === (val || '').trim().toLowerCase());
+        const actual = exact || (val || '').trim();
+        sel.value = actual;
+        disp.value = actual || '';
+        disp.classList.remove('is-invalid');
+        const showOther = exact === 'Other';
+        wrap.style.display = showOther ? 'block' : 'none';
+        if (showOther && !other.value) other.focus();
+      }
+
+      function render(filter) {
+        const q = (filter || '').trim().toLowerCase();
+        const found = options.filter(v => v.toLowerCase().includes(q));
+        const rows = [];
+        found.forEach(v => rows.push(`<button type="button" class="list-group-item list-group-item-action" data-val="${v.replace(/"/g, '&quot;')}">${v}</button>`));
+        if (q && !isStandard(filter)) {
+          const safe = (filter || '').replace(/"/g, '&quot;');
+          rows.unshift(`<button type="button" class="list-group-item list-group-item-action" data-val="${safe}">Use “${safe}” (custom)</button>`);
+        }
+        list.innerHTML = rows.join('') || `<div class="list-group-item text-muted">No matches</div>`;
+      }
+
+      trigger.addEventListener('click', () => { (panel.style.display === 'block') ? closePanel() : openPanel(); });
+      search.addEventListener('input', () => render(search.value));
+      list.addEventListener('click', e => {
+        const btn = e.target.closest('button[data-val]'); if (!btn) return;
+        setValue(btn.getAttribute('data-val') || ''); closePanel();
+      });
+      document.addEventListener('click', e => { if (!panel.contains(e.target) && !trigger.contains(e.target)) closePanel(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+      (function init() { const current = (sel.value || '').trim(); if (current) setValue(current); })();
+
+      form.addEventListener('submit', (ev) => {
+        if (!sel.value || !sel.value.trim()) {
+          ev.preventDefault(); openPanel(); disp.classList.add('is-invalid'); search.focus(); return;
+        }
+        if ((sel.value || '') === 'Other') {
+          const custom = (other.value || '').trim();
+          if (custom) { sel.value = custom; disp.value = custom; }
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // --- Save/Undo helpers for Back link guard (exposed for earlier code pieces that reuse them) ---
+    function __serializeForm(form) {
+      const obj = {};
+      const fd = new FormData(form);
+      for (const [k, v] of fd.entries()) obj[k] = v;
+      return obj;
+    }
+    function __restoreForm(form, data) {
+      if (!data) return;
+      Object.keys(data).forEach(k => {
+        const el = form.querySelector(`[name="${CSS.escape(k)}"]`);
+        if (!el) return;
+        el.value = data[k];
+        el.dispatchEvent(new Event('input', { bubbles: true })); // mark dirty
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+  </script>
+
+  <!-- Discard edits / Undo last Save + Back-link guard -->
+  <script>
+    (function () {
+      const form = document.getElementById('editForm');
+      const undoBtn = document.getElementById('undoSaveBtn');
+      const jobId = (document.getElementById('js-data')?.dataset.jobId || '').trim();
+      if (!form || !jobId) return;
+
+      const disableKey = `jobs_edit_disable_back_${jobId}`;     // set after Save (to lock back link)
+      const savedSnap = `jobs_edit_prev_snapshot_${jobId}`;     // snapshot taken right before Save submit
+      const initialSnap = `jobs_edit_initial_snapshot_${jobId}`;  // snapshot at page load (for Discard edits)
+
+      // helpers to toggle Back link
+      function disableBack() {
+        const a = document.getElementById('backLink');
+        if (!a) return;
+        a.classList.add('disabled');
+        a.setAttribute('aria-disabled', 'true');
+        a.style.pointerEvents = 'none';
+        a.style.opacity = '0.6';
+        a.title = 'Back is disabled — Submit for Approval or Undo/Discard to re-enable';
+      }
+      function enableBack() {
+        const a = document.getElementById('backLink');
+        if (!a) return;
+        a.classList.remove('disabled');
+        a.removeAttribute('aria-disabled');
+        a.style.pointerEvents = '';
+        a.style.opacity = '';
+        a.title = '';
+      }
+
+      // capture initial snapshot at load (for "Discard edits")
+      try { sessionStorage.setItem(initialSnap, JSON.stringify(__serializeForm(form))); } catch { }
+
+      // compare current form vs initial to know if we’re dirty
+      function isDirtyAgainstInitial() {
+        try {
+          const init = JSON.parse(sessionStorage.getItem(initialSnap) || '{}');
+          const now = __serializeForm(form);
+          const keys = new Set([...Object.keys(init), ...Object.keys(now)]);
+          for (const k of keys) if ((init[k] ?? '') !== (now[k] ?? '')) return true;
+          return false;
+        } catch { return false; }
+      }
+
+      // reflect UI (Back link + button) either for dirty (discard) or saved (undo) states
+      function refreshGuardUI() {
+        const lockedBySave = sessionStorage.getItem(disableKey) === '1';
+        if (lockedBySave) {
+          disableBack();
+          if (undoBtn && sessionStorage.getItem(savedSnap)) {
+            undoBtn.style.display = 'inline-block';
+            undoBtn.textContent = 'Undo last Save';
+            undoBtn.title = 'Undo the last saved changes';
+            undoBtn.dataset.mode = 'saved';
+          }
+          return;
+        }
+
+        if (isDirtyAgainstInitial()) {
+          disableBack();
+          if (undoBtn) {
+            undoBtn.style.display = 'inline-block';
+            undoBtn.textContent = 'Discard edits';
+            undoBtn.title = 'Revert unsaved changes on this page';
+            undoBtn.dataset.mode = 'dirty';
+          }
+        } else {
+          enableBack();
+          if (undoBtn && undoBtn.dataset.mode !== 'saved') {
+            undoBtn.style.display = 'none';
+          }
+        }
+      }
+
+      // initial apply and live tracking of changes
+      refreshGuardUI();
+      ['input', 'change'].forEach(evt => form.addEventListener(evt, refreshGuardUI));
+
+      // button handler (two modes):
+      //  - mode=dirty  -> Discard edits back to initial snapshot
+      //  - mode=saved  -> Undo last Save back to snapshot taken before saving
+      undoBtn?.addEventListener('click', () => {
+        const mode = undoBtn.dataset.mode || 'saved';
+        if (mode === 'dirty') {
+          const rawInit = sessionStorage.getItem(initialSnap);
+          if (!rawInit) return;
+          __restoreForm(form, JSON.parse(rawInit));
+        } else {
+          const raw = sessionStorage.getItem(savedSnap);
+          if (!raw) return;
+          __restoreForm(form, JSON.parse(raw));
+          sessionStorage.removeItem(disableKey);
+          sessionStorage.removeItem(savedSnap);
+        }
+        refreshGuardUI();
+        const btnSave = document.getElementById('btnSaveJob');
+        if (btnSave) btnSave.disabled = false;
+        try { document.getElementById('btnSubmitApproval')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { }
+      });
+
+      // When user submits for approval -> clear guards and snapshots, re-enable Back
+      document.getElementById('submitApprovalForm')?.addEventListener('submit', () => {
+        sessionStorage.removeItem(disableKey);
+        sessionStorage.removeItem(savedSnap);
+        sessionStorage.removeItem(initialSnap);
+        enableBack();
+      });
+    })();
   </script>
 }

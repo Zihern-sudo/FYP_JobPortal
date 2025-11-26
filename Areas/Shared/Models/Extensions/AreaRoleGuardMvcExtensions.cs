@@ -7,10 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace JobPortal.Areas.Shared.Models.Extensions
 {
     /// <summary>
-    /// Applies AreaRoleGuardFilter to Admin (role=Admin) and Recruiter (role=Recruiter).
-    /// Both redirect to JobSeeker/Account/Login. DO NOT register the filter in DI because it
-    /// has ctor string parameters; TypeFilterAttribute will construct it with Arguments.
+    /// Applies AreaRoleGuardFilter to Admin (role=Admin), Recruiter (role=Recruiter),
+    /// and JobSeeker (role=JobSeeker). All unauthenticated users are redirected to
+    /// JobSeeker/Account/Login. Do NOT register the filter in DI; it takes ctor args
+    /// and is constructed via TypeFilterAttribute.
     /// </summary>
+
     public static class AreaRoleGuardMvcExtensions
     {
         public static IMvcBuilder AddAreaRoleGuards(this IMvcBuilder mvc)
@@ -31,6 +33,14 @@ namespace JobPortal.Areas.Shared.Models.Extensions
                     areaName: "Recruiter",
                     requiredRole: "Recruiter",
                     loginArea: "JobSeeker"));
+
+
+                // ✅ JobSeeker area: require JobSeeker, login area = JobSeeker
+                opts.Conventions.Add(new AreaGuardConvention(
+                    areaName: "JobSeeker",
+                    requiredRole: "JobSeeker",
+                    loginArea: "JobSeeker"));
+
             });
 
             return mvc;

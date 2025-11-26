@@ -18,6 +18,8 @@
 <a asp-area="JobSeeker" asp-controller="Inbox" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
     &leftarrow; Back to Inbox
 </a>
+<div id="aiWarn" class="alert alert-warning d-none" role="alert"></div>
+
 
 @if (isBlocked)
 {
@@ -53,14 +55,20 @@
     <input type="hidden" name="ThreadId" value="@Model.ThreadId" />
     <div class="card-body">
         <textarea name="MessageText" class="form-control" rows="3" maxlength="200"
-            placeholder="@(isBlocked ? "Chat is blocked by admin." : "Write your reply...")" @(isBlocked ? "readonly      disabled" : "")>
+            placeholder="@(isBlocked ? "Chat is blocked by admin." : "Write your reply...")" @(isBlocked ? "readonly            disabled" : "")>
 @(!string.IsNullOrEmpty(ViewBag.PrefillMessage) ? ViewBag.PrefillMessage : Model.ReplyText)
         </textarea>
     </div>
-    <div class="card-footer d-flex justify-content-end">
-        <button class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" :
-                                                                  "")>Send</button>
+    <div class="card-footer d-flex justify-content-end align-items-center gap-2">
+        <span id="sendStatus" class="small text-muted d-none me-2">Sending…</span>
+        <button id="sendBtn" class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" :
+                                                                               "")>
+            <span class="js-send-text">Send</span>
+            <span class="spinner-border spinner-border-sm ms-1 d-none js-send-spin" role="status"
+                aria-hidden="true"></span>
+        </button>
     </div>
+
 </form>
 @section Scripts {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -77,4 +85,98 @@
             }
         });
     </script>
+
+    <script>
+        (() => {
+            const IS_BLOCKED = @(isBlocked ? "true" : "false");
+            const form = document.querySelector('form[asp-action="SendMessage"]');
+            const composer = form ? form.querySelector('textarea[name="MessageText"]') : null;
+            const aiWarn = document.getElementById('aiWarn');
+            const sendBtn = document.getElementById('sendBtn');
+            const sendSpin = sendBtn ? sendBtn.querySelector('.js-send-spin') : null;
+            const sendTxt = sendBtn ? sendBtn.querySelector('.js-send-text') : null;
+            const sendStatus = document.getElementById('sendStatus');
+
+            async function moderate() {
+                const tokenInput = form.querySelector('input[name="__RequestVerificationToken"]');
+                const token = tokenInput ? tokenInput.value : '';
+                const payload = { threadId: @Model.ThreadId, text: composer.value || '' };
+
+                const resp = await fetch('@Url.Action("Moderate", "Inbox", new { area = "JobSeeker" })', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!resp.ok) return { allowed: true, reason: 'AI check unavailable.' };
+                return await resp.json();
+            }
+
+            form.addEventListener('submit', async (e) => {
+                if (IS_BLOCKED === true || IS_BLOCKED === 'true') return;
+                e.preventDefault();
+
+                aiWarn.classList.add('d-none'); aiWarn.textContent = '';
+                const text = (composer.value || '').trim();
+                if (!text) {
+                    aiWarn.textContent = 'Message is empty.'; aiWarn.classList.remove('d-none'); composer.focus(); return;
+                }
+
+                // start UI
+                if (sendBtn) sendBtn.disabled = true;
+                if (sendSpin) sendSpin.classList.remove('d-none');
+                if (sendTxt) sendTxt.textContent = 'Sending';
+                if (sendStatus) { sendStatus.classList.remove('d-none'); sendStatus.textContent = 'Checking…'; }
+
+                // 1) AI check
+                try {
+                    const result = await moderate();
+                    if (result && result.allowed === false) {
+                        aiWarn.innerHTML = `<strong>Message blocked:</strong> ${result.reason || 'Not allowed.'} ${result.category ? `<span class="badge bg-warning text-dark ms-2">${result.category}</span>` : ''}`;
+                        aiWarn.classList.remove('d-none');
+
+                        if (sendSpin) sendSpin.classList.add('d-none');
+                        if (sendTxt) sendTxt.textContent = 'Send';
+                        if (sendBtn) sendBtn.disabled = false;
+                        if (sendStatus) { sendStatus.textContent = 'Blocked'; sendStatus.classList.add('text-danger'); setTimeout(() => sendStatus.classList.add('d-none'), 2000); }
+                        composer.focus();
+                        return;
+                    }
+                } catch { /* fail-open */ }
+
+                if (sendStatus) sendStatus.textContent = 'Sending…';
+
+                // 2) POST message via AJAX
+                try {
+                    const fd = new FormData(form);
+                    const body = new URLSearchParams(fd);
+
+                    const resp = await fetch('@Url.Action("SendMessage", "Inbox", new { area = "JobSeeker" })', {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body
+                    });
+
+                    let ok = false;
+                    try { const data = await resp.json(); ok = !!data.ok; } catch { ok = resp.ok; }
+
+                    if (ok) {
+                        if (sendStatus) { sendStatus.textContent = 'Delivered'; sendStatus.classList.remove('text-muted'); sendStatus.classList.add('text-success'); }
+                        setTimeout(() => window.location.reload(), 150);
+                    } else {
+                        if (sendStatus) { sendStatus.textContent = 'Failed to send'; sendStatus.classList.add('text-danger'); }
+                    }
+                } catch {
+                    if (sendStatus) { sendStatus.textContent = 'Failed to send'; sendStatus.classList.add('text-danger'); }
+                } finally {
+                    if (sendSpin) sendSpin.classList.add('d-none');
+                    if (sendTxt) sendTxt.textContent = 'Send';
+                    if (sendBtn) sendBtn.disabled = false;
+                }
+            });
+        })();
+    </script>
+
 }

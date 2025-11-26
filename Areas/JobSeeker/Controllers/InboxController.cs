@@ -9,6 +9,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Options;
+using JobPortal.Areas.Shared.Options; // OpenAIOptions
+using JobPortal.Areas.Shared.Extensions;
+
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -20,11 +27,18 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         private const int DefaultPageSize = 10;
         private const int MaxPageSize = 20;
 
-        public InboxController(ChatbotService chatbot, AppDbContext db)
+        private readonly IHttpClientFactory _httpFactory;     // NEW
+        private readonly IOptions<OpenAIOptions> _openAi;      // NEW
+
+
+        public InboxController(ChatbotService chatbot, AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi)
         {
             _chatbot = chatbot;
             _db = db;
+            _httpFactory = httpFactory;      // NEW
+            _openAi = openAi;                // NEW
         }
+
 
         // GET: /JobSeeker/Inbox
         [HttpGet]
@@ -129,7 +143,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             var unread = messages.Where(m => m.receiver_id == candidateId && m.is_read == false).ToList();
             if (unread.Any())
             {
-                unread.ForEach(m => m.is_read = false);
+                unread.ForEach(m => m.is_read = true);
                 convo.unread_for_candidate = 0;
                 await _db.SaveChangesAsync();
             }
@@ -182,6 +196,18 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Thread", new { id = vm.ThreadId });
             }
 
+            // Server-side AI moderation (backstop if JS fails)
+            var ai = await CheckAiForCandidateAsync(vm.ThreadId, candidateId, vm.MessageText ?? "");
+            if (!ai.Allowed)
+            {
+                if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                    return Json(new { ok = false, reason = ai.Reason, category = ai.Category });
+
+                TempData["Message"] = $"Message blocked: {ai.Reason}";
+                return RedirectToAction("Thread", new { id = vm.ThreadId });
+            }
+
+
             // Create new message
             var message = new message
             {
@@ -189,22 +215,212 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 sender_id = candidateId,
                 receiver_id = convo.recruiter_id ?? 0,
                 msg_content = vm.MessageText,
-                msg_timestamp = DateTime.Now,
+                msg_timestamp = MyTime.NowMalaysia(),
                 is_read = false
             };
 
             _db.messages.Add(message);
 
             // Update conversation
-            convo.last_message_at = DateTime.Now;
+            convo.last_message_at = MyTime.NowMalaysia();
             convo.last_snippet = vm.MessageText.Length > 100 ? vm.MessageText.Substring(0, 100) : vm.MessageText;
             convo.unread_for_recruiter += 1;
 
             await _db.SaveChangesAsync();
-
             TempData["Message"] = "Message sent successfully!";
+
+            if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
+                return Json(new { ok = true });
+
             return RedirectToAction("Thread", new { id = vm.ThreadId });
+
         }
+
+        // === NEW: AI moderation for outbound jobseeker messages ===
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Moderate([FromBody] MessageModerationCheckRequestVM req)
+        {
+            var userIdStr = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userIdStr))
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Not logged in.", Category = "Auth" });
+
+            int candidateId = int.Parse(userIdStr);
+
+            if (req is null || string.IsNullOrWhiteSpace(req.Text))
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Message is empty.", Category = "Empty" });
+
+            // Ownership check
+            var conv = await _db.conversations
+                .FirstOrDefaultAsync(c => c.conversation_id == req.ThreadId && c.candidate_id == candidateId);
+
+            if (conv == null)
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Thread not found or access denied.", Category = "Access" });
+
+            // Admin block
+            if (conv.is_blocked)
+            {
+                var reason = string.IsNullOrWhiteSpace(conv.blocked_reason)
+                    ? "Chat is blocked by admin."
+                    : $"Chat is blocked by admin: {conv.blocked_reason}";
+                return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = reason, Category = "AdminBlock" });
+            }
+
+            // OpenAI config
+            var opts = _openAi.Value;
+            if (string.IsNullOrWhiteSpace(opts.ApiKey))
+                return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check unavailable (no API key).", Category = "Bypass" });
+
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", opts.ApiKey);
+            var modelName = string.IsNullOrWhiteSpace(opts.ModelText) ? "gpt-4o-mini" : opts.ModelText;
+
+            var payload = new
+            {
+                model = modelName,
+                temperature = 0,
+                response_format = new { type = "json_object" },
+                messages = new object[]
+                {
+            new { role = "system", content =
+                "You are the content policy judge for a recruitment chat. " +
+                "Given ONE outbound candidate message, decide if it violates policy. " +
+                "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
+                "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
+                "Block only for clear violations; neutral/safety reminders are allowed." },
+            new { role = "user", content = req.Text.Trim() }
+                }
+            };
+
+            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            try
+            {
+                using var resp = await http.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var body = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode)
+                    return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check temporarily unavailable.", Category = "Bypass" });
+
+                string? msg = null;
+                try
+                {
+                    using var top = JsonDocument.Parse(body);
+                    msg = top.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+                }
+                catch
+                {
+                    return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI response malformed.", Category = "Bypass" });
+                }
+
+                bool allowed = true;
+                string reason = "Safe.";
+                string category = "Other";
+                try
+                {
+                    using var md = JsonDocument.Parse(string.IsNullOrWhiteSpace(msg) ? "{}" : msg!);
+                    var root = md.RootElement;
+                    if (root.ValueKind == JsonValueKind.Object &&
+                        root.TryGetProperty("allowed", out var aProp) &&
+                        (aProp.ValueKind == JsonValueKind.True || aProp.ValueKind == JsonValueKind.False))
+                        allowed = aProp.GetBoolean();
+
+                    if (root.TryGetProperty("reason", out var rProp) && rProp.ValueKind == JsonValueKind.String)
+                        reason = rProp.GetString() ?? reason;
+                    if (root.TryGetProperty("category", out var cProp) && cProp.ValueKind == JsonValueKind.String)
+                        category = cProp.GetString() ?? category;
+                }
+                catch { /* fail-open */ }
+
+                return Json(new MessageModerationCheckResultVM { Allowed = allowed, Reason = reason, Category = category });
+            }
+            catch
+            {
+                return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check timed out.", Category = "Bypass" });
+            }
+        }
+
+        // Server-side enforcement: reuse OpenAI moderation for candidate messages
+        private async Task<(bool Allowed, string Reason, string Category)> CheckAiForCandidateAsync(int threadId, int candidateId, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return (false, "Message is empty.", "Empty");
+
+            var conv = await _db.conversations
+                .FirstOrDefaultAsync(c => c.conversation_id == threadId && c.candidate_id == candidateId);
+            if (conv == null) return (false, "Thread not found or access denied.", "Access");
+            if (conv.is_blocked)
+            {
+                var reason = string.IsNullOrWhiteSpace(conv.blocked_reason)
+                    ? "Chat is blocked by admin."
+                    : $"Chat is blocked by admin: {conv.blocked_reason}";
+                return (false, reason, "AdminBlock");
+            }
+
+            var opts = _openAi.Value;
+            if (string.IsNullOrWhiteSpace(opts.ApiKey))
+                return (true, "AI check unavailable (no API key).", "Bypass");
+
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(Math.Max(1, opts.TimeoutSeconds));
+            http.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", opts.ApiKey);
+            var modelName = string.IsNullOrWhiteSpace(opts.ModelText) ? "gpt-4o-mini" : opts.ModelText;
+
+            var payload = new
+            {
+                model = modelName,
+                temperature = 0,
+                response_format = new { type = "json_object" },
+                messages = new object[]
+                {
+            new { role = "system", content =
+                "You are the content policy judge for a recruitment chat. " +
+                "Given ONE outbound candidate message, decide if it violates policy. " +
+                "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
+                "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
+                "Block only for clear violations; neutral/safety reminders are allowed." },
+            new { role = "user", content = text.Trim() }
+                }
+            };
+
+            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            try
+            {
+                using var resp = await http.PostAsync("https://api.openai.com/v1/chat/completions", content);
+                var body = await resp.Content.ReadAsStringAsync();
+                if (!resp.IsSuccessStatusCode) return (true, "AI check temporarily unavailable.", "Bypass");
+
+                string? msg;
+                try
+                {
+                    using var top = JsonDocument.Parse(body);
+                    msg = top.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+                }
+                catch { return (true, "AI response malformed.", "Bypass"); }
+
+                bool allowed = true; string reason = "Safe."; string category = "Other";
+                try
+                {
+                    using var md = JsonDocument.Parse(string.IsNullOrWhiteSpace(msg) ? "{}" : msg!);
+                    var root = md.RootElement;
+                    if (root.ValueKind == JsonValueKind.Object &&
+                        root.TryGetProperty("allowed", out var aProp) &&
+                        (aProp.ValueKind == JsonValueKind.True || aProp.ValueKind == JsonValueKind.False))
+                        allowed = aProp.GetBoolean();
+                    if (root.TryGetProperty("reason", out var rProp) && rProp.ValueKind == JsonValueKind.String)
+                        reason = rProp.GetString() ?? reason;
+                    if (root.TryGetProperty("category", out var cProp) && cProp.ValueKind == JsonValueKind.String)
+                        category = cProp.GetString() ?? category;
+                }
+                catch { /* keep defaults */ }
+
+                return (allowed, reason, category);
+            }
+            catch { return (true, "AI check timed out.", "Bypass"); }
+        }
+
+
 
         [HttpPost]
         public async Task<IActionResult> AskAI(string question)

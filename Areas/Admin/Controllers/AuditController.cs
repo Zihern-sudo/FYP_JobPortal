@@ -9,12 +9,14 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.Text;
 using SelectPdf;
+using JobPortal.Areas.Shared.Extensions; // MyTime
 
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Admin.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -22,8 +24,46 @@ namespace JobPortal.Areas.Admin.Controllers
     public class AuditController : Controller
     {
         private readonly AppDbContext _db;
-        private readonly ICompositeViewEngine _viewEngine; // ✅ use composite (always registered)
+        private readonly ICompositeViewEngine _viewEngine; // use composite (always registered)
         private readonly ITempDataProvider _tempDataProvider;
+
+        // Canonical technical keys → friendly labels for UI
+        private static readonly Dictionary<string, string> ActionLabels = new(StringComparer.OrdinalIgnoreCase)
+        {
+            // Auth
+            { "Admin.Auth.Login",          "Admin logged in" },
+            { "Admin.Auth.LoginFailed",    "Admin login failed" },
+            { "Admin.Auth.Logout",         "Admin logged out" },
+
+            // Users (single)
+            { "Admin.User.Activate",       "User activated" },
+            { "Admin.User.Deactivate",     "User deactivated" },
+            { "Admin.User.Suspend",        "User suspended" },
+            { "Admin.User.Update",         "User updated" },
+
+            // Users (bulk)
+            { "Admin.Bulk.User.Update",    "Bulk user update" },
+
+            // Companies
+            { "Admin.Company.Verify",      "Company verified" },
+            { "Admin.Company.Reject",      "Company rejected" },
+            { "Admin.Company.Incomplete",  "Company marked incomplete" },
+            { "Admin.Company.Update",      "Company updated" },
+
+            // Jobs (single)
+            { "Admin.Job.Approve",         "Job approved" },
+            { "Admin.Job.Reject",          "Job rejected" },
+            { "Admin.Job.RequestChanges",  "Job changes requested" },
+
+            // Jobs (bulk)
+            { "Admin.Bulk.Job.Update",     "Bulk job approvals update" },
+
+            // Messaging / conversations
+            { "Admin.Messaging.Flag",      "Conversation flagged" },
+            { "Admin.Messaging.Unflag",    "Conversation unflagged" },
+            { "Admin.Messaging.Restrict",  "Messaging restricted" },
+            { "Admin.Messaging.Allow",     "Messaging allowed" }
+        };
 
         public AuditController(
             AppDbContext db,
@@ -40,14 +80,17 @@ namespace JobPortal.Areas.Admin.Controllers
             DateTime? from = null,
             DateTime? to = null,
             string? actor = null,
-            string? actionType = null,   // ✅ renamed to avoid route/action collision
+            string? actionType = null,   // route param; may be technical key or friendly label
             string? target = null,
             int page = 1,
             int pageSize = 20)
         {
             ViewData["Title"] = "Audit Log";
 
-            var query = BuildQuery(from, to, actor, actionType, target);
+            // Normalize filter: map friendly label → technical key (or leave raw for LIKE)
+            var normalizedActionType = NormalizeActionFilter(actionType);
+
+            var query = BuildQuery(from, to, actor, normalizedActionType, target);
 
             var filteredAll = query
                 .Select(x => new
@@ -71,10 +114,25 @@ namespace JobPortal.Areas.Admin.Controllers
                 .Take(5)
                 .ToList();
 
+            // All distinct technical keys from DB → map to friendly labels for dropdown
+            var allActionKeys = _db.admin_logs
+                .AsNoTracking()
+                .Select(l => l.action_type)
+                .Where(s => s != null && s != "")
+                .Distinct()
+                .ToList();
+
+            var allActions = allActionKeys
+                .Select(ToFriendlyActionLabel)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s)
+                .ToList();
+
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, 200);
 
-            // ✅ total BEFORE paging
+            // total BEFORE paging
             var total = query.Count();
 
             var items = query
@@ -94,7 +152,12 @@ namespace JobPortal.Areas.Admin.Controllers
             ViewBag.DateFrom = from;
             ViewBag.DateTo = to;
             ViewBag.Actor = actor ?? string.Empty;
-            ViewBag.Action = actionType ?? string.Empty;  // ✅ keep available to the view
+
+            // Show friendly label back in the UI (if any), not the raw technical key
+            ViewBag.Action = string.IsNullOrWhiteSpace(actionType)
+                ? string.Empty
+                : ToFriendlyActionLabel(normalizedActionType ?? actionType);
+
             ViewBag.Target = target ?? string.Empty;
 
             ViewBag.TopActions = topActions;
@@ -102,6 +165,7 @@ namespace JobPortal.Areas.Admin.Controllers
             ViewBag.Page = page;
             ViewBag.PageSize = pageSize;
             ViewBag.Total = total;
+            ViewBag.AllActions = allActions; // list of friendly labels
 
             return View(items);
         }
@@ -112,10 +176,11 @@ namespace JobPortal.Areas.Admin.Controllers
             DateTime? from = null,
             DateTime? to = null,
             string? actor = null,
-            string? actionType = null,   // ✅
+            string? actionType = null,
             string? target = null)
         {
-            var query = BuildQuery(from, to, actor, actionType, target);
+            var normalizedActionType = NormalizeActionFilter(actionType);
+            var query = BuildQuery(from, to, actor, normalizedActionType, target);
 
             var rows = query
                 .OrderByDescending(x => x.timestamp)
@@ -123,9 +188,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 {
                     When = x.timestamp,
                     Actor = (x.user != null ? (x.user.first_name + " " + x.user.last_name).Trim() : "System"),
-                    Action = x.action_type,
-                    Target = (string?)null,
-                    Notes = (string?)null
+                    Action = x.action_type
                 })
                 .ToList();
 
@@ -138,14 +201,14 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             var sb = new StringBuilder();
-            sb.AppendLine("When,Actor,Action,Target,Notes");
+            sb.AppendLine("When,Actor,Action"); // simplified: Target/Notes not used
             foreach (var r in rows)
             {
-                sb.AppendLine($"{r.When:yyyy-MM-dd HH:mm},{Esc(r.Actor)},{Esc(r.Action)},{Esc(r.Target)},{Esc(r.Notes)}");
+                sb.AppendLine($"{r.When:yyyy-MM-dd HH:mm},{Esc(r.Actor)},{Esc(r.Action)}");
             }
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            var fileName = $"Audit_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv";
+            var fileName = $"Audit_{MyTime.NowMalaysia():yyyyMMdd_HHmm}.csv";
             return File(bytes, "text/csv; charset=utf-8", fileName);
         }
 
@@ -155,10 +218,11 @@ namespace JobPortal.Areas.Admin.Controllers
             DateTime? from = null,
             DateTime? to = null,
             string? actor = null,
-            string? actionType = null,   // ✅
+            string? actionType = null,
             string? target = null)
         {
-            var query = BuildQuery(from, to, actor, actionType, target);
+            var normalizedActionType = NormalizeActionFilter(actionType);
+            var query = BuildQuery(from, to, actor, normalizedActionType, target);
 
             var items = query
                 .OrderByDescending(x => x.timestamp)
@@ -175,9 +239,11 @@ namespace JobPortal.Areas.Admin.Controllers
             ViewBag.DateFrom = from;
             ViewBag.DateTo = to;
             ViewBag.Actor = actor ?? string.Empty;
-            ViewBag.Action = actionType ?? string.Empty; // ✅
+            ViewBag.Action = string.IsNullOrWhiteSpace(actionType)
+                ? string.Empty
+                : ToFriendlyActionLabel(normalizedActionType ?? actionType);
             ViewBag.Target = target ?? string.Empty;
-            ViewBag.GeneratedAt = DateTime.UtcNow;
+            ViewBag.GeneratedAt = MyTime.NowMalaysia();
 
             var html = await RenderRazorViewToString("Pdf", items);
 
@@ -197,14 +263,14 @@ namespace JobPortal.Areas.Admin.Controllers
             converter.Header.Add(new PdfHtmlSection(
                 "<div style='font-family:Arial; font-size:11px; width:100%'>" +
                 "<div style='float:left'>JobPortal — Audit Report</div>" +
-                $"<div style='float:right'>{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC</div>" +
+                $"<div style='float:right'>{MyTime.NowMalaysia():yyyy-MM-dd HH:mm} </div>" +
                 "<div style='clear:both'></div></div>", string.Empty));
 
             converter.Options.DisplayFooter = true;
             converter.Footer.Height = 40;
             converter.Footer.Add(new PdfHtmlSection(
                 "<div style='font-family:Arial; font-size:9px; width:100%'>" +
-                $"<div style='float:left'>&copy; {DateTime.UtcNow:yyyy} JobPortal</div>" +
+                $"<div style='float:left'>&copy; {MyTime.NowMalaysia():yyyy} JobPortal</div>" +
                 "<div style='float:right'>Page {page_number} of {total_pages}</div>" +
                 "<div style='clear:both'></div></div>", string.Empty));
 
@@ -212,10 +278,11 @@ namespace JobPortal.Areas.Admin.Controllers
             var bytes = pdf.Save();
             pdf.Close();
 
-            return File(bytes, "application/pdf", $"Audit_{DateTime.UtcNow:yyyyMMdd}.pdf");
+            return File(bytes, "application/pdf", $"Audit_{MyTime.NowMalaysia():yyyyMMdd}.pdf");
         }
 
         // --- helpers ---
+
         private IQueryable<admin_log> BuildQuery(DateTime? from, DateTime? to, string? actor, string? actionType, string? target)
         {
             var q = _db.admin_logs
@@ -255,6 +322,37 @@ namespace JobPortal.Areas.Admin.Controllers
             }
 
             return q;
+        }
+
+        private static string ToFriendlyActionLabel(string? key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return key ?? string.Empty;
+
+            if (ActionLabels.TryGetValue(key, out var label))
+                return label;
+
+            return key;
+        }
+
+        private static string? NormalizeActionFilter(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return null;
+            var term = input.Trim();
+
+            // 1) User typed / passed the technical key directly
+            if (ActionLabels.ContainsKey(term))
+                return term;
+
+            // 2) User selected / typed the friendly label → map back to key
+            var match = ActionLabels.FirstOrDefault(kv =>
+                kv.Value.Equals(term, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(match.Key))
+                return match.Key;
+
+            // 3) Fallback: treat as raw free-text for LIKE search
+            return term;
         }
 
         private async Task<string> RenderRazorViewToString(string viewName, object model)

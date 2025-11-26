@@ -5,7 +5,7 @@ using JobPortal.Areas.Shared.Models;
 
 namespace JobPortal.Areas.Recruiter.Models
 {
-    public enum JobStatus { Draft, Open, Paused, Closed }
+    public enum JobStatus { Draft, Open, Paused, Closed, PendingApproval }
 
     public static class JobCatalog
     {
@@ -14,16 +14,29 @@ namespace JobPortal.Areas.Recruiter.Models
             "Full Time", "Part Time", "Contract", "Temporary", "Internship"
         };
 
-        // New domain categories for job_category
+        // Domain categories for job_category
         public static readonly string[] JobCategories = new[]
         {
-            "Marketing", "Customer Service", "Information Technology", "Accounting", "Finance"
+            "Marketing", "Customer Service", "Information Technology", "Accounting", "Finance",
+            "Other" // why: allow UI toggle to show custom input
         };
 
         public static readonly string[] WorkModes = new[]
         {
             "On-site", "Hybrid", "Remote"
         };
+
+        // ---- helpers for validation ----
+        public static bool IsStandardJobCategory(string? value) =>
+            !string.IsNullOrWhiteSpace(value) && JobCategories.Contains(value.Trim());
+
+        public static bool IsValidCustomCategory(string? value)
+        {
+            // why: accept recruiter-entered custom categories; keep constraints sane
+            var s = value?.Trim();
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            return s.Length <= 120; // soft cap for DB/UI
+        }
     }
 
     public class JobCreateVm : IValidatableObject
@@ -75,8 +88,9 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
 
-            if (!JobCatalog.JobCategories.Contains(job_category))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+            // allow either a standard category OR any non-empty custom string
+            if (!(JobCatalog.IsStandardJobCategory(job_category) || JobCatalog.IsValidCustomCategory(job_category)))
+                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(job_category) });
 
             if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
                 yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
@@ -138,8 +152,9 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
 
-            if (!JobCatalog.JobCategories.Contains(job_category))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(job_category) });
+            // allow either a standard category OR any non-empty custom string
+            if (!(JobCatalog.IsStandardJobCategory(job_category) || JobCatalog.IsValidCustomCategory(job_category)))
+                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(job_category) });
 
             if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
                 yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
@@ -289,8 +304,9 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(WorkMode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(WorkMode) });
 
-            if (!JobCatalog.JobCategories.Contains(JobCategory))
-                yield return new ValidationResult("Invalid Job Category.", new[] { nameof(JobCategory) });
+            // allow either a standard category OR any non-empty custom string
+            if (!(JobCatalog.IsStandardJobCategory(JobCategory) || JobCatalog.IsValidCustomCategory(JobCategory)))
+                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(JobCategory) });
 
             if (ExpiryDate.HasValue && ExpiryDate.Value.Date < DateTime.Today)
                 yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(ExpiryDate) });
@@ -314,9 +330,10 @@ namespace JobPortal.Areas.Recruiter.Models
         [Required, Display(Name = "Last Name"), StringLength(60)]
         public string last_name { get; set; } = "";
 
-        [Required, Display(Name = "Phone Number"), StringLength(30)]
-        [Phone(ErrorMessage = "Enter a valid phone number.")]
+        [Required, Display(Name = "Phone Number"), StringLength(16)]
+        [RegularExpression(@"^\+[1-9]\d{7,14}$", ErrorMessage = "Use international format, e.g., +60123456789.")]
         public string phone { get; set; } = "";
+
 
         [Required, EmailAddress, Display(Name = "Email"), StringLength(190)]
         public string email { get; set; } = "";
@@ -338,17 +355,74 @@ namespace JobPortal.Areas.Recruiter.Models
 
     public class CompanyProfileVm
     {
-        [Required, Display(Name = "Company Name"), StringLength(160)]
+        [Required, Display(Name = "Company Name"), StringLength(160, MinimumLength = 2)]
+        [RegularExpression(@"^(?=.*\S).{2,160}$", ErrorMessage = "Company name can't be empty or whitespace.")]
         public string company_name { get; set; } = "";
 
         [Display(Name = "Industry"), StringLength(120)]
+        [RegularExpression(@"^\s*$|.*\S.*", ErrorMessage = "Industry cannot be only whitespace.")]
         public string? company_industry { get; set; }
 
         [Display(Name = "Location"), StringLength(120)]
+        [RegularExpression(@"^\s*$|.*\S.*", ErrorMessage = "Location cannot be only whitespace.")]
         public string? company_location { get; set; }
 
-        [Display(Name = "Description")]
+        [Display(Name = "Description"), StringLength(1000)]
+        [RegularExpression(@"^\s*$|.*\S.*", ErrorMessage = "Description cannot be only whitespace.")]
         public string? company_description { get; set; }
+    }
+
+    public class CompanyProfileSubmitVm
+    {
+        [Required, StringLength(160, MinimumLength = 2)]
+        [RegularExpression(@"^(?=.*\S).{2,160}$")]
+        public string company_name { get; set; } = "";
+
+        [Required, StringLength(120)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Industry cannot be only whitespace.")]
+        public string? company_industry { get; set; }
+
+        [Required, StringLength(120)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Location cannot be only whitespace.")]
+        public string? company_location { get; set; }
+
+        [Required, StringLength(1000)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Description cannot be only whitespace.")]
+        public string? company_description { get; set; }
+    }
+
+
+
+    public enum CompanyProfileStatus
+    {
+        Pending,   // awaiting admin review
+        Draft,     // local draft saved by recruiter
+        Verified,  // approved & live
+        Inactive   // rejected or incomplete
+    }
+
+    /// <summary>
+    /// Manage page VM: shows either live or draft values, plus status flags.
+    /// </summary>
+    public class CompanyProfileManageVm : CompanyProfileVm
+    {
+        public string Status { get; set; } = "Inactive";
+        public string? LivePhotoUrl { get; set; }
+        public string? DraftPhotoUrl { get; set; }
+        public bool HasDraft { get; set; }
+        public bool IsPending => string.Equals(Status, "Pending", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// On-disk JSON payload for company drafts (text-only). Photo is stored as file beside this JSON.
+    /// </summary>
+    public class CompanyDraftPayload
+    {
+        public string company_name { get; set; } = "";
+        public string? company_industry { get; set; }
+        public string? company_location { get; set; }
+        public string? company_description { get; set; }
+        public DateTime saved_at { get; set; } = DateTime.UtcNow;
     }
 
     public class DashboardVm
@@ -468,6 +542,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public int Id { get; set; }
         public string Title { get; set; } = "";
         public string TextPreview { get; set; } = "";
+        public string Text { get; set; } = "";
         public string? Type { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsRead { get; set; }
@@ -498,6 +573,41 @@ namespace JobPortal.Areas.Recruiter.Models
     {
         public bool Allowed { get; set; }
         public string Reason { get; set; } = "";
-        public string? Category { get; set; }  
+        public string? Category { get; set; }
     }
+
+    // ===================== NEW: Score Breakdown VMs (read-only) =====================
+    // Why: present transparent scoring to recruiters (no editing of resume JSON)
+
+    public record ScoreSectionVM(
+        string Name,
+        int Points,                // awarded points for this section
+        int MaxPoints,             // section cap
+        IReadOnlyList<string> Matched,  // human-readable hits (e.g., skill names)
+        IReadOnlyList<string> Missing   // human-readable gaps
+    );
+
+    public record PerRequirementVM(
+        string Requirement,        // exact requirement text
+        double Similarity,         // 0..1 similarity estimate
+        string Category            // "skills" | "experience" | "education" | "extras"
+    );
+
+    public class ScoreBreakdownVM
+    {
+        public byte Total { get; init; }                       // 0..100
+        public ScoreSectionVM Skills { get; init; } = new("Skills", 0, 50, Array.Empty<string>(), Array.Empty<string>());
+        public ScoreSectionVM Experience { get; init; } = new("Experience", 0, 35, Array.Empty<string>(), Array.Empty<string>());
+        public ScoreSectionVM Education { get; init; } = new("Education", 0, 15, Array.Empty<string>(), Array.Empty<string>());
+        public ScoreSectionVM Extras { get; init; } = new("Extras", 0, 0, Array.Empty<string>(), Array.Empty<string>());
+        public string Notes { get; init; } = "";               // short explanation (model notes)
+        public DateTime? EvaluatedAt { get; init; }            // when the score was computed
+        public IReadOnlyList<PerRequirementVM> PerRequirement { get; init; } = Array.Empty<PerRequirementVM>();
+    }
+}
+
+public class NewConversationPostVM
+{
+    [Required]
+    public int ApplicationId { get; set; }
 }

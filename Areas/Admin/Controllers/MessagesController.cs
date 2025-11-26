@@ -18,7 +18,7 @@ namespace JobPortal.Areas.Admin.Controllers
         public MessagesController(AppDbContext db) => _db = db;
 
         private static bool IsAjaxRequest(HttpRequest r) =>
-            string.Equals(r.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+            string.Equals(r.Headers["X-Requested-With"], "XMLHttpRequest", System.StringComparison.OrdinalIgnoreCase);
 
         // Resolve a valid existing user_id for conversation_monitor.user_id (FK NOT NULL)
         private int ResolveActorUserId(int? adminId)
@@ -225,7 +225,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 return RedirectToAction(nameof(Thread), new { id = form.ConversationId });
             }
 
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
             int? adminId = null;
             if (this.TryGetUserId(out var aid, out _)) adminId = aid;
             var actorUserId = ResolveActorUserId(adminId);
@@ -236,17 +236,28 @@ namespace JobPortal.Areas.Admin.Controllers
             conv.flagged_at = now;
             conv.flagged_by_user_id = adminId; // keep if your model has this column
 
-            // Append audit row — IMPORTANT: set user_id to satisfy FK
+            // Append monitor row — IMPORTANT: set user_id to satisfy FK
             _db.conversation_monitors.Add(new conversation_monitor
             {
                 conversation_id = conv.conversation_id,
-                user_id = actorUserId,         // <-- FIX: required FK to user(user_id)
+                user_id = actorUserId,         // required FK to user(user_id)
                 flag = true,
                 flag_reason = reason,
                 flagged_at = now,
                 flagged_by_user_id = adminId,  // keep if column exists in your model
                 date_reviewed = now
             });
+
+            // Audit log for conversation flag (standardised)
+            if (adminId.HasValue)
+            {
+                _db.admin_logs.Add(new admin_log
+                {
+                    user_id = adminId.Value,
+                    action_type = $"Admin.Messaging.BlockConversation:{conv.conversation_id}",
+                    timestamp = now
+                });
+            }
 
             _db.SaveChanges();
 
@@ -272,7 +283,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
             int? adminId = null;
             if (this.TryGetUserId(out var aid, out _)) adminId = aid;
             var actorUserId = ResolveActorUserId(adminId);
@@ -285,13 +296,24 @@ namespace JobPortal.Areas.Admin.Controllers
             _db.conversation_monitors.Add(new conversation_monitor
             {
                 conversation_id = conv.conversation_id,
-                user_id = actorUserId,        // <-- FIX: required FK to user(user_id)
+                user_id = actorUserId,        // required FK to user(user_id)
                 flag = false,
                 flag_reason = "Unblocked by admin",
                 flagged_at = now,
                 flagged_by_user_id = adminId, // keep if column exists
                 date_reviewed = now
             });
+
+            // Audit log for conversation unflag (standardised)
+            if (adminId.HasValue)
+            {
+                _db.admin_logs.Add(new admin_log
+                {
+                    user_id = adminId.Value,
+                    action_type = $"Admin.Messaging.UnblockConversation:{conv.conversation_id}",
+                    timestamp = now
+                });
+            }
 
             _db.SaveChanges();
 
@@ -300,7 +322,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             TempData["Flash.Type"] = "success";
             TempData["Flash.Message"] = "Conversation unblocked.";
-            return RedirectToAction(nameof(Thread), new { id = conv.conversation_id });
+            return RedirectToAction(nameof(Thread), new { id = conversationId });
         }
 
         // ---------- Existing actions kept below ----------
@@ -339,8 +361,8 @@ namespace JobPortal.Areas.Admin.Controllers
                 _db.admin_logs.Add(new admin_log
                 {
                     user_id = adminId,
-                    action_type = $"Messaging-Restrict:{userId}",
-                    timestamp = DateTime.UtcNow
+                    action_type = $"Admin.Messaging.RestrictUser:{userId}",
+                    timestamp = MyTime.NowMalaysia()
                 });
                 _db.SaveChanges();
             }
@@ -365,8 +387,8 @@ namespace JobPortal.Areas.Admin.Controllers
                 _db.admin_logs.Add(new admin_log
                 {
                     user_id = adminId,
-                    action_type = $"Messaging-Allow:{userId}",
-                    timestamp = DateTime.UtcNow
+                    action_type = $"Admin.Messaging.AllowUser:{userId}",
+                    timestamp = MyTime.NowMalaysia()
                 });
                 _db.SaveChanges();
             }

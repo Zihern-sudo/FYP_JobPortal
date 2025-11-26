@@ -10,6 +10,9 @@ using JobPortal.Areas.Recruiter.Models;   // CandidateItemVM, CandidateVM, NoteV
 using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 using System.Collections.Generic;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;                     // ILogger<T>
+using JobPortal.Services;                               // INotificationService
+using JobPortal.Areas.Shared.Models.Extensions;         // TryNotifyAsync()
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -21,7 +24,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private const int CsvExportCap = 5000;
 
         private readonly AppDbContext _db;
-        public CandidatesController(AppDbContext db) => _db = db;
+        private readonly INotificationService _notif;            // notify
+        private readonly ILogger<CandidatesController> _logger;  // log
+
+        public CandidatesController(AppDbContext db,
+                                    INotificationService notif,
+                                    ILogger<CandidatesController> logger)
+        {
+            _db = db;
+            _notif = notif;
+            _logger = logger;
+        }
 
         // GET /Recruiter/Candidates?q=&stage=&page=&pageSize=
         [HttpGet]
@@ -159,7 +172,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            var fileName = $"candidates_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+            var fileName = $"candidates_{MyTime.NowMalaysia():yyyyMMdd_HHmmss}.csv";
             return File(bytes, "text/csv", fileName);
         }
 
@@ -314,7 +327,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             if (app == null) return NotFound();
 
             var token = Guid.NewGuid();
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
 
             DateOnly? startDate = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value) : (DateOnly?)null;
 
@@ -357,6 +370,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
+
+            // notify candidate (non-blocking)
+            var jobTitle = await _db.job_listings
+                .Where(j => j.job_listing_id == app.job_listing_id)
+                .Select(j => j.job_title)
+                .FirstOrDefaultAsync();
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: app.user_id,
+                    title: "Job offer sent",
+                    message: $"You have a job offer for “{(jobTitle ?? "your application")}”.",
+                    type: "System"
+                )
+            );
 
             TempData["Message"] = $"Offer sent for Application #{vm.ApplicationId}.";
             return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
@@ -453,14 +481,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = app.user_id,
                     job_listing_id = app.job_listing_id,
                     parsed_json = json,
-                    updated_at = DateTime.UtcNow
+                    updated_at = MyTime.NowMalaysia()
                 };
                 _db.ai_parsed_resumes.Add(row);
             }
             else
             {
                 row.parsed_json = json;
-                row.updated_at = DateTime.UtcNow;
+                row.updated_at = MyTime.NowMalaysia();
             }
 
             // Leave an audit note
@@ -470,7 +498,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = "[AI] Parsed resume corrected by recruiter.",
-                created_at = DateTime.UtcNow
+                created_at = MyTime.NowMalaysia()
             });
 
             await _db.SaveChangesAsync();
@@ -504,7 +532,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 user_id = recruiterId,
                 direction = (sbyte)dir,
                 reason = reason.Trim(),
-                created_at = DateTime.UtcNow
+                created_at = MyTime.NowMalaysia()
             });
 
             // Keep an inline note for quick visibility
@@ -514,7 +542,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = $"[AI] Manual rank nudge {(dir > 0 ? "↑ up" : "↓ down")}: {reason}".Trim(),
-                created_at = DateTime.UtcNow
+                created_at = MyTime.NowMalaysia()
             });
 
             await _db.SaveChangesAsync();
@@ -573,9 +601,24 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             app.application_status = nextStatus;
-            app.date_updated = DateTime.UtcNow;
+            app.date_updated = MyTime.NowMalaysia();
 
             await _db.SaveChangesAsync();
+
+            // notify candidate (non-blocking)
+            var jobTitle = await _db.job_listings
+                .Where(j => j.job_listing_id == app.job_listing_id)
+                .Select(j => j.job_title)
+                .FirstOrDefaultAsync();
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: app.user_id,
+                    title: "Application status updated",
+                    message: $"Your application for “{(jobTitle ?? "the job")}” is now {nextStatus}.",
+                    type: "System"
+                )
+            );
 
             TempData["Message"] = $"Application #{applicationId} moved to {nextStatus}.";
             return RedirectToAction(nameof(Detail), new { id = applicationId });
@@ -602,11 +645,26 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_recruiter_id = recruiterId,
                 job_seeker_id = app.user_id,
                 note_text = text,
-                created_at = DateTime.UtcNow
+                created_at = MyTime.NowMalaysia()
             };
 
             _db.job_seeker_notes.Add(note);
             await _db.SaveChangesAsync();
+
+            // notify candidate (non-blocking)
+            var jobTitle = await _db.job_listings
+                .Where(j => j.job_listing_id == app.job_listing_id)
+                .Select(j => j.job_title)
+                .FirstOrDefaultAsync();
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: app.user_id,
+                    title: "New message from recruiter",
+                    message: $"You have a new message about “{(jobTitle ?? "your application")}”.",
+                    type: "Message"
+                )
+            );
 
             TempData["Message"] = "Message sent.";
             return RedirectToAction(nameof(Detail), new { id });

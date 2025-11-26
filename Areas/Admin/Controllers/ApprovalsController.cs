@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Admin.Models;
-using JobPortal.Areas.Shared.Extensions; // For TryGetUserId + DateTime helpers
+using JobPortal.Areas.Shared.Extensions; // TryGetUserId + MyTime
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 using System.Net.Http.Headers;
 using JobPortal.Areas.Shared.Options; // OpenAIOptions (existing in app)
 using Microsoft.Extensions.Caching.Memory; // NEW for server-side cache
+using JobPortal.Services; // <-- NEW: notifications
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -32,16 +33,19 @@ namespace JobPortal.Areas.Admin.Controllers
         // NEW: server-side cache
         private readonly IMemoryCache _cache;
 
+        // NEW: notifications
+        private readonly INotificationService _notif;
+
         // UPDATED: inject http client + options + memory cache (no other changes)
-        public ApprovalsController(AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi, IMemoryCache cache)
+        public ApprovalsController(AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi, IMemoryCache cache, INotificationService notif)
         {
             _db = db;
             _httpFactory = httpFactory;
             _openAi = openAi;
             _cache = cache;
+            _notif = notif;
         }
 
-        // File: Areas/Admin/Controllers/ApprovalsController.cs  (Index action only)
         // GET: /Admin/Approvals?status=All&q=&page=1&pageSize=10
         public IActionResult Index(string? status = "All", string? q = null, int page = 1, int pageSize = 10, string? sort = null)
         {
@@ -51,22 +55,34 @@ namespace JobPortal.Areas.Admin.Controllers
             sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
             if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
-            // Counts for tabs
-            var counts = _db.job_post_approvals
+            // -----------------------------------------------------------------
+            // Only show the LATEST approval per job_listing_id to avoid dups
+            // -----------------------------------------------------------------
+            var latestApprovalIds = _db.job_post_approvals
                 .AsNoTracking()
+                .GroupBy(a => a.job_listing_id)
+                .Select(g => g.Max(x => x.approval_id));
+
+            // Base query restricted to latest records only
+            var baseQuery = _db.job_post_approvals
+                .AsNoTracking()
+                .Where(a => latestApprovalIds.Contains(a.approval_id))
+                .Include(a => a.job_listing!.company)
+                .AsQueryable();
+
+            // Counts for tabs (computed on latest only)
+            var countData = baseQuery
                 .GroupBy(a => a.approval_status)
                 .Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToList();
 
-            int pending = counts.FirstOrDefault(x => x.Status == "Pending")?.Count ?? 0;
-            int approved = counts.FirstOrDefault(x => x.Status == "Approved")?.Count ?? 0;
-            int changes = counts.FirstOrDefault(x => x.Status == "ChangesRequested")?.Count ?? 0;
-            int rejected = counts.FirstOrDefault(x => x.Status == "Rejected")?.Count ?? 0;
+            int pending = countData.FirstOrDefault(x => x.Status == "Pending")?.Count ?? 0;
+            int approved = countData.FirstOrDefault(x => x.Status == "Approved")?.Count ?? 0;
+            int changes = countData.FirstOrDefault(x => x.Status == "ChangesRequested")?.Count ?? 0;
+            int rejected = countData.FirstOrDefault(x => x.Status == "Rejected")?.Count ?? 0;
 
-            var query = _db.job_post_approvals
-                .AsNoTracking()
-                .Include(a => a.job_listing!.company)
-                .AsQueryable();
+            // Apply filters on the latest-only set
+            var query = baseQuery;
 
             if (!string.IsNullOrWhiteSpace(status) && status != "All")
                 query = query.Where(a => a.approval_status == status);
@@ -86,11 +102,11 @@ namespace JobPortal.Areas.Admin.Controllers
 
             var total = query.Count();
 
-            // Convert date_posted (stored as UTC) to Malaysia time for display
+            // Build page items (submitted date pulled from job_listing.date_posted which you keep updated)
             var items = query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .AsEnumerable() // switch to client-side so extension methods work
+                .AsEnumerable() // switch to client-side so MyTime works if needed later
                 .Select(a => new ApprovalRow
                 {
                     Id = a.approval_id,
@@ -98,13 +114,11 @@ namespace JobPortal.Areas.Admin.Controllers
                     JobTitle = a.job_listing!.job_title,
                     Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status, // Pending/Approved/ChangesRequested/Rejected
-                    Date = a.job_listing!.date_posted
-                        .AsUtc()
-                        .ToMalaysiaTime()
+                    Date = a.job_listing!.date_posted // always latest submission time
                 })
                 .ToList();
 
-            // NEW: map approver names for current page (only Approved items)
+            // map approver names for current page (only Approved items)
             var pageIds = items.Select(i => i.Id).ToArray();
             var approvers = _db.job_post_approvals
                 .AsNoTracking()
@@ -134,7 +148,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     PageSize = pageSize,
                     TotalItems = total
                 },
-                // ADDED: pass sort to view
+                // pass sort to view
                 Sort = sort
             };
 
@@ -149,7 +163,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 .AsNoTracking()
                 .Include(a => a.job_listing!.company)
                 .Where(a => a.approval_id == id)
-                .AsEnumerable() // for extension methods
+                .AsEnumerable() // for MyTime conversion
                 .Select(a => new ApprovalPreviewViewModel
                 {
                     Id = a.approval_id,
@@ -157,10 +171,8 @@ namespace JobPortal.Areas.Admin.Controllers
                     JobTitle = a.job_listing!.job_title,
                     Company = a.job_listing!.company!.company_name,
                     Status = a.approval_status,
-                    // Convert stored UTC to Malaysia time for display
-                    Date = a.job_listing!.date_posted
-                        .AsUtc()
-                        .ToMalaysiaTime(),
+                    // Convert stored time to Malaysia time for display
+                    Date = a.job_listing!.date_posted,
                     JobDescription = a.job_listing!.job_description,
                     JobRequirements = a.job_listing!.job_requirements,
                     Comments = a.comments
@@ -169,7 +181,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             if (item == null) return NotFound();
 
-            // NEW: provide company photo path to the view without changing VM
+            // provide company photo path to the view without changing VM
             var photo = _db.job_post_approvals
                 .AsNoTracking()
                 .Where(a => a.approval_id == id)
@@ -178,7 +190,7 @@ namespace JobPortal.Areas.Admin.Controllers
             if (!string.IsNullOrWhiteSpace(photo))
                 ViewBag.CompanyPhotoUrl = photo;
 
-            // NEW: approver name for Approved items
+            // approver name for Approved items
             if (string.Equals(item.Status, "Approved", StringComparison.OrdinalIgnoreCase))
             {
                 var approver = _db.job_post_approvals
@@ -208,12 +220,11 @@ namespace JobPortal.Areas.Admin.Controllers
                 .FirstOrDefault(a => a.approval_id == id);
             if (approval == null) return NotFound();
 
-            var nowUtc = DateTime.UtcNow;
+            var nowMy = MyTime.NowMalaysia();
 
             approval.approval_status = "Approved";
-            // Store as UTC in DB
-            approval.date_approved = nowUtc;
-            approval.user_id = adminId; // NEW: persist approver
+            approval.date_approved = nowMy;
+            approval.user_id = adminId; // persist approver
             if (!string.IsNullOrWhiteSpace(comments))
                 approval.comments = comments;
 
@@ -228,12 +239,24 @@ namespace JobPortal.Areas.Admin.Controllers
             _db.admin_logs.Add(new admin_log
             {
                 user_id = adminId,
-                action_type = $"Approved job #{approval.job_listing_id}",
-                // Store log timestamp as UTC
-                timestamp = nowUtc
+                action_type = "Admin.Job.Approve",
+                timestamp = nowMy
             });
 
             _db.SaveChanges();
+
+            // --- Notify recruiter (owner) ---
+            try
+            {
+                var ownerId = approval.job_listing!.user_id;
+                if (ownerId > 0)
+                {
+                    var title = "Job approved";
+                    var msg = $"Your job \"{approval.job_listing!.job_title}\" has been approved and is now live.";
+                    _notif.SendAsync(ownerId, title, msg, type: "Approval").GetAwaiter().GetResult();
+                }
+            }
+            catch { /* best effort */ }
 
             TempData["Flash.Type"] = "success";
             TempData["Flash.Message"] = "Job approved.";
@@ -251,6 +274,8 @@ namespace JobPortal.Areas.Admin.Controllers
                 .FirstOrDefault(a => a.approval_id == id);
             if (approval == null) return NotFound();
 
+            var nowMy = MyTime.NowMalaysia();
+
             approval.approval_status = "Rejected";
             approval.date_approved = null;
             if (!string.IsNullOrWhiteSpace(comments))
@@ -262,12 +287,25 @@ namespace JobPortal.Areas.Admin.Controllers
             _db.admin_logs.Add(new admin_log
             {
                 user_id = adminId,
-                action_type = $"Rejected job #{approval.job_listing_id}",
-                // UTC for DB storage
-                timestamp = DateTime.UtcNow
+                action_type = "Admin.Job.Reject",
+                timestamp = nowMy
             });
 
             _db.SaveChanges();
+
+            // --- Notify recruiter (owner) ---
+            try
+            {
+                var ownerId = approval.job_listing!.user_id;
+                if (ownerId > 0)
+                {
+                    var title = "Job rejected";
+                    var reason = string.IsNullOrWhiteSpace(comments) ? "" : $" Reason: {comments.Trim()}";
+                    var msg = $"Your job \"{approval.job_listing!.job_title}\" was rejected.{reason}";
+                    _notif.SendAsync(ownerId, title, msg, type: "Review").GetAwaiter().GetResult();
+                }
+            }
+            catch { /* best effort */ }
 
             TempData["Flash.Type"] = "danger";
             TempData["Flash.Message"] = "Job rejected.";
@@ -285,6 +323,8 @@ namespace JobPortal.Areas.Admin.Controllers
                 .FirstOrDefault(a => a.approval_id == id);
             if (approval == null) return NotFound();
 
+            var nowMy = MyTime.NowMalaysia();
+
             approval.approval_status = "ChangesRequested";
             approval.date_approved = null;
             if (!string.IsNullOrWhiteSpace(comments))
@@ -296,12 +336,25 @@ namespace JobPortal.Areas.Admin.Controllers
             _db.admin_logs.Add(new admin_log
             {
                 user_id = adminId,
-                action_type = $"Requested changes for job #{approval.job_listing_id}",
-                // UTC for DB storage
-                timestamp = DateTime.UtcNow
+                action_type = "Admin.Job.RequestChanges",
+                timestamp = nowMy
             });
 
             _db.SaveChanges();
+
+            // --- Notify recruiter (owner) ---
+            try
+            {
+                var ownerId = approval.job_listing!.user_id;
+                if (ownerId > 0)
+                {
+                    var title = "Changes requested for job";
+                    var extra = string.IsNullOrWhiteSpace(comments) ? "" : $" Details: {comments.Trim()}";
+                    var msg = $"Your job \"{approval.job_listing!.job_title}\" needs changes before it can go live.{extra}";
+                    _notif.SendAsync(ownerId, title, msg, type: "Review").GetAwaiter().GetResult();
+                }
+            }
+            catch { /* best effort */ }
 
             TempData["Flash.Type"] = "warning";
             TempData["Flash.Message"] = "Changes requested from recruiter.";
@@ -330,8 +383,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 .Where(a => ids.Contains(a.approval_id))
                 .ToList();
 
-            // UTC for DB storage
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
             int changed = 0;
 
             foreach (var a in approvals)
@@ -341,7 +393,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     case "Approve":
                         a.approval_status = "Approved";
                         a.date_approved = now;
-                        a.user_id = adminId; // NEW: persist approver
+                        a.user_id = adminId; // persist approver
                         if (!string.IsNullOrWhiteSpace(comments))
                             a.comments = comments;
 
@@ -352,7 +404,12 @@ namespace JobPortal.Areas.Admin.Controllers
                                 a.job_listing.company.company_status = "Active"; // persist Active
                         }
 
-                        _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Approved job #{a.job_listing_id}", timestamp = now });
+                        _db.admin_logs.Add(new admin_log
+                        {
+                            user_id = adminId,
+                            action_type = "Admin.Bulk.Job.Update",
+                            timestamp = now
+                        });
                         changed++;
                         break;
 
@@ -363,7 +420,12 @@ namespace JobPortal.Areas.Admin.Controllers
                             a.comments = comments;
                         if (a.job_listing!.job_status == "Open")
                             a.job_listing.job_status = "Paused";
-                        _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Rejected job #{a.job_listing_id}", timestamp = now });
+                        _db.admin_logs.Add(new admin_log
+                        {
+                            user_id = adminId,
+                            action_type = "Admin.Bulk.Job.Update",
+                            timestamp = now
+                        });
                         changed++;
                         break;
 
@@ -374,13 +436,50 @@ namespace JobPortal.Areas.Admin.Controllers
                             a.comments = comments;
                         if (a.job_listing!.job_status != "Closed")
                             a.job_listing.job_status = "Draft";
-                        _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"Requested changes for job #{a.job_listing_id}", timestamp = now });
+                        _db.admin_logs.Add(new admin_log
+                        {
+                            user_id = adminId,
+                            action_type = "Admin.Bulk.Job.Update",
+                            timestamp = now
+                        });
                         changed++;
                         break;
                 }
             }
 
             if (changed > 0) _db.SaveChanges();
+
+            // --- Notify recruiters in bulk (best-effort, per item) ---
+            try
+            {
+                foreach (var a in approvals)
+                {
+                    var ownerId = a.job_listing?.user_id ?? 0;
+                    if (ownerId <= 0) continue;
+
+                    if (string.Equals(actionType, "Approve", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var title = "Job approved";
+                        var msg = $"Your job \"{a.job_listing!.job_title}\" has been approved and is now live.";
+                        _notif.SendAsync(ownerId, title, msg, type: "Approval").GetAwaiter().GetResult();
+                    }
+                    else if (string.Equals(actionType, "Reject", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var title = "Job rejected";
+                        var reason = string.IsNullOrWhiteSpace(comments) ? "" : $" Reason: {comments.Trim()}";
+                        var msg = $"Your job \"{a.job_listing!.job_title}\" was rejected.{reason}";
+                        _notif.SendAsync(ownerId, title, msg, type: "Review").GetAwaiter().GetResult();
+                    }
+                    else if (string.Equals(actionType, "Changes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var title = "Changes requested for job";
+                        var extra = string.IsNullOrWhiteSpace(comments) ? "" : $" Details: {comments.Trim()}";
+                        var msg = $"Your job \"{a.job_listing!.job_title}\" needs changes before it can go live.{extra}";
+                        _notif.SendAsync(ownerId, title, msg, type: "Review").GetAwaiter().GetResult();
+                    }
+                }
+            }
+            catch { /* swallow notification errors in bulk */ }
 
             TempData["Flash.Type"] = "success";
             TempData["Flash.Message"] = $"{changed} item(s) updated ({actionType}).";
@@ -431,8 +530,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     ["summary"] = "Item not found.",
                     ["items"] = new List<AiJobPolicyCheckItemVM>(),
                     ["fromCache"] = false,
-                    // cachedAt kept as UTC for consistency; convert at UI if needed
-                    ["cachedAt"] = DateTime.UtcNow
+                    ["cachedAt"] = MyTime.NowMalaysia()
                 };
                 return Json(nf);
             }
@@ -446,7 +544,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     ["summary"] = "AI check unavailable (no API key). Please review manually.",
                     ["items"] = new List<AiJobPolicyCheckItemVM>(),
                     ["fromCache"] = false,
-                    ["cachedAt"] = DateTime.UtcNow
+                    ["cachedAt"] = MyTime.NowMalaysia()
                 };
                 // Cache this for a short time to avoid repeated calls
                 _cache.Set(cacheKey, noKey, TimeSpan.FromMinutes(10));
@@ -483,7 +581,6 @@ namespace JobPortal.Areas.Admin.Controllers
                         "Set a check to false whenever that problem appears. Keep items short (0–5)." },
 
                     // ---------------- FEW-SHOT EXAMPLES ----------------
-                    // BAD EXAMPLE (should fail multiple checks)
                     new { role = "user", content =
                         "Company: ExampleCo\nTitle: Brand Ambassador – Fast Pay\n\n" +
                         "Description:\nPay a small onboarding fee to unlock client lists. Message me on WhatsApp +1 555 1234.\n\n" +
@@ -513,7 +610,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         "  ]\n" +
                         "}" },
 
-                    // GOOD EXAMPLE (should pass all checks)
+                    // GOOD EXAMPLE
                     new { role = "user", content =
                         "Company: Acme Labs\nTitle: Software Engineer (Backend)\n\n" +
                         "Description:\nBuild and maintain .NET APIs, collaborate with Product, review code, write tests. Hybrid 2–3 days/week. Clear responsibilities and growth path.\n\n" +
@@ -535,7 +632,6 @@ namespace JobPortal.Areas.Admin.Controllers
                         "  },\n" +
                         "  \"items\": []\n" +
                         "}" },
-                    // --------------- END FEW-SHOT EXAMPLES -------------
 
                     // ---- Actual item to evaluate ----
                     new { role = "user", content =
@@ -562,7 +658,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         ["items"] = new List<AiJobPolicyCheckItemVM>(),
                         ["rawNote"] = $"HTTP {resp.StatusCode}",
                         ["fromCache"] = false,
-                        ["cachedAt"] = DateTime.UtcNow
+                        ["cachedAt"] = MyTime.NowMalaysia()
                     };
                     _cache.Set(cacheKey, down, TimeSpan.FromMinutes(10));
                     return Json(down);
@@ -582,7 +678,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         ["summary"] = "AI response malformed. Please review manually.",
                         ["items"] = new List<AiJobPolicyCheckItemVM>(),
                         ["fromCache"] = false,
-                        ["cachedAt"] = DateTime.UtcNow
+                        ["cachedAt"] = MyTime.NowMalaysia()
                     };
                     _cache.Set(cacheKey, malformed, TimeSpan.FromMinutes(10));
                     return Json(malformed);
@@ -606,8 +702,8 @@ namespace JobPortal.Areas.Admin.Controllers
                     {
                         foreach (var el in arr.EnumerateArray())
                         {
-                            var issue = el.TryGetProperty("issue", out var iProp) && iProp.ValueKind == JsonValueKind.String ? iProp.GetString() ?? "" : "";
-                            var sev = el.TryGetProperty("severity", out var sv) && sv.ValueKind == JsonValueKind.String ? sv.GetString() ?? "Advice" : "Advice";
+                            var issue = el.TryGetProperty("issue", out var iProp) && iProp.ValueKind == JsonValueKind.String ? el.GetProperty("issue").GetString() ?? "" : "";
+                            var sev = el.TryGetProperty("severity", out var sv) && sv.ValueKind == JsonValueKind.String ? el.GetProperty("severity").GetString() ?? "Advice" : "Advice";
                             if (!string.IsNullOrWhiteSpace(issue))
                                 items.Add(new AiJobPolicyCheckItemVM { Issue = issue, Severity = string.IsNullOrWhiteSpace(sev) ? "Advice" : sev });
                         }
@@ -663,7 +759,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     ["summary"] = finalSummary,
                     ["items"] = finalItems,
                     ["fromCache"] = false,
-                    ["cachedAt"] = DateTime.UtcNow
+                    ["cachedAt"] = MyTime.NowMalaysia()
                 };
 
                 // Cache the result (e.g., 12 hours)
@@ -679,7 +775,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     ["summary"] = "AI check timed out. Please review manually.",
                     ["items"] = new List<AiJobPolicyCheckItemVM>(),
                     ["fromCache"] = false,
-                    ["cachedAt"] = DateTime.UtcNow
+                    ["cachedAt"] = MyTime.NowMalaysia()
                 };
                 _cache.Set(cacheKey, timeout, TimeSpan.FromMinutes(10));
                 return Json(timeout);

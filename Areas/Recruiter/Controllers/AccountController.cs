@@ -20,7 +20,9 @@ using JobPortal.Areas.Recruiter.Models;
 using System.Net.Http;
 using System.Text.Json;
 using System.IO; // <-- required for Path/Directory
-using JobPortal.Services;               // <-- INotificationService
+using JobPortal.Services;
+using JobPortal.Areas.Shared.Extensions; // MyTime
+               // <-- INotificationService
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -197,7 +199,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         if (await _db.users.AnyAsync(u => u.email == email))
           return Json(new { ok = false, message = "Email already registered." });
 
-        var now = DateTime.UtcNow;
+        var now = MyTime.NowMalaysia();
 
         // Invalidate any existing active tokens for this email/purpose
         await _db.email_verifications
@@ -264,7 +266,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
     [HttpGet, AllowAnonymous]
     public async Task<IActionResult> VerifyEmail([FromQuery] Guid token, [FromQuery] string email)
     {
-      var now = DateTime.UtcNow;
+      var now = MyTime.NowMalaysia();
 
       if (await _db.users.AnyAsync(u => u.email == email))
       {
@@ -351,7 +353,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
     // --- Branded HTML email (unchanged) ---
     private string BuildVerifyEmailHtml(string verifyUrl, string? logoCid)
     {
-      var year = DateTime.UtcNow.Year;
+      var year = MyTime.NowMalaysia().Year;
       var safeUrl = System.Net.WebUtility.HtmlEncode(verifyUrl);
 
       var logoImg = string.IsNullOrWhiteSpace(logoCid)

@@ -10,6 +10,8 @@ using JobPortal.Services;
 using Microsoft.AspNetCore.Identity;
 using JobPortal.Areas.JobSeeker.Models;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Authorization; // add this
+
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -29,14 +31,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
 
         // GET: Login page
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public IActionResult Login()
         {
             return View();
         }
 
         // POST: Handle login submission
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> Login(string email, string password, string? twoFACode)
         {
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
@@ -167,7 +169,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ===============================
         // REGISTER
         // ===============================
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> Register(string firstName, string lastName, string email, string password, string confirmPassword, RegisterViewModel model)
         {
             if (!ModelState.IsValid)
@@ -321,13 +323,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return RedirectToAction("Login");
         }
 
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public IActionResult StaffLogin()
         {
             return View(); // Create StaffLogin.cshtml
         }
 
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> StaffLogin(string email, string password, string? twoFACode)
         {
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
@@ -398,7 +400,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
 
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public async Task<IActionResult> VerifyEmail(string email, string token)
         {
 
@@ -582,7 +584,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ===============================
         // ✅ Forgot Password (GET)
         // ===============================
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public IActionResult ForgotPassword()
         {
             return View();
@@ -591,7 +593,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ===============================
         // ✅ Forgot Password (POST)
         // ===============================
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> ForgotPassword(string email)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -653,7 +655,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ===============================
         // ✅ Reset Password (GET)
         // ===============================
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public async Task<IActionResult> ResetPassword(string email, string token)
         {
             // 1️⃣ Validate token format
@@ -702,7 +704,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         // ===============================
         // ✅ Reset Password (POST)
         // ===============================
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> ResetPassword(string email, string token, string newPassword, string confirmPassword)
         {
             // 1️⃣ Check required fields
@@ -796,13 +798,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return RedirectToAction("Login");
         }
 
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public IActionResult RecoverAccount()
         {
             return View("Recover"); // Make sure Recover.cshtml has a simple email input form
         }
 
-        [HttpPost]
+        [HttpPost, AllowAnonymous]
         public async Task<IActionResult> RecoverAccount(string email)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -886,7 +888,7 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         }
 
 
-        [HttpGet]
+        [HttpGet, AllowAnonymous]
         public async Task<IActionResult> UnlockAccount(string email, string token)
         {
             var storedToken = HttpContext.Session.GetString("RecoverToken");

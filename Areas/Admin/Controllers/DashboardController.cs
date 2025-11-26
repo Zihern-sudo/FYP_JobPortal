@@ -6,6 +6,8 @@ using JobPortal.Areas.Shared.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using JobPortal.Areas.Shared.Extensions; // MyTime
+
 
 namespace JobPortal.Areas.Admin.Controllers
 {
@@ -63,7 +65,7 @@ namespace JobPortal.Areas.Admin.Controllers
             int activeJobs = _db.job_listings.Count(j => j.job_status == "Open");
 
             // Distinct candidates who applied in last 7 days
-            var today = DateTime.UtcNow.Date;
+            var today = MyTime.NowMalaysia();
             var sevenDaysAgo = today.AddDays(-6); // inclusive 7-day window
             int candidates7d = _db.job_applications
                 .Where(a => a.date_updated >= sevenDaysAgo && a.date_updated < today.AddDays(1))
@@ -101,14 +103,24 @@ namespace JobPortal.Areas.Admin.Controllers
             return View(vm);
         }
 
-        // --- Logout (Recruiter) ---
+        // --- Logout (Admin) ---
         [HttpGet]
         public IActionResult Logout()
         {
-            // Why: ensure full sign-out for session-based auth
+            // Log admin logout so we can track access sessions
+            if (this.TryGetUserId(out var adminId, out _))
+            {
+                _db.admin_logs.Add(new admin_log
+                {
+                    user_id = adminId,
+                    action_type = "Admin.Auth.Logout",
+                    timestamp = MyTime.NowMalaysia()
+                });
+                _db.SaveChanges();
+            }
+
             HttpContext.Session.Clear();
 
-            // Return to Recruiter login
             return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
         }
     }

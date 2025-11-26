@@ -9,6 +9,9 @@ using JobPortal.Areas.Recruiter.Models;   // ViewModels, enums
 using JobPortal.Areas.Shared.Extensions;  // TryGetUserId extension
 using System.Text.Json;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;                     // ILogger<T>
+using JobPortal.Services;                               // INotificationService
+using JobPortal.Areas.Shared.Models.Extensions;         // TryNotifyAsync()
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -16,7 +19,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
     public class JobsController : Controller
     {
         private readonly AppDbContext _db;
-        public JobsController(AppDbContext db) => _db = db;
+        private readonly INotificationService _notif;            // notify
+        private readonly ILogger<JobsController> _logger;        // log
+
+        public JobsController(AppDbContext db,
+                              INotificationService notif,
+                              ILogger<JobsController> logger)
+        {
+            _db = db;
+            _notif = notif;
+            _logger = logger;
+        }
 
         private const string TEMP_APPLY_KEY = "tpl_apply_payload";
         private const int DefaultPageSize = 20;
@@ -44,6 +57,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         private async Task CreateApprovalForJobAsync(int jobId, int submittedByUserId)
         {
+            // why: persist submit intent in approval table (DB supports Pending/Approved/ChangesRequested/Rejected)
             var row = new job_post_approval
             {
                 user_id = submittedByUserId,
@@ -65,7 +79,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             public string? status { get; set; }
         }
 
-        // LIST + toolbar state (hides New buttons when company not verified/active)
+        // LIST
         public async Task<IActionResult> Index(string? q, string? status, string? order, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
@@ -116,9 +130,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Where(x => x != null)
                 .ToDictionary(x => x.job_listing_id, x => x.approval_status);
 
-            // Expose allow-post flag to the view (controls toolbar buttons)
-            var gate = await CanPostJobAsync(recruiterId);
-            ViewBag.AllowPost = gate.Allowed;
+            ViewBag.AllowPost = (await CanPostJobAsync(recruiterId)).Allowed;
 
             var vm = new JobsIndexVM
             {
@@ -142,7 +154,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            // BLOCK: require Verified/Active company before opening the Add form
+            // Gate: require Verified/Active
             var gate = await CanPostJobAsync(recruiterId);
             if (!gate.Allowed)
             {
@@ -203,7 +215,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            // BLOCK: require Verified/Active company at creation
             var gate = await CanPostJobAsync(recruiterId);
             if (!gate.Allowed || gate.CompanyId == null)
             {
@@ -219,20 +230,22 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 job_requirements_nice = vm.job_requirements_nice,
                 salary_min = vm.salary_min,
                 salary_max = vm.salary_max,
-                job_status = "Draft", // recruiter cannot open directly
+                job_status = "Draft", // DB schema: enum('Draft','Open','Paused','Closed')
                 job_type = vm.job_type,
                 work_mode = vm.work_mode,
                 job_category = vm.job_category,
                 user_id = recruiterId,
                 company_id = gate.CompanyId.Value,
-                date_posted = DateTime.UtcNow,
+                date_posted = MyTime.NowMalaysia(),
                 expiry_date = vm.expiry_date
             };
 
             _db.job_listings.Add(entity);
             await _db.SaveChangesAsync();
 
-            TempData["Message"] = "Job saved as Draft. Use 'Submit for Approval' on the Edit page.";
+            // why: signal Edit page to show "Pending Approval" UI and enable Submit
+            TempData["JustCreated"] = true;
+            TempData["Message"] = "Job saved. Review and Submit for Approval.";
             return RedirectToAction(nameof(Edit), new { id = entity.job_listing_id });
         }
 
@@ -305,28 +318,30 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (latestApproval != null)
             {
-                ViewBag.ApprovalStatus = latestApproval.approval_status;
+                ViewBag.ApprovalStatus = latestApproval.approval_status; // "Pending"|"Approved"|"ChangesRequested"|"Rejected"
                 ViewBag.ApprovalComments = latestApproval.comments;
                 ViewBag.ApprovalUpdatedAt = latestApproval.date_approved;
             }
 
-            // ===== NEW: if the job itself is Draft, force "ChangesRequested" in the view =====
-            // This guarantees the Edit page shows 66% (ChangesRequested) immediately after any save,
-            // even if there is no approval row yet or the latest row was "Pending".
-            if (string.Equals(job.job_status, "Draft", StringComparison.OrdinalIgnoreCase))
+            // UI status computation
+            if (TempData.Peek("JustCreated") is bool justCreated && justCreated)
+            {
+                ViewBag.UiStatus = "PendingApproval";      // UI-only label (VM enum added)
+                ViewBag.ApprovalStatus ??= "None";
+            }
+            else if (string.Equals(job.job_status, "Draft", StringComparison.OrdinalIgnoreCase) &&
+                     !string.Equals((string?)ViewBag.ApprovalStatus ?? "", "Pending", StringComparison.OrdinalIgnoreCase))
             {
                 ViewBag.ApprovalStatus = "ChangesRequested";
-                if (ViewBag.ApprovalComments == null)
-                    ViewBag.ApprovalComments = "Draft changes saved by recruiter. Resubmit for approval.";
-                if (ViewBag.ApprovalUpdatedAt == null)
-                    ViewBag.ApprovalUpdatedAt = DateTime.UtcNow;
+                ViewBag.ApprovalComments ??= "Draft changes saved by recruiter. Resubmit for approval.";
+                ViewBag.ApprovalUpdatedAt ??= MyTime.NowMalaysia();
             }
 
             ViewBag.FromTemplate = fromTemplate;
             return View(vm);
         }
 
-        // EDIT (POST)
+        // EDIT (POST) — Save first, keep as Draft
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(JobEditVm vm, string? setStatus)
@@ -338,10 +353,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .FirstOrDefaultAsync();
 
             if (job == null) return NotFound();
-
-            // Why: enforce annotations + IValidatableObject before saving
-            if (!ModelState.IsValid)
-                return View(vm);
+            if (!ModelState.IsValid) return View(vm);
 
             if (vm.salary_min.HasValue && vm.salary_max.HasValue && vm.salary_min.Value > vm.salary_max.Value)
             {
@@ -349,7 +361,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return View(vm);
             }
 
-            // Keep as Draft until admin approves
             job.job_title = vm.job_title;
             job.job_description = vm.job_description;
             job.job_requirements = vm.job_requirements;
@@ -360,22 +371,23 @@ namespace JobPortal.Areas.Recruiter.Controllers
             job.work_mode = vm.work_mode;
             job.job_category = vm.job_category;
             job.expiry_date = vm.expiry_date;
-            job.job_status = "Draft";
+            job.job_status = "Draft"; // DB enum
 
             await _db.SaveChangesAsync();
 
-            TempData["Message"] = $"Job #{job.job_listing_id} saved as Draft.";
+            // why: let client enable Submit after a save
+            TempData["SavedOnce"] = true;
+            TempData["Message"] = $"Job #{job.job_listing_id} saved.";
             return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
         }
 
-        // SUBMIT FOR APPROVAL
+        // SUBMIT FOR APPROVAL — disables both buttons (client) & records Pending approval
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SubmitForApproval(int id)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
 
-            // BLOCK: require Verified/Active company when submitting for approval
             var gate = await CanPostJobAsync(recruiterId);
             if (!gate.Allowed)
             {
@@ -389,10 +401,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (job == null) return NotFound();
 
-            job.job_status = "Draft"; // enforce Draft at submission
+            job.job_status = "Draft"; // DB still Draft; approval row represents the submitted state
             await _db.SaveChangesAsync();
 
+            // Create/append a Pending approval row
             await CreateApprovalForJobAsync(job.job_listing_id, recruiterId);
+
+            // Notify Admins (non-blocking)
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendToAdminsAsync(
+                    title: "Job post submitted",
+                    message: $"“{(job.job_title ?? "Job")}” was submitted and awaits review.",
+                    type: "Review"
+                )
+            );
 
             TempData["Message"] = $"Job #{job.job_listing_id} submitted for Admin approval.";
             return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
@@ -444,7 +466,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // PIPELINE (only for Open jobs)
+        // PIPELINE (only for Open jobs) — unchanged
         [HttpGet]
         public async Task<IActionResult> Pipeline(int id)
         {
@@ -503,7 +525,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Distinct()
                 .ToListAsync();
 
-            // === NEW: latest manual override per application (for recency sort) ===
             var latestOverrideAt = await _db.ai_rank_overrides
                 .Where(o => o.job_listing_id == id && appIds.Contains(o.application_id))
                 .GroupBy(o => o.application_id)
@@ -539,7 +560,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 Applied = a.date_updated
             });
 
-            // === NEW: sort by override recency → score → applied date ===
             var cands = composed
                 .OrderByDescending(x => x.OverrideAt ?? DateTime.MinValue)
                 .ThenByDescending(x => x.Score)
@@ -550,7 +570,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             ViewBag.Job = item;
             ViewBag.Cands = cands;
 
-            // NEW: supply requirement lines to the view for Scoring Rules
             static string[] SplitLines(string? s) =>
                 string.IsNullOrWhiteSpace(s)
                     ? Array.Empty<string>()
@@ -569,7 +588,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return View();
         }
 
-        // Save current job as template
+        // Save current job as template — unchanged
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SaveAsTemplate(int id, string name)
@@ -597,8 +616,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 template_subject = null,
                 template_body = body,
                 template_status = "Active",
-                date_created = DateTime.UtcNow,
-                date_updated = DateTime.UtcNow
+                date_created = MyTime.NowMalaysia(),
+                date_updated = MyTime.NowMalaysia()
             };
             _db.templates.Add(row);
             await _db.SaveChangesAsync();
@@ -607,7 +626,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id });
         }
 
-        // Move candidate within pipeline
+        // Move candidate — NOW sends notification like CandidatesController.SetStatus
         private static readonly Dictionary<string, string> _nextStage = new(StringComparer.OrdinalIgnoreCase)
         {
             ["AI-Screened"] = "Shortlisted",
@@ -640,13 +659,28 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
 
             app.application_status = toStage;
-            app.date_updated = DateTime.UtcNow;
+            app.date_updated = MyTime.NowMalaysia();
             await _db.SaveChangesAsync();
+
+            // === NEW: notify candidate (non-blocking), same pattern as CandidatesController.SetStatus ===
+            var jobTitle = await _db.job_listings
+                .Where(j => j.job_listing_id == app.job_listing_id)
+                .Select(j => j.job_title)
+                .FirstOrDefaultAsync();
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: app.user_id,
+                    title: "Application status updated",
+                    message: $"Your application for “{(jobTitle ?? "the job")}” is now {toStage}.",
+                    type: "System"
+                )
+            );
 
             return Json(new { ok = true, applicationId, newStage = toStage });
         }
 
-        // Create offer
+        // Create offer — NOW also notifies candidate
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
@@ -675,15 +709,30 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 contract_type = vm.ContractType,
                 notes = vm.Notes,
                 candidate_token = Guid.NewGuid(),
-                date_sent = DateTime.UtcNow,
-                date_updated = DateTime.UtcNow
+                date_sent = MyTime.NowMalaysia(),
+                date_updated = MyTime.NowMalaysia()
             };
             _db.job_offers.Add(offer);
 
             app.application_status = "Offer";
-            app.date_updated = DateTime.UtcNow;
+            app.date_updated = MyTime.NowMalaysia();
 
             await _db.SaveChangesAsync();
+
+            // === NEW: notify candidate about the offer (same content as CandidatesController.SendOffer) ===
+            var jobTitle = app.job_listing?.job_title
+                           ?? await _db.job_listings.Where(j => j.job_listing_id == app.job_listing_id)
+                                                    .Select(j => j.job_title)
+                                                    .FirstOrDefaultAsync();
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: app.user_id,
+                    title: "Job offer sent",
+                    message: $"You have a job offer for “{(jobTitle ?? "your application")}”.",
+                    type: "System"
+                )
+            );
 
             return Json(new
             {
@@ -694,7 +743,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             });
         }
 
-        // AJAX: latest approval info (used by Edit + Index polling UIs)
+        // AJAX: approval info
         [HttpGet]
         public async Task<IActionResult> ApprovalInfo(int id)
         {
@@ -719,9 +768,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             });
         }
 
-        // ===========================
-        // ===== SCORING RULES =======
-        // ===========================
+        // Scoring rules — unchanged
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ScoringRules(int id, [FromForm] string[]? weight2)
@@ -754,14 +801,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     user_id = recruiterId,
                     job_listing_id = id,
                     rule_json = json,
-                    updated_at = DateTime.UtcNow
+                    updated_at = MyTime.NowMalaysia()
                 };
                 _db.ai_scoring_rules.Add(row);
             }
             else
             {
                 row.rule_json = json;
-                row.updated_at = DateTime.UtcNow;
+                row.updated_at = MyTime.NowMalaysia();
             }
 
             await _db.SaveChangesAsync();
@@ -802,9 +849,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return Json(new { ok = true, weight2 });
         }
 
-        // =====================================
-        // ===== Manual Ranking: OverrideRank ==
-        // =====================================
+        // Manual Ranking — unchanged
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> OverrideRank(int id, int applicationId, string direction, string reason)
@@ -818,22 +863,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var dir = direction.Trim().ToLowerInvariant();
             var delta = dir == "down" ? -1 : 1; // default to up
 
-            // Validate job ownership
             var job = await _db.job_listings
                 .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
                 .Select(j => new { j.job_listing_id })
                 .FirstOrDefaultAsync();
             if (job is null) return NotFound(new { ok = false, error = "Job not found." });
 
-            // Validate application belongs to job
             var app = await _db.job_applications
                 .Where(a => a.job_listing_id == id && a.application_id == applicationId)
                 .FirstOrDefaultAsync();
             if (app is null) return NotFound(new { ok = false, error = "Application not found." });
 
-            var now = DateTime.UtcNow;
+            var now = MyTime.NowMalaysia();
 
-            // Persist override (recency drives sort)
             _db.ai_rank_overrides.Add(new ai_rank_override
             {
                 job_listing_id = id,
@@ -844,7 +886,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 created_at = now
             });
 
-            // Optional: audit trail inside candidate notes
             if (!string.IsNullOrWhiteSpace(reason))
             {
                 _db.job_seeker_notes.Add(new job_seeker_note

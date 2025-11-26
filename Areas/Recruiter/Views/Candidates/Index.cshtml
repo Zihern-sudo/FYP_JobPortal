@@ -108,6 +108,20 @@
 
                         <a asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@c.Id"
                             class="btn btn-sm btn-outline-primary">Open</a>
+
+                        <form class="d-inline js-start-conv-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ApplicationId" value="@c.Id" />
+                            <button type="button" class="btn btn-sm btn-outline-secondary js-new-conv" data-app-id="@c.Id"
+                                data-bs-toggle="tooltip" title="Start a new conversation with this candidate">
+                                <span class="js-new-conv-text">New Conversation</span>
+                                <span class="spinner-border spinner-border-sm ms-1 d-none js-new-conv-spin" role="status"
+                                    aria-hidden="true"></span>
+                            </button>
+                        </form>
+
+
+
                     </td>
                 </tr>
 
@@ -118,8 +132,9 @@
 
 <nav aria-label="paging">
     <ul class="pagination justify-content-end">
-        <li class="page-item @(Model.Page <= 1 ?
-                                    "disabled" : "")">
+        <li
+            class="page-item @(Model.Page <= 1 ?
+                                                                                                                                    "disabled" : "")">
             <a class="page-link" href="@(Model.Page <= 1 ? "#" : RoutePreserve(1))">First</a>
         </li>
         <li class="page-item @(Model.Page <= 1 ? "disabled" : "")">
@@ -153,3 +168,78 @@
     Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> • Total
     <strong>@Model.TotalCount</strong> candidates
 </div>
+
+<script>
+    (function () {
+        if (window.bootstrap) {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+        }
+
+        const createUrl = '@Url.Action("StartFromApplication", "Inbox", new { area = "Recruiter" })';
+        const existsUrl = '@Url.Action("ExistsForApplication", "Inbox", new { area = "Recruiter" })';
+
+        // PRE-CHECK: rename button to "Open Conversation" when a thread exists
+        document.querySelectorAll('.js-new-conv').forEach(async (btn) => {
+            const form = btn.closest('.js-start-conv-form');
+            const appId = form.querySelector('input[name="ApplicationId"]').value;
+            try {
+                const r = await fetch(`${existsUrl}?applicationId=${encodeURIComponent(appId)}`, { headers: { 'Accept': 'application/json' } });
+                const d = await r.json();
+                if (d.exists) {
+                    const t = btn.querySelector('.js-new-conv-text');
+                    if (t) t.textContent = 'Open Conversation';
+                    btn.title = 'Open existing conversation';
+                    if (btn.getAttribute('data-bs-toggle') === 'tooltip' && window.bootstrap) {
+                        const tip = bootstrap.Tooltip.getInstance(btn) || new bootstrap.Tooltip(btn);
+                        btn.setAttribute('data-bs-original-title', btn.title);
+                        tip.update();
+                    }
+                }
+            } catch { }
+        });
+
+
+
+        document.querySelectorAll('.js-new-conv').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const form = btn.closest('.js-start-conv-form');
+                const token = form.querySelector('input[name="__RequestVerificationToken"]').value;
+                const appId = form.querySelector('input[name="ApplicationId"]').value;
+                const spin = btn.querySelector('.js-new-conv-spin');
+                const txt = btn.querySelector('.js-new-conv-text');
+
+                btn.disabled = true; spin.classList.remove('d-none'); txt.textContent = 'Opening…';
+
+                let exists = {};
+                try {
+                    const r = await fetch(`${existsUrl}?applicationId=${encodeURIComponent(appId)}`, { headers: { 'Accept': 'application/json' } });
+                    exists = await r.json();
+                } catch (_) { }
+
+                if (exists.exists && exists.url) {
+                    const t = btn.querySelector('.js-new-conv-text');
+                    if (t) t.textContent = 'Open Conversation';
+                    window.location.href = exists.url; // go straight to thread, same tab
+                    return;
+                }
+
+                const body = new URLSearchParams({ ApplicationId: appId });
+                try {
+                    const r = await fetch(createUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'RequestVerificationToken': token
+                        },
+                        body
+                    });
+                    const data = await r.json();
+                    if (data.ok && data.url) { window.location.href = data.url; return; }
+                } catch (_) { }
+
+                spin.classList.add('d-none'); txt.textContent = 'New Conversation'; btn.disabled = false;
+            });
+        });
+    })();
+</script>

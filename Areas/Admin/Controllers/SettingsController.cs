@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using JobPortal.Areas.Shared.Extensions; // MyTime
+
 
 using JobPortal.Areas.Admin.Models;
 
@@ -88,7 +90,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
 
                 var ext = Path.GetExtension(logo.FileName);
-                var fileName = $"logo_{DateTime.UtcNow:yyyyMMddHHmmssfff}{ext}";
+                var fileName = $"logo_{MyTime.NowMalaysia():yyyyMMddHHmmssfff}{ext}";
                 var full = Path.Combine(uploadDir, fileName);
 
                 await using (var fs = System.IO.File.Create(full))

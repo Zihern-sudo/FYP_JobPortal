@@ -1,6 +1,3 @@
-@* ================================
-   File: Areas/Admin/Views/Audit/Index.cshtml
-   ================================ *@
 @model IEnumerable<JobPortal.Areas.Admin.Models.AuditLogViewModel>
 @{
   ViewData["Title"] = "Audit Log";
@@ -8,8 +5,7 @@
   string vFrom = (ViewBag.DateFrom is DateTime df) ? df.ToString("yyyy-MM-dd") : "";
   string vTo = (ViewBag.DateTo is DateTime dt) ? dt.ToString("yyyy-MM-dd") : "";
   string vActor = (ViewBag.Actor as string) ?? "";
-  string vAction = (ViewBag.Action as string) ?? ""; // remains ViewBag.Action
-  string vTarget = (ViewBag.Target as string) ?? "";
+  string vAction = (ViewBag.Action as string) ?? ""; // now friendly label (if known)
 
   int page = ViewBag.Page is int p ? p : 1;
   int pageSize = ViewBag.PageSize is int ps ? ps : 20;
@@ -18,11 +14,15 @@
 
   var topActions = ViewBag.TopActions as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
   var topActors = ViewBag.TopActors as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+  var allActions = ViewBag.AllActions as IEnumerable<string> ?? Enumerable.Empty<string>(); // friendly labels
+
+  int fromIndex = total == 0 ? 0 : ((page - 1) * pageSize) + 1;
+  int toIndex = Math.Min(page * pageSize, total);
 }
 
 <div class="card shadow-sm mb-3">
   <div class="card-body">
-    <form method="get" class="row g-2 align-items-end">
+    <form method="get" class="row g-2 align-items-start">
       <div class="col-auto">
         <label class="form-label mb-0 small">From</label>
         <input class="form-control" type="date" name="from" value="@vFrom" />
@@ -38,11 +38,20 @@
       <div class="col-auto">
         <label class="form-label mb-0 small">Action</label>
         @* name is actionType to avoid route/action collision *@
-        <input class="form-control" type="text" name="actionType" value="@vAction" placeholder="Contains..." />
-      </div>
-      <div class="col-auto">
-        <label class="form-label mb-0 small">Target</label>
-        <input class="form-control" type="text" name="target" value="@vTarget" placeholder="(not tracked)" />
+        <input class="form-control" type="text" name="actionType" value="@vAction" list="actionTypeList"
+          placeholder="All actions" autocomplete="off" />
+        <datalist id="actionTypeList">
+          @foreach (var a in allActions)
+          {
+            if (!string.IsNullOrWhiteSpace(a))
+            {
+              <option value="@a"></option>
+            }
+          }
+        </datalist>
+        <small class="text-muted d-block mt-1 small">
+          Start typing to search, or choose from the list.
+        </small>
       </div>
       <div class="col-auto">
         <label class="form-label mb-0 small">Page size</label>
@@ -53,26 +62,72 @@
           <option value="100" selected="@(pageSize == 100)">100</option>
         </select>
       </div>
+
+      @* CHANGED: add an empty label so the Apply button lines up with the input row *@
       <div class="col-auto">
+        <label class="form-label mb-0 small d-block">&nbsp;</label>
         <button class="btn btn-primary">Apply</button>
       </div>
+
       <div class="col-auto ms-auto">
         <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Audit" asp-action="ExportCsv"
-          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction"
-          asp-route-target="@vTarget">Export CSV</a>
+          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction">
+          Export CSV
+        </a>
 
         <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Audit" asp-action="ExportPdf"
-          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction"
-          asp-route-target="@vTarget">Export PDF</a>
+          asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor" asp-route-actionType="@vAction">
+          Export PDF
+        </a>
       </div>
     </form>
+
+    <div class="mt-3 small text-muted">
+      @if (total == 0)
+      {
+        <span>No entries for the selected filters.</span>
+      }
+      else
+      {
+        <span>Showing @fromIndex-@toIndex of @total entries.</span>
+
+        var hasFilter = !string.IsNullOrWhiteSpace(vActor)
+        || !string.IsNullOrWhiteSpace(vAction)
+        || !string.IsNullOrWhiteSpace(vFrom)
+        || !string.IsNullOrWhiteSpace(vTo);
+        if (hasFilter)
+        {
+          <span class="ms-2">Filters:</span>
+          if (!string.IsNullOrWhiteSpace(vFrom) || !string.IsNullOrWhiteSpace(vTo))
+          {
+            <span class="badge bg-light text-dark ms-1">
+              Date:
+              @(string.IsNullOrWhiteSpace(vFrom) ? "Any" : vFrom)
+              →
+              @(string.IsNullOrWhiteSpace(vTo) ? "Now" : vTo)
+            </span>
+          }
+          if (!string.IsNullOrWhiteSpace(vActor))
+          {
+            <span class="badge bg-light text-dark ms-1">Actor contains “@vActor”</span>
+          }
+          if (!string.IsNullOrWhiteSpace(vAction))
+          {
+            <span class="badge bg-light text-dark ms-1">Action = “@vAction”</span>
+          }
+        }
+      }
+    </div>
   </div>
 </div>
 
 <div class="row g-3 mb-3">
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">Top Actions</div>
+      <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+        <span>Top Actions</span>
+        <span class="small text-muted">Based on current filters</span>
+      </div>
       <div class="card-body">
         @if (!(topActions?.Any() ?? false))
         {
@@ -95,7 +150,10 @@
   </div>
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header bg-white fw-semibold">Top Actors</div>
+      <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+        <span>Top Actors</span>
+        <span class="small text-muted">Based on current filters</span>
+      </div>
       <div class="card-body">
         @if (!(topActors?.Any() ?? false))
         {
@@ -126,15 +184,13 @@
           <th style="width:160px">When</th>
           <th style="width:240px">Actor</th>
           <th>Action</th>
-          <th style="width:200px">Target</th>
-          <th>Notes</th>
         </tr>
       </thead>
       <tbody>
         @if (Model == null || !Model.Any())
         {
           <tr>
-            <td colspan="5" class="text-muted text-center py-4">No log entries</td>
+            <td colspan="3" class="text-muted text-center py-4">No log entries</td>
           </tr>
         }
         else
@@ -144,9 +200,9 @@
             <tr>
               <td>@r.When.ToString("yyyy-MM-dd HH:mm")</td>
               <td>@r.Actor</td>
-              <td><span class="badge text-bg-light">@r.Action</span></td>
-              <td>@(string.IsNullOrWhiteSpace(r.Target) ? "—" : r.Target)</td>
-              <td class="text-muted">@r.Notes</td>
+              <td>
+                <span class="badge text-bg-light">@r.Action</span>
+              </td>
             </tr>
           }
         }
@@ -165,15 +221,13 @@
       }
       <a class="btn btn-sm btn-outline-secondary @(page == 1 ? "disabled" : "")" asp-area="Admin" asp-controller="Audit"
         asp-action="Index" asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor"
-        asp-route-actionType="@vAction" asp-route-target="@vTarget" asp-route-page="@prev"
-        asp-route-pageSize="@pageSize">
+        asp-route-actionType="@vAction" asp-route-page="@prev" asp-route-pageSize="@pageSize">
         Prev
       </a>
 
       <a class="btn btn-sm btn-outline-secondary @(page == totalPages ? "disabled" : "")" asp-area="Admin"
         asp-controller="Audit" asp-action="Index" asp-route-from="@vFrom" asp-route-to="@vTo" asp-route-actor="@vActor"
-        asp-route-actionType="@vAction" asp-route-target="@vTarget" asp-route-page="@next"
-        asp-route-pageSize="@pageSize">
+        asp-route-actionType="@vAction" asp-route-page="@next" asp-route-pageSize="@pageSize">
         Next
       </a>
     </div>

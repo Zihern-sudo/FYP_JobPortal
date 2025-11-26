@@ -388,8 +388,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 template_subject = null,
                 template_body = JsonSerializer.Serialize(dto),
                 template_status = "Active",
-                date_created = DateTime.UtcNow,
-                date_updated = DateTime.UtcNow
+                date_created = MyTime.NowMalaysia(),
+                date_updated = MyTime.NowMalaysia()
             };
             _db.templates.Add(row);
             await _db.SaveChangesAsync();
@@ -459,7 +459,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             row.template_name = JOB_PREFIX + vm.Name.Trim();
             row.template_body = JsonSerializer.Serialize(dto);
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
 
             await _db.SaveChangesAsync();
             TempData["Message"] = "Job template updated.";
@@ -474,7 +474,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id && t.user_id == recruiterId && t.template_name.StartsWith(JOB_PREFIX));
             if (row == null) return NotFound();
             row.template_status = "Archived";
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
             await _db.SaveChangesAsync();
             TempData["Message"] = "Template archived.";
             return RedirectToAction(nameof(Index));
@@ -488,7 +488,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             var row = await _db.templates.FirstOrDefaultAsync(t => t.template_id == id && t.user_id == recruiterId && t.template_name.StartsWith(JOB_PREFIX));
             if (row == null) return NotFound();
             row.template_status = "Active";
-            row.date_updated = DateTime.UtcNow;
+            row.date_updated = MyTime.NowMalaysia();
             await _db.SaveChangesAsync();
             TempData["Message"] = "Template restored.";
             return RedirectToAction(nameof(Archived));

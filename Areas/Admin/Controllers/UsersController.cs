@@ -389,10 +389,8 @@ namespace JobPortal.Areas.Admin.Controllers
                 sb.AppendLine($"{Esc(r.Name)},{Esc(r.email)},{Esc(r.Status)},{Esc(r.Role)},{Esc(r.Company)},{Esc(r.CompanyStatus)},{r.Created:yyyy-MM-dd HH:mm}");
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return File(bytes, "text/csv; charset=utf-8", $"Users_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv");
+            return File(bytes, "text/csv; charset=utf-8", $"Users_{MyTime.NowMalaysia():yyyyMMdd_HHmm}.csv");
         }
-
-
 
 
         // BULK: Approve / Reject / Suspend / Reactivate (respects role)
@@ -469,9 +467,18 @@ namespace JobPortal.Areas.Admin.Controllers
 
             if (this.TryGetUserId(out var adminId, out _))
             {
-                var now = DateTime.UtcNow;
+                var now = MyTime.NowMalaysia();
+                var auditAction = "Admin.Bulk.User.Update";
+
                 foreach (var _ in users)
-                    _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"User-{setTo}", timestamp = now });
+                {
+                    _db.admin_logs.Add(new admin_log
+                    {
+                        user_id = adminId,
+                        action_type = auditAction,
+                        timestamp = now
+                    });
+                }
                 _db.SaveChanges();
             }
 
@@ -547,16 +554,16 @@ namespace JobPortal.Areas.Admin.Controllers
 
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Approve(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
-            => SetUserStatus(id, "Active", "User activated.", status, q, from, to, page, role);
+            => SetUserStatus(id, "Active", "User activated.", "Admin.User.Approve", status, q, from, to, page, role);
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Reject(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
-            => SetUserStatus(id, "Inactive", "User rejected.", status, q, from, to, page, role);
+            => SetUserStatus(id, "Inactive", "User rejected.", "Admin.User.Reject", status, q, from, to, page, role);
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Suspend(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
-            => SetUserStatus(id, "Suspended", "User suspended.", status, q, from, to, page, role);
+            => SetUserStatus(id, "Suspended", "User suspended.", "Admin.User.Suspend", status, q, from, to, page, role);
         [HttpPost, ValidateAntiForgeryToken]
         public IActionResult Reactivate(int id, string status = "All", string q = "", DateTime? from = null, DateTime? to = null, int page = 1, string role = "All")
-            => SetUserStatus(id, "Active", "User reactivated.", status, q, from, to, page, role);
+            => SetUserStatus(id, "Active", "User reactivated.", "Admin.User.Reactivate", status, q, from, to, page, role);
 
         // Redirect helper: from a user id, jump to the Companies/Preview page if company exists
         [HttpGet]
@@ -571,7 +578,7 @@ namespace JobPortal.Areas.Admin.Controllers
             return RedirectToAction("Preview", "Companies", new { area = "Admin", id = comp.company_id });
         }
 
-        private IActionResult SetUserStatus(int id, string newStatus, string okMessage,
+        private IActionResult SetUserStatus(int id, string newStatus, string okMessage, string auditAction,
             string status, string q, DateTime? from, DateTime? to, int page, string role)
         {
             var u = _db.users.Include(x => x.company).FirstOrDefault(x => x.user_id == id);
@@ -613,7 +620,12 @@ namespace JobPortal.Areas.Admin.Controllers
 
             if (this.TryGetUserId(out var adminId, out _))
             {
-                _db.admin_logs.Add(new admin_log { user_id = adminId, action_type = $"User-{newStatus}", timestamp = DateTime.UtcNow });
+                _db.admin_logs.Add(new admin_log
+                {
+                    user_id = adminId,
+                    action_type = auditAction,
+                    timestamp = MyTime.NowMalaysia()
+                });
                 _db.SaveChanges();
             }
 

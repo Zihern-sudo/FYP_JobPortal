@@ -1,3 +1,4 @@
+// File: Areas/Recruiter/Controllers/BulkController.cs
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,6 +11,10 @@ using Microsoft.EntityFrameworkCore;
 using JobPortal.Areas.Shared.Models;
 using JobPortal.Areas.Recruiter.Models;
 using JobPortal.Areas.Shared.Extensions; // <-- add this
+using Microsoft.AspNetCore.Hosting;                     // IWebHostEnvironment
+using Microsoft.Extensions.Logging;                    // ILogger<T>
+using JobPortal.Services;                              // INotificationService
+using JobPortal.Areas.Shared.Models.Extensions;        // TryNotifyAsync()
 
 namespace JobPortal.Areas.Recruiter.Controllers
 {
@@ -22,11 +27,18 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         private readonly AppDbContext _db;
         private readonly IWebHostEnvironment _env;
+        private readonly INotificationService _notif;           // notify
+        private readonly ILogger<BulkController> _logger;       // log
 
-        public BulkController(AppDbContext db, IWebHostEnvironment env)
+        public BulkController(AppDbContext db,
+                              IWebHostEnvironment env,
+                              INotificationService notif,
+                              ILogger<BulkController> logger)
         {
             _db = db;
             _env = env;
+            _notif = notif;
+            _logger = logger;
         }
 
         // GET: /Recruiter/Bulk
@@ -163,10 +175,21 @@ namespace JobPortal.Areas.Recruiter.Controllers
             foreach (var a in apps)
             {
                 a.application_status = "Shortlisted";
-                a.date_updated = DateTime.UtcNow;
+                a.date_updated = MyTime.NowMalaysia();
             }
 
             await _db.SaveChangesAsync();
+
+            // notify all candidates (non-blocking, batched)
+            var userIds = apps.Select(a => a.user_id).Distinct().ToArray();
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendManyAsync(
+                    userIds,
+                    title: "You were shortlisted",
+                    message: "Your application status changed to Shortlisted.",
+                    type: "System"
+                )
+            );
 
             TempData["Message"] = $"Moved {apps.Count} candidate(s) to Shortlisted.";
             return RedirectToAction(nameof(Index));
@@ -257,7 +280,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             ms.Position = 0;
-            var outName = $"CVs_{DateTime.UtcNow:yyyyMMdd_HHmm}.zip";
+            var outName = $"CVs_{MyTime.NowMalaysia():yyyyMMdd_HHmm}.zip";
             return File(ms.ToArray(), "application/zip", outName);
         }
 
@@ -353,8 +376,8 @@ namespace JobPortal.Areas.Recruiter.Controllers
                         candidate_id = candidateId,
                         candidate_name = $"{a.user.first_name} {a.user.last_name}".Trim(),
                         job_title = job.job_title,
-                        created_at = DateTime.UtcNow,
-                        last_message_at = DateTime.UtcNow,
+                        created_at = MyTime.NowMalaysia(),
+                        last_message_at = MyTime.NowMalaysia(),
                         last_snippet = "",
                         unread_for_candidate = 0,
                         unread_for_recruiter = 0
@@ -393,7 +416,7 @@ namespace JobPortal.Areas.Recruiter.Controllers
                     }
                 }
 
-                var now = DateTime.UtcNow;
+                var now = MyTime.NowMalaysia();
 
                 var msg = new message
                 {
@@ -415,6 +438,17 @@ namespace JobPortal.Areas.Recruiter.Controllers
             }
 
             await _db.SaveChangesAsync();
+
+            // notify all recipients (non-blocking, batched)
+            var recipientIds = apps.Select(a => a.user_id).Distinct().ToArray();
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendManyAsync(
+                    recipientIds,
+                    title: "New message from recruiter",
+                    message: "You received a new message in your inbox.",
+                    type: "Message"
+                )
+            );
 
             TempData["Message"] = $"Message sent to {sent} candidate(s).";
             return RedirectToAction(nameof(Index));

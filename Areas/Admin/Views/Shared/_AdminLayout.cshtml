@@ -314,7 +314,7 @@
 
         <li class="side-item"><a class="side-link @(ActiveController("Messages") ? "active" : "")" asp-area="Admin" asp-controller="Messages" asp-action="Index">Conversation Monitor</a></li>
         <li class="side-item"><a class="side-link @(ActiveController("Audit") ? "active" : "")" asp-area="Admin" asp-controller="Audit" asp-action="Index">Audit Log</a></li>
-        <li class="side-item"><a class="side-link @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index">Reports</a></li>
+        @* <li class="side-item"><a class="side-link @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index">Reports</a></li> *@
 
         @* Settings collapsible
         @{
@@ -375,7 +375,7 @@
 
           <li class="side-item"><a class="side-link text-white @(ActiveController("Messages") ? "active" : "")" asp-area="Admin" asp-controller="Messages" asp-action="Index" data-bs-dismiss="offcanvas">Conversation Monitor</a></li>
           <li class="side-item"><a class="side-link text-white @(ActiveController("Audit") ? "active" : "")" asp-area="Admin" asp-controller="Audit" asp-action="Index" data-bs-dismiss="offcanvas">Audit Log</a></li>
-          <li class="side-item"><a class="side-link text-white @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index" data-bs-dismiss="offcanvas">Reports</a></li>
+          @* <li class="side-item"><a class="side-link text-white @(ActiveController("Reports") ? "active" : "")" asp-area="Admin" asp-controller="Reports" asp-action="Index" data-bs-dismiss="offcanvas">Reports</a></li> *@
           <li class="side-item mt-2">
             <a class="side-link text-white d-flex align-items-center" data-bs-toggle="collapse" href="#mSettingsMenu" role="button" aria-expanded="@(inSettings.ToString().ToLower())" aria-controls="mSettingsMenu">
               Settings <span class="side-caret ms-auto">▾</span>

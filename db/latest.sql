@@ -995,3 +995,9 @@ PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 SET FOREIGN_KEY_CHECKS = @old_fk;
 SELECT 'Schema update completed (binary-safe).' AS status;
 /* ------------------------------------------------------------------------------------------- */
+
+/* ---------Zi Hern 24/11 10.13pm-------------------------------------------------------- */
+ALTER TABLE `ai_resume_evaluation`
+    ADD COLUMN `breakdown_json` JSON NULL AFTER `match_score`,
+    ADD COLUMN `explanation` VARCHAR(500) NULL AFTER `breakdown_json`;
+/* ------------------------------------------------------------------------------------------- */

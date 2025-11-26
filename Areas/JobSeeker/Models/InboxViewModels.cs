@@ -56,3 +56,14 @@ namespace JobPortal.Areas.JobSeeker.Models
         public string MessageText { get; set; } = "";
     }
 }
+
+// === AI moderation DTOs (jobseeker side) ===
+public record MessageModerationCheckRequestVM(int ThreadId, string Text);
+
+public record MessageModerationCheckResultVM
+{
+    public bool Allowed { get; init; }
+    public string Reason { get; init; } = "";
+    public string Category { get; init; } = "";
+}
+

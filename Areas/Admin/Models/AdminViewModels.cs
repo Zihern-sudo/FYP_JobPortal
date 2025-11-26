@@ -461,6 +461,10 @@ public class AiJobPolicyCheckResultVM
     public List<AiJobPolicyCheckItemVM> Items { get; set; } = new();
     // Optional debugging note (not shown to end users)
     public string? RawNote { get; set; }
+
+    // NEW: align with controller JSON so the view can display cache freshness
+    public bool FromCache { get; set; } = false;
+    public DateTime CachedAt { get; set; } = DateTime.UtcNow;
 }
 
 /* ===============================

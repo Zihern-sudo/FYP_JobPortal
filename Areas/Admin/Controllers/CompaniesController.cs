@@ -20,6 +20,10 @@ using Microsoft.Extensions.Caching.Memory;
 using JobPortal.Areas.Shared.Options; // OpenAIOptions
 using System.Text.RegularExpressions;  // <-- NEW (evidence gating)
 
+// NEW: file ops for draft→live
+using System.IO;
+using System.Globalization;
+
 namespace JobPortal.Areas.Admin.Controllers
 {
     [Area("Admin")]
@@ -171,18 +175,33 @@ namespace JobPortal.Areas.Admin.Controllers
                 return RedirectToAction(nameof(Index), new { status, q, page });
             }
 
+            // NEW: apply draft→live for each company when verifying
+            if (setTo == "Verified")
+            {
+                foreach (var c in companies)
+                    await ApplyDraftToLiveAsync(c); // why: ensure approved content is what goes live
+                await _db.SaveChangesAsync();
+            }
+
             foreach (var c in companies) c.company_status = setTo;
             await _db.SaveChangesAsync();
 
             if (this.TryGetUserId(out var adminId, out _))
             {
-                var now = DateTime.UtcNow;
+                var now = MyTime.NowMalaysia();
+                var auditType = setTo switch
+                {
+                    "Verified" => "Admin.Company.Verify",
+                    "Rejected" => "Admin.Company.Reject",
+                    _ => $"Admin.Company.Status:{setTo}"
+                };
+
                 foreach (var _ in companies)
                 {
                     _db.admin_logs.Add(new admin_log
                     {
                         user_id = adminId,
-                        action_type = $"Company-{setTo}",
+                        action_type = auditType,
                         timestamp = now
                     });
                 }
@@ -202,7 +221,7 @@ namespace JobPortal.Areas.Admin.Controllers
                         ? $"Your company profile \"{c.company_name}\" has been approved. You can now post jobs."
                         : $"Your company profile \"{c.company_name}\" has been rejected.{(string.IsNullOrWhiteSpace(comments) ? "" : $" Reason: {comments.Trim()}")}";
 
-                    var type = setTo == "Verified" ? "Approval" : "Review";
+                    var type = setTo == "Verified" ? "Info" : "Review";
                     return _notif.SendAsync(c.user_id, title, msg, type: type);  // ← fixed
                 });
 
@@ -272,7 +291,7 @@ namespace JobPortal.Areas.Admin.Controllers
                 sb.AppendLine($"{Esc(r.company_name)},{Esc(r.company_industry)},{Esc(r.company_location)},{Esc(r.Status)},{r.Jobs}");
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            var fileName = $"Companies_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv";
+            var fileName = $"Companies_{MyTime.NowMalaysia():yyyyMMdd_HHmm}.csv";
             return File(bytes, "text/csv; charset=utf-8", fileName);
         }
 
@@ -284,6 +303,10 @@ namespace JobPortal.Areas.Admin.Controllers
                 .FirstOrDefault(x => x.company_id == id);
 
             if (c == null) return NotFound();
+
+            // NEW: Prefer DRAFT content for preview so admin reviews what will go live
+            var draft = LoadDraft(c.user_id);
+            var useDraft = draft != null || GetDraftPhotoPath(c.user_id) != null;
 
             var jobs = c.job_listings
                 .OrderByDescending(j => j.date_posted)
@@ -302,24 +325,41 @@ namespace JobPortal.Areas.Admin.Controllers
             var vm = new CompanyPreviewViewModel
             {
                 Id = c.company_id,
-                Name = c.company_name,
-                Industry = c.company_industry,
-                Location = c.company_location,
-                Description = c.company_description,
+                Name = useDraft ? (draft?.company_name ?? c.company_name) : c.company_name,
+                Industry = useDraft ? (draft?.company_industry ?? c.company_industry) : c.company_industry,
+                Location = useDraft ? (draft?.company_location ?? c.company_location) : c.company_location,
+                Description = useDraft ? (draft?.company_description ?? c.company_description) : c.company_description,
                 Status = c.job_listings.Any(j => j.job_status == "Open") ? "Active" : (c.company_status ?? "Pending"),
                 RecentJobs = jobs
             };
 
-            // expose the photo path for the view
-            ViewBag.CompanyPhotoUrl = c.company_photo;
+            // after: var vm = new CompanyPreviewViewModel { ... };
+
+            var draftSavedAtMy = draft != null ? MyTime.ToMalaysiaTime(draft.saved_at) : (DateTime?)null;
+            ViewBag.UsingDraft = useDraft;             // true if any draft text or draft photo is being shown
+            ViewBag.DraftSavedAt = draftSavedAtMy;     // DateTime? in MYT for display
+
+            // expose the photo path for the view (draft first, else live)
+            var draftPhotoWeb = GetDraftPhotoWebPath(c.user_id);
+            ViewBag.CompanyPhotoUrl = draftPhotoWeb ?? c.company_photo;
 
             ViewData["Title"] = "Company Preview";
             return View(vm);
+
         }
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Verify(int id)
-            => await SetStatus(id, "Verified", "Company verified.");
+        {
+            var c = _db.companies.FirstOrDefault(x => x.company_id == id);
+            if (c == null) return NotFound();
+
+            // NEW: apply draft→live before status flip
+            await ApplyDraftToLiveAsync(c);
+            await _db.SaveChangesAsync();
+
+            return await SetStatus(id, "Verified", "Company verified.");
+        }
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> MarkIncomplete(int id)
@@ -357,11 +397,19 @@ namespace JobPortal.Areas.Admin.Controllers
 
             if (this.TryGetUserId(out var adminId, out _))
             {
+                var actionType = status switch
+                {
+                    "Verified" => "Admin.Company.Verify",
+                    "Incomplete" => "Admin.Company.MarkIncomplete",
+                    "Rejected" => "Admin.Company.Reject",
+                    _ => $"Admin.Company.Status:{status}"
+                };
+
                 _db.admin_logs.Add(new admin_log
                 {
                     user_id = adminId,
-                    action_type = $"Company-{status}",
-                    timestamp = DateTime.UtcNow
+                    action_type = actionType,
+                    timestamp = MyTime.NowMalaysia()
                 });
                 await _db.SaveChangesAsync();
             }
@@ -375,19 +423,24 @@ namespace JobPortal.Areas.Admin.Controllers
                 {
                     title = "Company profile approved";
                     message = $"Your company profile \"{c.company_name}\" has been approved. You can now post jobs.";
-                    type = "Approval";
+                    type = "Info";
+
+                    // NEW: after verify, cleanup drafts (best-effort)
+                    try { CleanupDraft(c.user_id); } catch { /* ignore */ }
                 }
                 else if (status == "Rejected")
                 {
                     title = "Company profile rejected";
                     message = $"Your company profile \"{c.company_name}\" has been rejected.{(string.IsNullOrWhiteSpace(recruiterComments) ? "" : $" Reason: {recruiterComments.Trim()}")}";
                     type = "Review";
+                    // keep draft so recruiter can edit and resubmit
                 }
                 else // Incomplete
                 {
                     title = "Company profile incomplete";
                     message = $"Your company profile \"{c.company_name}\" is marked as incomplete. Please fill in all required details (e.g., name and location) and resubmit for approval.";
                     type = "Review";
+                    // keep draft
                 }
 
                 try { await _notif.SendAsync(c.user_id, title, message, type: type); }  // ← fixed
@@ -420,16 +473,37 @@ namespace JobPortal.Areas.Admin.Controllers
                     Summary = "AI check unavailable (service not configured). Please review manually.",
                     Items = new() { new AiCompanyProfileCheckItemVM { Issue = "Service not configured", Severity = "Warning" } },
                     FromCache = false,
-                    CachedAt = DateTime.UtcNow
+                    CachedAt = MyTime.NowMalaysia()
                 });
             }
 
+            // --- Normalize "force" (form/query) and evict cache when forced ---
+            bool forceRun =
+                force ||
+                string.Equals(Request.Form["force"], "1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Request.Form["force"], "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Request.Query["force"], "1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Request.Query["force"], "true", StringComparison.OrdinalIgnoreCase);
+
             string cacheKey = $"ai:company:{id}";
-            if (!force && _cache.TryGetValue(cacheKey, out AiCompanyProfileCheckResultVM cached) && cached != null)
+            if (forceRun)
             {
-                cached.FromCache = true;
-                return Json(cached);
+                _cache.Remove(cacheKey); // ensure a fresh OpenAI call
             }
+            else if (_cache.TryGetValue(cacheKey, out AiCompanyProfileCheckResultVM cached) && cached != null)
+            {
+                // Avoid mutating cached instance: return a shallow copy flagged as fromCache
+                var copy = new AiCompanyProfileCheckResultVM
+                {
+                    Pass = cached.Pass,
+                    Summary = cached.Summary,
+                    Items = cached.Items?.ToList() ?? new(),
+                    FromCache = true,
+                    CachedAt = cached.CachedAt
+                };
+                return Json(copy);
+            }
+            // -------------------------------------------------------------------
 
             var data = _db.companies
                 .AsNoTracking()
@@ -451,7 +525,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     Summary = "Company not found.",
                     Items = new(),
                     FromCache = false,
-                    CachedAt = DateTime.UtcNow
+                    CachedAt = MyTime.NowMalaysia()
                 });
             }
 
@@ -464,7 +538,7 @@ namespace JobPortal.Areas.Admin.Controllers
                     Summary = "AI check unavailable (no API key). Please review manually.",
                     Items = new(),
                     FromCache = false,
-                    CachedAt = DateTime.UtcNow
+                    CachedAt = MyTime.NowMalaysia()
                 };
                 _cache.Set(cacheKey, noKey, TimeSpan.FromMinutes(10));
                 return Json(noKey);
@@ -630,7 +704,7 @@ Profile Description:
                         Summary = "AI check temporarily unavailable. Please review manually.",
                         Items = new(),
                         FromCache = false,
-                        CachedAt = DateTime.UtcNow
+                        CachedAt = MyTime.NowMalaysia()
                     };
                     _cache.Set(cacheKey, down, TimeSpan.FromMinutes(10));
                     return Json(down);
@@ -650,7 +724,7 @@ Profile Description:
                         Summary = "AI response malformed. Please review manually.",
                         Items = new(),
                         FromCache = false,
-                        CachedAt = DateTime.UtcNow
+                        CachedAt = MyTime.NowMalaysia()
                     };
                     _cache.Set(cacheKey, malformed, TimeSpan.FromMinutes(10));
                     return Json(malformed);
@@ -684,17 +758,13 @@ Profile Description:
                     {
                         foreach (var kv in checks.EnumerateObject())
                         {
-                            // Only treat explicit false as a problem; missing keys are ignored
                             if (kv.Value.ValueKind == JsonValueKind.False) anyExplicitFalse = true;
                         }
                     }
 
-                    // If assistant provided a clear “compliant” summary, prefer pass
                     if (!string.IsNullOrWhiteSpace(summaryText))
                         finalSummary = summaryText;
 
-                    // Decide pass/fail:
-                    // 1) If we have any Violation items:
                     bool hasViolation = finalItems.Any(i => string.Equals(i.Severity, "Violation", StringComparison.OrdinalIgnoreCase));
 
                     if (hasViolation)
@@ -705,7 +775,6 @@ Profile Description:
                         }
                         else
                         {
-                            // downgrade to warnings if no textual evidence found in profile
                             foreach (var it in finalItems.Where(i => i.Severity.Equals("Violation", StringComparison.OrdinalIgnoreCase)))
                                 it.Severity = "Warning";
                             finalPass = true;
@@ -715,26 +784,21 @@ Profile Description:
                     }
                     else if (anyExplicitFalse && evidenceFound)
                     {
-                        // No explicit 'Violation' items, but checks show problems and text evidence exists
                         finalPass = false;
                         if (string.IsNullOrWhiteSpace(finalSummary)) finalSummary = "Detected explicit red flags in profile.";
-                        // Add a generic item if none existed
                         if (finalItems.Count == 0)
                             finalItems.Add(new AiCompanyProfileCheckItemVM { Issue = "Profile contains explicit red-flag signals.", Severity = "Violation" });
                     }
                     else
                     {
-                        // No violations (or none evidenced) → pass
                         finalPass = true;
                         if (string.IsNullOrWhiteSpace(finalSummary)) finalSummary = "Profile looks professional.";
                     }
 
-                    // Cap list for UI
                     if (finalItems.Count > 8) finalItems = finalItems.Take(8).ToList();
                 }
                 catch
                 {
-                    // On parse error, be conservative but do not auto-fail
                     finalPass = true;
                     finalSummary = "Profile looks professional.";
                     finalItems = new();
@@ -746,7 +810,7 @@ Profile Description:
                     Summary = finalSummary,
                     Items = finalItems,
                     FromCache = false,
-                    CachedAt = DateTime.UtcNow
+                    CachedAt = MyTime.NowMalaysia()
                 };
 
                 _cache.Set(cacheKey, outPayload, TimeSpan.FromHours(12));
@@ -760,11 +824,130 @@ Profile Description:
                     Summary = "AI check timed out. Please review manually.",
                     Items = new(),
                     FromCache = false,
-                    CachedAt = DateTime.UtcNow
+                    CachedAt = MyTime.NowMalaysia()
                 };
                 _cache.Set(cacheKey, timeout, TimeSpan.FromMinutes(10));
                 return Json(timeout);
             }
+        }
+
+        // ======================================================================
+        // =============== DRAFT helpers: read/copy/cleanup ======================
+        // ======================================================================
+
+        // Minimal DTO matching the recruiter's draft JSON
+        private sealed class CompanyDraftPayload
+        {
+            public string company_name { get; set; } = "";
+            public string? company_industry { get; set; }
+            public string? company_location { get; set; }
+            public string? company_description { get; set; }
+            public DateTime saved_at { get; set; } = DateTime.UtcNow;
+        }
+
+        private string GetDraftDir(int uid)
+        {
+            var dir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "company", "_drafts", uid.ToString(CultureInfo.InvariantCulture));
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        private string GetLiveDir()
+        {
+            var dir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "company");
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        private string GetDraftJsonPath(int uid) => Path.Combine(GetDraftDir(uid), $"company_{uid}.json");
+
+        private string? GetDraftPhotoPath(int uid)
+        {
+            var dir = GetDraftDir(uid);
+            var f = Directory.GetFiles(dir, $"company_{uid}.*")
+                             .FirstOrDefault(x => !x.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+            return f;
+        }
+
+        private string? GetDraftPhotoWebPath(int uid)
+        {
+            var p = GetDraftPhotoPath(uid);
+            return p == null ? null : "/uploads/company/_drafts/" + uid + "/" + Path.GetFileName(p);
+        }
+
+        private CompanyDraftPayload? LoadDraft(int uid)
+        {
+            var jsonPath = GetDraftJsonPath(uid);
+            if (!System.IO.File.Exists(jsonPath)) return null;
+
+            try
+            {
+                var json = System.IO.File.ReadAllText(jsonPath);
+                return JsonSerializer.Deserialize<CompanyDraftPayload>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch { return null; }
+        }
+
+        private async Task ApplyDraftToLiveAsync(company c)
+        {
+            if (c == null) return;
+
+            // If no draft exists, nothing to apply
+            var payload = LoadDraft(c.user_id);
+            var draftPhoto = GetDraftPhotoPath(c.user_id);
+            if (payload == null && string.IsNullOrWhiteSpace(draftPhoto))
+                return;
+
+            // 1) Copy text fields from payload (if present)
+            if (payload != null)
+            {
+                c.company_name = (payload.company_name ?? "").Trim();
+                c.company_industry = payload.company_industry?.Trim();
+                c.company_location = payload.company_location?.Trim();
+                c.company_description = payload.company_description?.Trim();
+            }
+
+            // 2) Copy draft photo → live folder (overwrite)
+            if (!string.IsNullOrWhiteSpace(draftPhoto) && System.IO.File.Exists(draftPhoto))
+            {
+                var liveDir = GetLiveDir();
+
+                // remove existing live files for this user
+                foreach (var f in Directory.GetFiles(liveDir, $"company_{c.user_id}.*"))
+                    try { System.IO.File.Delete(f); } catch { /* ignore */ }
+
+                var ext = Path.GetExtension(draftPhoto).ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(ext)) ext = ".jpg";
+                var liveFileName = $"company_{c.user_id}{ext}";
+                var livePath = Path.Combine(liveDir, liveFileName);
+
+                // copy/overwrite
+                System.IO.File.Copy(draftPhoto, livePath, overwrite: true);
+
+                // update DB path (clean web path)
+                c.company_photo = "/uploads/company/" + liveFileName;
+            }
+
+            // 3) Do not set status here; caller handles status + SaveChanges
+        }
+
+        private void CleanupDraft(int uid)
+        {
+            var dir = GetDraftDir(uid);
+            if (!Directory.Exists(dir)) return;
+
+            try
+            {
+                foreach (var f in Directory.GetFiles(dir, $"company_{uid}.*"))
+                    System.IO.File.Delete(f);
+                // optional: remove empty dir
+                if (!Directory.EnumerateFileSystemEntries(dir).Any())
+                    Directory.Delete(dir);
+            }
+            catch { /* ignore */ }
         }
     }
 }

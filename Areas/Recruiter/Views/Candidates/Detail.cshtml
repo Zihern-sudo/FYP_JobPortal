@@ -1,3 +1,4 @@
+@* File: Areas/Recruiter/Views/Candidates/Detail.cshtml *@
 @using JobPortal.Areas.Recruiter.Models
 @using Microsoft.AspNetCore.Mvc.Rendering
 
@@ -20,192 +21,224 @@
   bool showHire = !(isHired || isRejected);
   bool showReject = !(isHired || isRejected);
 
-  // NEW: from DB job_application.expected_salary & job_application.description
   int? expectedSalary = ViewBag.ExpectedSalary as int?;
   string? candidateDesc = ViewBag.Description as string;
 }
 
-<a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index" class="d-inline-block text-decoration-none mb-3">
-  &leftarrow; Back to Candidates
+<a asp-area="Recruiter" asp-controller="Candidates" asp-action="Index"
+  class="d-inline-flex align-items-center text-decoration-none mb-3">
+  <span class="me-2">&larr;</span> Back to Candidates
 </a>
 
-<div class="d-flex align-items-start justify-content-between mb-3">
-  <div>
-    <h3 class="mb-1">@p.Name</h3>
-    <div class="text-muted">
-      <span class="me-3">@p.Email</span>
-      @if (!string.IsNullOrWhiteSpace(p.Phone))
-      {
-        <span class="me-3">@p.Phone</span>
-      }
-      <span>Status: <span class="badge bg-secondary">@p.Status</span></span>
-      @if (ViewBag.AiScore != null)
-      {
-        <span class="ms-2">• AI Score: <span class="badge bg-primary">@ViewBag.AiScore</span></span>
-        @if (ViewBag.AiEvaluated is DateTime dt)
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="d-flex flex-wrap align-items-start justify-content-between">
+      <div class="me-3">
+        <h3 class="mb-1">@p.Name</h3>
+        <div class="text-muted">
+          <span class="me-3">@p.Email</span>
+          @if (!string.IsNullOrWhiteSpace(p.Phone))
+          {
+            <span class="me-3">@p.Phone</span>
+          }
+          <span>Status:
+            <span class="badge bg-secondary">@p.Status</span>
+          </span>
+          @if (ViewBag.AiScore != null)
+          {
+            <span class="ms-2">• AI Score:
+              <span class="badge bg-primary">@ViewBag.AiScore</span>
+            </span>
+            @if (ViewBag.AiEvaluated is DateTime dt)
+            {
+              <span class="text-muted small ms-1">(as of @dt.ToString("yyyy-MM-dd HH:mm"))</span>
+            }
+          }
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2">
+        @if (showMoveToInterview)
         {
-          <span class="text-muted small ms-1">(as of @dt.ToString("yyyy-MM-dd HH:mm"))</span>
+          <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Interview" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@p.ApplicationId" />
+            <button class="btn btn-outline-secondary btn-sm" type="submit" title="Move to Interview">Move to
+              Interview</button>
+          </form>
+
+          <form class="d-inline js-start-conv-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ApplicationId" value="@p.ApplicationId" />
+            <button type="button" class="btn btn-outline-secondary btn-sm js-new-conv" data-app-id="@p.ApplicationId"
+              data-bs-toggle="tooltip" title="Start a new conversation with this candidate">
+              New Conversation
+            </button>
+          </form>
+
+
         }
-      }
-    </div>
-  </div>
 
-  <div class="btn-group">
-    @if (showMoveToInterview)
-    {
-      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Interview" method="post" class="me-1">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="id" value="@p.ApplicationId" />
-        <button class="btn btn-outline-secondary btn-sm" type="submit">Move to Interview</button>
-      </form>
-    }
-
-    @* ==== AI: Tools ==== *@
-    <div class="btn-group me-1">
-      <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-        AI Tools
-      </button>
-      <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 280px;">
-        <button class="dropdown-item" type="button" onclick="openParsed(@p.ApplicationId)">View/Edit Parsed
-          Resume</button>
-        <div class="dropdown-divider"></div>
-        <form id="evalOneForm" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne" method="post"
-          class="px-2">
-          @Html.AntiForgeryToken()
-          <input type="hidden" name="applicationId" value="@p.ApplicationId" />
-          <div class="small text-muted mb-1">Scoring Rules (x2 weight)</div>
-          <div id="weightsContainer" class="border rounded p-2 mb-2 small">
-            <div class="text-muted">Weights come from the Job’s Pipeline page.</div>
+        <div class="btn-group">
+          <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown"
+            aria-expanded="false">
+            AI Tools
+          </button>
+          <div class="dropdown-menu dropdown-menu-end p-2" style="min-width: 280px;">
+            <form id="evalOneForm" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne"
+              method="post" class="px-2">
+              @Html.AntiForgeryToken()
+              <input type="hidden" name="applicationId" value="@p.ApplicationId" />
+              <div class="small text-muted mb-1">Scoring Rules (x2 weight)</div>
+              <div id="weightsContainer" class="border rounded p-2 mb-2 small">
+                <div class="text-muted">Weights come from the Job’s Pipeline page.</div>
+              </div>
+              <button type="submit" class="btn btn-sm btn-outline-primary w-100">Re-score</button>
+            </form>
           </div>
-          <button type="submit" class="btn btn-sm btn-outline-primary w-100">Re-score</button>
-        </form>
+        </div>
+
+        @if (showSendOffer)
+        {
+          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#offerModal">Send Offer</button>
+        }
+        @if (showHire)
+        {
+          <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Hire" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@p.ApplicationId" />
+            <button class="btn btn-success btn-sm" type="submit">Mark Hired</button>
+          </form>
+        }
+        @if (showReject)
+        {
+          <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Reject" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@p.ApplicationId" />
+            <button class="btn btn-outline-danger btn-sm" type="submit">Reject</button>
+          </form>
+        }
       </div>
     </div>
-
-    @if (showSendOffer)
-    {
-      <button class="btn btn-primary btn-sm me-1" data-bs-toggle="modal" data-bs-target="#offerModal">
-        Send Offer
-      </button>
-    }
-    @if (showHire)
-    {
-      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Hire" method="post" class="me-1">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="id" value="@p.ApplicationId" />
-        <button class="btn btn-success btn-sm" type="submit">Mark Hired</button>
-      </form>
-    }
-    @if (showReject)
-    {
-      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="Reject" method="post">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="id" value="@p.ApplicationId" />
-        <button class="btn btn-outline-danger btn-sm" type="submit">Reject</button>
-      </form>
-    }
   </div>
 </div>
 
 @if (TempData["Message"] != null)
 {
-  <div class="alert alert-info">@TempData["Message"]</div>
+  <div class="alert alert-info shadow-sm">@TempData["Message"]</div>
 }
 
-<div class="card mb-3">
-  <div class="card-body">
-    <h6 class="text-uppercase text-muted mb-2">Summary</h6>
-
-
-    @* NEW: Candidate extra details from job_application *@
-    <dl class="row mb-0">
-      <dt class="col-sm-3">Description</dt>
-      <dd class="col-sm-9">
-        @(!string.IsNullOrWhiteSpace(candidateDesc) ? candidateDesc : "Not provided")
-      </dd>
-
-      <dt class="col-sm-3">Expected Salary</dt>
-      <dd class="col-sm-9">
-        @(expectedSalary.HasValue ? $"RM {expectedSalary.Value:N0}" : "Not provided")
-      </dd>
-    </dl>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-body">
-    <h6 class="text-uppercase text-muted mb-3">Thread</h6>
-
-    @if (notes.Count == 0)
-    {
-      <div class="text-muted">No messages yet.</div>
-    }
-    else
-    {
-      <div class="list-group">
-        @foreach (var n in notes)
-        {
-          <div class="list-group-item">
-            <div class="d-flex justify-content-between">
-              <div>
-                <strong>@n.Author</strong>
-                <span class="text-muted">• @n.CreatedAt</span>
-              </div>
-              @if (n.FromRecruiter)
-              {
-                <span class="badge bg-primary">Recruiter</span>
-              }
-              else
-              {
-
-                <span class="badge bg-secondary">Candidate</span>
-              }
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="text-uppercase text-muted mb-3">Summary</h6>
+        <div class="row">
+          <div class="col-md-6">
+            <div class="mb-3">
+              <div class="text-muted small">Description</div>
+              <div>@(!string.IsNullOrWhiteSpace(candidateDesc) ? candidateDesc : "Not provided")</div>
             </div>
-            <div class="mt-1" style="white-space:pre-line">@n.Text</div>
+          </div>
+          <div class="col-md-6">
+            <div class="mb-3">
+              <div class="text-muted small">Expected Salary</div>
+              <div>@(expectedSalary.HasValue ? $"RM {expectedSalary.Value:N0}" : "Not provided")</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  @* ================= Score Breakdown ================= *@
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h6 class="text-uppercase text-muted mb-0">Score Breakdown</h6>
+          <span class="small text-muted">Transparent view of how the AI score was derived</span>
+        </div>
+
+        <div id="sb-loading" class="text-muted">Loading breakdown…</div>
+        <div id="sb-empty" class="text-muted d-none">No breakdown available. Re-score the candidate to generate it.
+        </div>
+
+        <div id="sb-container" class="d-none">
+          <div class="d-flex align-items-start align-items-md-center flex-column flex-md-row mb-3">
+            <div class="display-5 fw-semibold me-md-3" id="sb-total" aria-label="Total AI score">0</div>
+            <div class="text-muted small">
+              <div id="sb-evaluated"></div>
+              <div id="sb-notes" class="mt-1"></div>
+            </div>
+          </div>
+
+          <div id="sb-sections" class="row g-3">
+            @* sections injected by JS *@
+          </div>
+
+          <details class="mt-3">
+            <summary class="small text-muted">Per requirement similarity details</summary>
+            <div id="sb-perreq" class="mt-2"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  @* ================= Notes ================= *@
+  <div class="col-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="text-uppercase text-muted mb-3">Notes</h6>
+
+        @if (notes.Count == 0)
+        {
+          <div class="text-muted">No messages yet.</div>
+        }
+        else
+        {
+          <div class="list-group">
+            @foreach (var n in notes)
+            {
+              <div class="list-group-item">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <strong>@n.Author</strong>
+                    <span class="text-muted">• @n.CreatedAt</span>
+                  </div>
+                  @if (n.FromRecruiter)
+                  {
+                    <span class="badge bg-primary">Recruiter</span>
+                  }
+                  else
+                  {
+
+                    <span class="badge bg-secondary">Candidate</span>
+                  }
+                </div>
+                <div class="mt-1" style="white-space:pre-line">@n.Text</div>
+              </div>
+            }
           </div>
         }
+
+        <hr class="my-3" />
+
+        <form asp-area="Recruiter" asp-controller="Candidates" asp-action="SendMessage" method="post">
+          @Html.AntiForgeryToken()
+          <input type="hidden" name="id" value="@p.ApplicationId" />
+          <div class="input-group">
+            <input class="form-control" name="text" placeholder="Write a quick note..." />
+            <button class="btn btn-outline-primary" type="submit">Send</button>
+          </div>
+        </form>
       </div>
-    }
-
-    <hr class="my-3" />
-
-    <form asp-area="Recruiter" asp-controller="Candidates" asp-action="SendMessage" method="post">
-      @Html.AntiForgeryToken()
-      <input type="hidden" name="id" value="@p.ApplicationId" />
-      <div class="input-group">
-        <input class="form-control" name="text" placeholder="Write a quick note..." />
-        <button class="btn btn-outline-primary" type="submit">Send</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-@* ================= Edit Parsed Resume Modal ================= *@
-<div class="modal fade" id="parsedModal" tabindex="-1" aria-labelledby="parsedLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <form id="parsedForm" method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="applicationId" value="@p.ApplicationId" />
-        <div class="modal-header">
-          <h5 class="modal-title" id="parsedLabel">Parsed Resume (editable)</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <textarea id="parsedJson" name="resumeJsonOverride" class="form-control" rows="18"
-            spellcheck="false"></textarea>
-          <small class="text-muted">Keep the structure; fix only obvious mistakes (skills, highlights, degree).</small>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-link" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save & Re-score</button>
-        </div>
-      </form>
     </div>
   </div>
 </div>
 
-@* ================= Offer Modal (unchanged) ================= *@
+@* ================= Offer Modal ================= *@
 <div class="modal fade" id="offerModal" tabindex="-1" aria-labelledby="offerModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -264,17 +297,214 @@
 
 @section Scripts {
   <script>
-    // Pull parsed JSON and open the editor modal
-    async function openParsed(appId) {
-      const res = await fetch(`@Url.Action("ParsedJson", "AiEvaluation", new { area = "Recruiter" })?applicationId=${appId}`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      const txt = await res.text();
-      try {
-        document.getElementById('parsedJson').value = JSON.stringify(JSON.parse(txt), null, 2);
-      } catch { document.getElementById('parsedJson').value = txt; }
-      const m = new bootstrap.Modal(document.getElementById('parsedModal'));
-      m.show();
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchBreakdown(@p.ApplicationId);
+    });
+
+    async function fetchBreakdown(appId) {
+      const url = '@Url.Action("Breakdown", "AiEvaluation", new { area = "Recruiter" })' + `?applicationId=${appId}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+      let data;
+      try { data = await res.json(); } catch { data = { ok: false }; }
+
+      const loading = document.getElementById('sb-loading');
+      const empty = document.getElementById('sb-empty');
+      const box = document.getElementById('sb-container');
+
+      loading.classList.add('d-none');
+
+      if (!data.ok) {
+        empty.classList.remove('d-none');
+        return;
+      }
+
+      // Total + meta
+      document.getElementById('sb-total').innerText = (data.total ?? 0);
+      document.getElementById('sb-evaluated').innerText = data.evaluatedAt
+        ? `Evaluated at ${new Date(data.evaluatedAt).toLocaleString()}`
+        : '';
+      document.getElementById('sb-notes').innerText = data.explanation || '';
+
+      // Sections
+      const sc = data.breakdown || {};
+      const sections = [
+        sc.skills || sc.Skills,
+        sc.experience || sc.Experience,
+        sc.education || sc.Education,
+        sc.extras || sc.Extras
+      ].filter(Boolean);
+
+      const container = document.getElementById('sb-sections');
+      container.innerHTML = '';
+
+      for (const sec of sections) {
+        const name = sec.name || sec.Name || 'Section';
+        const pts = sec.points ?? sec.Points ?? 0;
+        const max = sec.maxPoints ?? sec.MaxPoints ?? 0;
+        const matched = (sec.matched ?? sec.Matched ?? []);
+        const missing = (sec.missing ?? sec.Missing ?? []);
+        const pct = max > 0 ? Math.round((pts / max) * 100) : 0;
+
+        const col = document.createElement('div');
+        col.className = 'col-12 col-md-6 col-lg-3';
+        col.innerHTML = `
+                          <div class="h-100 border rounded p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                              <strong>${escapeHtml(name)}</strong>
+                              <span class="badge bg-light text-dark">${pts} / ${max}</span>
+                            </div>
+                            <div class="progress mb-2" style="height:8px;">
+                              <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div class="small text-muted mb-1">Matched</div>
+                            <ul class="mb-2 small list-unstyled" style="max-height:110px;overflow:auto;">
+                              ${matched.length ? matched.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
+                            </ul>
+                            <div class="small text-muted mb-1">Missing</div>
+                            <ul class="small list-unstyled" style="max-height:110px;overflow:auto;">
+                              ${missing.length ? missing.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
+                            </ul>
+                          </div>`;
+        container.appendChild(col);
+      }
+
+      // Per requirement table
+      const pr = sc.perRequirement || sc.PerRequirement || [];
+      const prBox = document.getElementById('sb-perreq');
+      if (pr.length === 0) {
+        prBox.innerHTML = '<div class="text-muted small">No detailed requirement signals available.</div>';
+      } else {
+        const rows = pr.map(x => {
+          const req = escapeHtml(x.requirement || x.Requirement || '');
+          const sim = (x.similarity ?? x.Similarity ?? 0);
+          const cat = escapeHtml(x.category || x.Category || '');
+          const pct = Math.round(sim * 100);
+          return `<tr>
+                              <td>${req}</td>
+                              <td class="text-capitalize">${cat}</td>
+                              <td style="width:220px;">
+                                <div class="progress" style="height:8px;">
+                                  <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                              </td>
+                              <td class="text-muted small ps-2" style="width:60px;">${pct}%</td>
+                            </tr>`;
+        }).join('');
+
+        prBox.innerHTML = `
+                          <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                              <thead class="table-light">
+                                <tr>
+                                  <th>Requirement</th>
+                                  <th>Category</th>
+                                  <th colspan="2">Similarity</th>
+                                </tr>
+                              </thead>
+                              <tbody>${rows}</tbody>
+                            </table>
+                          </div>`;
+      }
+
+      box.classList.remove('d-none');
+    }
+
+    function escapeHtml(s) {
+      return (s ?? '').toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
   </script>
+
+  <script>
+    (function () {
+      if (window.bootstrap) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+          new bootstrap.Tooltip(el);
+        });
+      }
+
+      const createUrl = '@Url.Action("StartFromApplication", "Inbox", new { area = "Recruiter" })';
+      const existsUrl = '@Url.Action("ExistsForApplication", "Inbox", new { area = "Recruiter" })';
+
+      // PRE-CHECK: show "Open Conversation" if exists
+      document.querySelectorAll('.js-new-conv').forEach(async (btn) => {
+        const form = btn.closest('.js-start-conv-form');
+        const appId = form.querySelector('input[name="ApplicationId"]').value;
+        try {
+          const r = await fetch(`${existsUrl}?applicationId=${encodeURIComponent(appId)}`, { headers: { 'Accept': 'application/json' } });
+          const d = await r.json();
+          if (d.exists) {
+            btn.textContent = 'Open Conversation';
+            btn.title = 'Open existing conversation';
+            if (btn.getAttribute('data-bs-toggle') === 'tooltip' && window.bootstrap) {
+              const tip = bootstrap.Tooltip.getInstance(btn) || new bootstrap.Tooltip(btn);
+              btn.setAttribute('data-bs-original-title', btn.title);
+              tip.update();
+            }
+          }
+        } catch { }
+      });
+
+
+
+      document.querySelectorAll('.js-new-conv').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const form = btn.closest('.js-start-conv-form');
+          const token = form.querySelector('input[name="__RequestVerificationToken"]').value;
+          const appId = form.querySelector('input[name="ApplicationId"]').value;
+
+          let existsResp = await fetch(`${existsUrl}?applicationId=${encodeURIComponent(appId)}`, {
+            headers: { 'Accept': 'application/json' }
+          });
+          let existsData = {};
+          try { existsData = await existsResp.json(); } catch { }
+
+          if (existsData.exists && existsData.url) {
+            btn.title = 'Conversation already exists';
+            if (btn.getAttribute('data-bs-toggle') === 'tooltip' && window.bootstrap) {
+              const tip = bootstrap.Tooltip.getInstance(btn) || new bootstrap.Tooltip(btn);
+              btn.setAttribute('data-bs-original-title', btn.title);
+              tip.update();
+            }
+            btn.disabled = true;
+            btn.textContent = 'Open Conversation';
+            window.location.href = existsData.url;
+            return;
+          }
+
+          const body = new URLSearchParams({ ApplicationId: appId });
+          const res = await fetch(createUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+              'X-Requested-With': 'XMLHttpRequest',
+              'RequestVerificationToken': token
+            },
+            body
+          });
+
+          let data = {};
+          try { data = await res.json(); } catch { }
+          if (data.ok && data.url) {
+            btn.textContent = 'Open Conversation';
+            window.location.href = data.url;
+
+            btn.title = 'Conversation already exists';
+            if (btn.getAttribute('data-bs-toggle') === 'tooltip' && window.bootstrap) {
+              const tip = bootstrap.Tooltip.getInstance(btn) || new bootstrap.Tooltip(btn);
+              btn.setAttribute('data-bs-original-title', btn.title);
+              tip.update();
+            }
+            btn.disabled = true;
+          }
+        });
+      });
+    })();
+  </script>
+
 }
