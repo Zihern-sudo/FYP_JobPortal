@@ -11,10 +11,27 @@
     "Pending" => "badge text-bg-secondary",
     _ => "badge text-bg-light"
   };
+
+  string CompanyChipClass(string? s) => (s ?? "").Trim() switch
+  {
+    "Active" => "badge text-bg-success",
+    "Verified" => "badge text-bg-success",
+    "Pending" => "badge text-bg-warning",
+    "Suspended" => "badge text-bg-danger",
+    _ => "badge text-bg-secondary"
+  };
+
+  string JobStatusChip(string? s) => (s ?? "").Trim() switch
+  {
+    "Open" => "badge text-bg-success",
+    "Draft" => "badge text-bg-secondary",
+    "Paused" => "badge text-bg-warning",
+    "Closed" => "badge text-bg-dark",
+    _ => "badge text-bg-light"
+  };
 }
 
 @{
-
   var jobs = Model.Items ?? Enumerable.Empty<job_listing>();
   var order = Model.Order;
 
@@ -27,10 +44,32 @@
     pageSize = Model.PageSize
   })!;
 
-  // Build pending IDs for auto-refresh polling
   var pendingIds = new List<int>();
   bool allowPost = (bool)(ViewBag.AllowPost ?? false);
 }
+
+<style>
+  /* spacing/readability */
+  .jobs-table th,
+  .jobs-table td {
+    padding: .75rem 1rem;
+    vertical-align: middle;
+  }
+
+  .jobs-table th.min {
+    width: 86px;
+  }
+
+  .jobs-table td.title {
+    min-width: 280px;
+    white-space: normal;
+  }
+
+  .jobs-table td.nowrap,
+  .jobs-table th.nowrap {
+    white-space: nowrap;
+  }
+</style>
 
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
   <div id="toast-notify" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
@@ -74,10 +113,10 @@
 <div class="card shadow-sm">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-sm mb-0 align-middle">
+      <table class="table mb-0 align-middle jobs-table">
         <thead>
           <tr>
-            <th style="width:90px;">
+            <th class="min nowrap">
               <a asp-area="Recruiter" asp-controller="Jobs" asp-action="Index"
                 asp-route-order="@(order == "asc" ? "desc" : "asc")" asp-route-q="@Model.Query"
                 asp-route-status="@Model.Status" class="text-decoration-none text-body" title="Toggle sort by ID">
@@ -86,15 +125,16 @@
               </a>
             </th>
             <th>Title</th>
-            <th>Category</th>
+            <th class="nowrap">Category</th>
             <th>Approval</th>
-            <th>Deadline</th>
-            <th>Location</th>
-            <th>Status</th>
-            <th>Job Category</th>
-            <th>Work Mode</th>
-            <th>Created</th>
-            <th></th>
+            <th class="nowrap">Deadline</th>
+            <th class="nowrap">Location</th>
+            <th class="nowrap">Company Status</th>
+            <th class="nowrap">Job Status</th>
+            <th class="nowrap">Job Category</th>
+            <th class="nowrap">Work Mode</th>
+            <th class="nowrap">Created</th>
+            <th class="nowrap"></th>
           </tr>
         </thead>
         <tbody id="jobRows">
@@ -102,7 +142,7 @@
           {
             foreach (var j in jobs)
             {
-              var status = Enum.TryParse<JobStatus>(j.job_status ?? "", true, out var s) ? s : JobStatus.Open;
+              var statusEnum = Enum.TryParse<JobStatus>(j.job_status ?? "", true, out var s) ? s : JobStatus.Open;
               string deadline = j.expiry_date.HasValue ? j.expiry_date.Value.ToString("yyyy-MM-dd") : "—";
 
               string stText = "None";
@@ -112,40 +152,31 @@
               {
                 stText = approvalRawValue;
               }
-
-              // Corrected: Only nudge to "ChangesRequested" when a Draft is an edit to an already APPROVED job.
-              // Brand-new unsent Draft => stays "None". If (re)submitted => stays "Pending".
-              if (string.Equals(j.job_status, "Draft", StringComparison.OrdinalIgnoreCase))
+              if (string.Equals(j.job_status, "Draft", StringComparison.OrdinalIgnoreCase) &&
+              string.Equals(stText, "Approved", StringComparison.OrdinalIgnoreCase))
               {
-                if (string.Equals(stText, "Approved", StringComparison.OrdinalIgnoreCase))
-                {
-                  // Previously approved, recruiter saved edits as Draft (needs re-submit)
-                  stText = "ChangesRequested";
-                }
-                // else: keep stText as "None" (brand-new unsent), "Pending" (already submitted),
-                // "Rejected" or existing "ChangesRequested" as-is.
+                stText = "ChangesRequested";
               }
-
-
               if (string.Equals(stText, "Pending", StringComparison.OrdinalIgnoreCase))
               {
                 pendingIds.Add(j.job_listing_id);
               }
 
               bool isOpen = string.Equals(j.job_status, "Open", StringComparison.OrdinalIgnoreCase);
+              bool isClosed = string.Equals(j.job_status, "Closed", StringComparison.OrdinalIgnoreCase);
 
               var pct = stText == "Approved" ? 100
               : stText == "ChangesRequested" ? 66
               : stText == "Pending" ? 50
               : stText == "Rejected" ? 100
               : 0;
+
               var barClass = stText == "Approved" ? "bg-success"
               : stText == "ChangesRequested" ? "bg-warning"
               : stText == "Pending" ? "bg-info"
               : stText == "Rejected" ? "bg-danger"
               : "bg-secondary";
 
-              // Tooltip copy for each approval state
               var tipText =
               stText == "Approved" ? "Approved by admin. Job can be Open."
               : stText == "ChangesRequested" ? "Admin requested changes. Edit and resubmit for approval."
@@ -153,12 +184,17 @@
               : stText == "Rejected" ? "Rejected by admin. See comments and update."
               : "No approval request yet.";
 
-              <tr>
-                <td>@j.job_listing_id</td>
+              var companyStatus = (j.company?.company_status ?? "").Trim();
+              var companyBadgeClass = CompanyChipClass(companyStatus);
+              var companyLabel = string.IsNullOrWhiteSpace(companyStatus) ? "Unknown" : companyStatus;
 
-                <td>@j.job_title</td>
-                <td>@j.job_category</td>
-                <td style="min-width:200px">
+              <tr>
+                <td class="nowrap">@j.job_listing_id</td>
+
+                <td class="title">@j.job_title</td>
+                <td class="nowrap">@j.job_category</td>
+
+                <td style="min-width:220px">
                   <div class="progress" style="height:6px;" data-bs-toggle="tooltip" data-bs-placement="top"
                     title="@tipText" aria-label="@tipText">
                     <div class="progress-bar @barClass" role="progressbar" style="width:@pct%"></div>
@@ -166,23 +202,27 @@
                   <small class="@ChipClass(stText) mt-1 d-inline-block" data-bs-toggle="tooltip" data-bs-placement="top"
                     title="@tipText">@stText</small>
                 </td>
-                <td>@deadline</td>
-                <td>@(j.company?.company_location ?? "")</td>
-                <td>
-                  <span class="chip">@status</span>
-                  @if (j.expiry_date.HasValue && j.expiry_date.Value.Date < DateTime.Today)
-                  {
-                    <span class="badge bg-secondary ms-2">Expired</span>
-                  }
-                  else
-                  {
-                    <span class="badge bg-success ms-2">Active</span>
-                  }
+
+                <td class="nowrap">@deadline</td>
+                <td class="nowrap">@(
+                  string.IsNullOrWhiteSpace(j.company?.company_location) ? "—" : j.company!.company_location
+                            )</td>
+
+                <td class="nowrap">
+                  <span class="@companyBadgeClass">@companyLabel</span>
                 </td>
-                <td>@j.job_type</td>
-                <td>@j.work_mode</td>
-                <td>@(j.date_posted == default(DateTime) ? "-" : j.date_posted.ToString("yyyy-MM-dd HH:mm"))</td>
-                <td class="text-end">
+
+                <td class="nowrap">
+                  <span class="@JobStatusChip(j.job_status)">@statusEnum</span>
+                </td>
+
+                <td class="nowrap">@j.job_type</td>
+                <td class="nowrap">@j.work_mode</td>
+                <td class="nowrap">@(
+                  j.date_posted == default(DateTime) ? "-" : j.date_posted.ToString("yyyy-MM-dd HH:mm")
+                            )</td>
+
+                <td class="text-end nowrap">
                   <a class="btn btn-sm btn-outline-secondary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Edit"
                     asp-route-id="@j.job_listing_id">Edit</a>
 
@@ -192,6 +232,23 @@
                       asp-route-id="@j.job_listing_id">Preview</a>
                     <a class="btn btn-sm btn-primary" asp-area="Recruiter" asp-controller="Jobs" asp-action="Pipeline"
                       asp-route-id="@j.job_listing_id">Pipeline</a>
+
+                    @* Close button *@
+                    <form method="post" asp-area="Recruiter" asp-controller="Jobs" asp-action="Close" asp-antiforgery="true"
+                      class="d-inline">
+                      <input type="hidden" name="id" value="@j.job_listing_id" />
+                      <button type="submit" class="btn btn-sm btn-outline-danger"
+                        onclick="return confirm('Close this job? Applicants will no longer be able to apply.');">
+                        Close
+                      </button>
+                    </form>
+                  }
+                  else if (isClosed)
+                  {
+                    <button type="button" class="btn btn-sm btn-outline-primary" disabled data-bs-toggle="tooltip"
+                      title="This job is Closed. Preview disabled.">Preview</button>
+                    <button type="button" class="btn btn-sm btn-primary" disabled data-bs-toggle="tooltip"
+                      title="This job is Closed. Pipeline disabled.">Pipeline</button>
                   }
                 </td>
               </tr>
@@ -200,7 +257,7 @@
           else
           {
             <tr>
-              <td colspan="10" class="text-center text-muted">No jobs found.</td>
+              <td colspan="12" class="text-center text-muted">No jobs found.</td>
             </tr>
           }
         </tbody>
@@ -209,7 +266,6 @@
   </div>
 </div>
 
-@* Safe bridge for auto-refresh polling *@
 <div id="js-index" data-approval-info-url="@Url.Action("ApprovalInfo", "Jobs", new { area = "Recruiter" })"
   data-pending-ids="@string.Join(",", pendingIds)">
 </div>
@@ -242,7 +298,7 @@
 </nav>
 
 <div class="text-muted small">
-  Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> &bull; Total
+  Showing page <strong>@Model.Page</strong> of <strong>@Model.TotalPages</strong> • Total
   <strong>@Model.TotalCount</strong> jobs
 </div>
 
@@ -267,8 +323,7 @@
             if (!res.ok) continue;
             const data = await res.json();
             if ((data && data.status) && String(data.status).trim() === 'Approved') {
-              window.location.reload();
-              return;
+              window.location.reload(); return;
             }
           }
         } catch { }
@@ -287,7 +342,6 @@
       }
     })();
 
-    // Enable Bootstrap tooltips for approval progress/badges
     (function () {
       var triggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
       triggers.forEach(function (el) { new bootstrap.Tooltip(el); });

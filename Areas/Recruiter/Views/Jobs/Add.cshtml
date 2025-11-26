@@ -27,27 +27,27 @@
 
     <div class="mb-3">
         <label asp-for="job_title" class="form-label">Job Title</label>
-        <input asp-for="job_title" class="form-control" />
+        <input asp-for="job_title" class="form-control" required maxlength="160" />
         <span asp-validation-for="job_title" class="text-danger"></span>
     </div>
 
     <div class="mb-3">
         <label asp-for="job_description" class="form-label">Job Description</label>
-        <textarea asp-for="job_description" class="form-control" rows="6"></textarea>
+        <textarea asp-for="job_description" class="form-control" rows="6" maxlength="10000"></textarea>
         <span asp-validation-for="job_description" class="text-danger"></span>
     </div>
 
     @* --- Must-have Requirements (missing before) --- *@
     <div class="mb-3">
         <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
-        <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
+        <textarea asp-for="job_requirements" class="form-control" rows="4" maxlength="8000"></textarea>
         <span asp-validation-for="job_requirements" class="text-danger"></span>
     </div>
 
     @* --- Nice-to-have Requirements --- *@
     <div class="mb-3">
         <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
-        <textarea asp-for="job_requirements_nice" class="form-control" rows="4"></textarea>
+        <textarea asp-for="job_requirements_nice" class="form-control" rows="4" maxlength="8000"></textarea>
         <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
     </div>
 
@@ -70,7 +70,7 @@
             <!-- Employment Type -->
             <div class="col-md-6">
                 <label asp-for="job_type" class="form-label"></label>
-                <select asp-for="job_type" class="form-select"
+                <select asp-for="job_type" class="form-select" required
                     asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.Categories)">
                     <option value="">-- Select Employment Type --</option>
                 </select>
@@ -80,7 +80,7 @@
             <!-- Work Mode -->
             <div class="col-md-6">
                 <label asp-for="work_mode" class="form-label"></label>
-                <select asp-for="work_mode" class="form-select"
+                <select asp-for="work_mode" class="form-select" required
                     asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.WorkModes)">
                     <option value="">-- Select Work Mode --</option>
                 </select>
@@ -94,7 +94,7 @@
                 <!-- Visible trigger (readonly) -->
                 <div id="jobCategoryTrigger" class="input-group">
                     <input id="jobCategoryDisplay" type="text" class="form-control" placeholder="Select a category"
-                        readonly />
+                        readonly required />
                     <span class="input-group-text">&#9662;</span>
                 </div>
 
@@ -120,8 +120,8 @@
 
                 <!-- Custom category (only when 'Other' is chosen explicitly) -->
                 <div id="otherCategoryWrap" class="mt-2" style="display:none;">
-                    <input id="otherCategory" type="text" class="form-control"
-                        placeholder="Enter custom job category" />
+                    <input id="otherCategory" type="text" class="form-control" placeholder="Enter custom job category"
+                        maxlength="120" />
                     <div class="form-text">Provide a category not in the list.</div>
                 </div>
             </div>
@@ -150,6 +150,60 @@
     <partial name="_ValidationScriptsPartial" />
 
     <script>
+        // Align with Edit: validate hidden #job_category too (jQuery Validate ignores hidden by default)
+        (function () {
+            if (window.jQuery && window.jQuery.validator) {
+                $.validator.setDefaults({ ignore: ":hidden:not(#job_category)" });
+            }
+        })();
+    </script>
+
+    <script>
+        // Align with Edit: Require Description & Must-have (client-side)
+        (function () {
+            const form = document.getElementById('addForm');
+            if (!form) return;
+
+            const reqFields = [
+                { id: 'job_description', msg: 'Job Description is required.' },
+                { id: 'job_requirements', msg: 'Must-have Requirements are required.' }
+            ];
+
+            reqFields.forEach(({ id, msg }) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.setAttribute('required', 'required');
+                el.setAttribute('data-val', 'true');
+                el.setAttribute('data-val-required', msg);
+            });
+
+            // Re-parse so Unobtrusive picks up newly-added rules
+            if (window.jQuery && $.validator && $.validator.unobtrusive) {
+                $.validator.unobtrusive.parse(form);
+            }
+        })();
+    </script>
+
+    <script>
+        // Salary cross-field guard (client)
+        (function () {
+            const form = document.getElementById('addForm');
+            form?.addEventListener('submit', function (e) {
+                const minEl = document.getElementById('salary_min');
+                const maxEl = document.getElementById('salary_max');
+                const min = parseFloat(minEl?.value || '');
+                const max = parseFloat(maxEl?.value || '');
+                if (!isNaN(min) && !isNaN(max) && min > max) {
+                    e.preventDefault();
+                    minEl?.classList.add('is-invalid'); // why: immediate visual hint
+                    alert('Minimum salary cannot exceed maximum salary.');
+                }
+            });
+        })();
+    </script>
+
+    <script>
+        // Category dropdown (same behavior as Edit)
         (function categoryDropdown_Add() {
             const form = document.getElementById('addForm');
             const sel = document.getElementById('job_category');
@@ -173,7 +227,7 @@
                 const actual = exact || (val || '').trim();
                 sel.value = actual;
                 disp.value = actual || '';
-                disp.classList.remove('is-invalid'); // clear any invalid hint
+                disp.classList.remove('is-invalid');
                 const showOther = exact === 'Other';
                 wrap.style.display = showOther ? 'block' : 'none';
                 if (showOther && !other.value) other.focus();
@@ -191,7 +245,6 @@
                 list.innerHTML = rows.join('') || `<div class="list-group-item text-muted">No matches</div>`;
             }
 
-            // Events
             trigger.addEventListener('click', () => { (panel.style.display === 'block') ? closePanel() : openPanel(); });
             search.addEventListener('input', () => render(search.value));
             list.addEventListener('click', e => {
@@ -201,10 +254,13 @@
             document.addEventListener('click', e => { if (!panel.contains(e.target) && !trigger.contains(e.target)) closePanel(); });
             document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 
-            // Init from model
-            (function init() { const current = (sel.value || '').trim(); if (current) setValue(current); })();
+            // Pre-fill from model on invalid postback/custom
+            (function init() {
+                const current = (sel.value || '').trim();
+                if (current) setValue(current);
+            })();
 
-            // Submit mapping + required guard (client-side)
+            // Submit mapping + required guard
             form.addEventListener('submit', (ev) => {
                 if (!sel.value || !sel.value.trim()) {
                     ev.preventDefault(); openPanel(); disp.classList.add('is-invalid'); search.focus(); return;
@@ -216,6 +272,4 @@
             });
         })();
     </script>
-
-
 }

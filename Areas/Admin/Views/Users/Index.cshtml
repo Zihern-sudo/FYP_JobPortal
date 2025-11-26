@@ -86,7 +86,11 @@
 
             <div class="col-auto">
                 <button class="btn btn-primary" type="submit">Apply</button>
+
+                <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Users" asp-action="Index">Reset</a>
             </div>
+
+            
         </form>
 
         @* --------- IMPORT (standalone POST; NOT nested) --------- *@
@@ -164,7 +168,7 @@
                                     "Suspended" => "badge text-bg-danger",
                                     null or "" => "badge text-bg-secondary",
                                     _ => "badge text-bg-secondary"
-                                        };
+                                };
                                 <tr>
                                     <td><input type="checkbox" name="ids" value="@r.Id" class="rowChk" /></td>
                                     <td>@r.Id</td>
@@ -179,7 +183,7 @@
                                     <td class="text-end">
                                         <div class="btn-group">
                                             @* Row actions submit THIS form using formaction (no nested forms) *@
-                                                    <button type="submit" class="btn btn-sm btn-outline-success"
+                                            <button type="submit" class="btn btn-sm btn-outline-success"
                                                 formaction="@Url.Action("Approve", "Users", new { area = "Admin" })" name="id"
                                                 value="@r.Id">Approve</button>
                                             <button type="submit" class="btn btn-sm btn-outline-warning"
@@ -196,7 +200,7 @@
                                                 asp-route-id="@r.Id">Open</a>
 
                                             @* NEW: View Company (only if recruiter and company is NOT yet verified/active) *@
-                                                    @if (r.Role == "Recruiter" && (string.IsNullOrEmpty(r.CompanyStatus) ||
+                                            @if (r.Role == "Recruiter" && (string.IsNullOrEmpty(r.CompanyStatus) ||
                                                                                 r.CompanyStatus == "Pending" || r.CompanyStatus == "Incomplete" || r.CompanyStatus
                                                                                 == "Rejected"))
                                             {

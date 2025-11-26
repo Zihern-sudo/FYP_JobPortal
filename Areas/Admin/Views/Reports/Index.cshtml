@@ -2,6 +2,7 @@
    File: Areas/Admin/Views/Reports/Index.cshtml
    ============================== *@
 @model JobPortal.Areas.Admin.Models.ReportViewModel
+@using JobPortal.Areas.Shared.Extensions;
 
 @{
   string StatIcon(string label) => label switch
@@ -13,7 +14,8 @@
     _ => "bi-clipboard-data"
   };
 
-  var today = DateTime.UtcNow.Date;
+  var today = MyTime.NowMalaysia()
+.Date;
   var firstOfYear = new DateTime(today.Year, 1, 1);
   var firstOfMonth = new DateTime(today.Year, today.Month, 1);
 }

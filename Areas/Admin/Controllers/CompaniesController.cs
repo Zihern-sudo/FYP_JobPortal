@@ -52,6 +52,7 @@ namespace JobPortal.Areas.Admin.Controllers
             _cache = cache!;
         }
 
+        // File: Areas/Admin/Controllers/CompaniesController.cs (Index UPDATED)
         // GET: /Admin/Companies
         public IActionResult Index(
             string status = "All",
@@ -59,9 +60,14 @@ namespace JobPortal.Areas.Admin.Controllers
             DateTime? from = null,
             DateTime? to = null,
             int page = 1,
-            int pageSize = 10)
+            int pageSize = 10,
+            string? sort = null)
         {
             ViewData["Title"] = "Companies";
+
+            // normalize sort (default newest first by ID)
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             // Auto-flag Incomplete (missing required fields)
             AutoFlagIncompleteCompanies();
@@ -103,8 +109,12 @@ namespace JobPortal.Areas.Admin.Controllers
                     (!toExclusive.HasValue || j.date_posted < toExclusive.Value)));
             }
 
+            // ORDER BY company_id per toggle BEFORE paging (default: id_desc)
+            qset = sort == "id_asc"
+                ? qset.OrderBy(c => c.company_id)
+                : qset.OrderByDescending(c => c.company_id);
+
             var projected = qset
-                .OrderBy(c => c.company_name)
                 .Select(c => new CompanyRow
                 {
                     Id = c.company_id,
@@ -137,7 +147,9 @@ namespace JobPortal.Areas.Admin.Controllers
                     Page = page,
                     PageSize = pageSize,
                     TotalItems = total
-                }
+                },
+                // pass sort to the view
+                Sort = sort
             };
 
             ViewBag.From = from?.ToString("yyyy-MM-dd");
@@ -145,6 +157,7 @@ namespace JobPortal.Areas.Admin.Controllers
 
             return View(vm);
         }
+
 
         // POST: bulk verify/reject (ASYNC)
         [HttpPost, ValidateAntiForgeryToken]
@@ -842,7 +855,7 @@ Profile Description:
             public string? company_industry { get; set; }
             public string? company_location { get; set; }
             public string? company_description { get; set; }
-            public DateTime saved_at { get; set; } = DateTime.UtcNow;
+            public DateTime saved_at { get; set; } = MyTime.NowMalaysia();
         }
 
         private string GetDraftDir(int uid)

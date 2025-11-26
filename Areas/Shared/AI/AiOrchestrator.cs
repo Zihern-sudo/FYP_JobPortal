@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using JobPortal.Areas.Shared.Extensions;
 
 namespace JobPortal.Areas.Shared.AI
 {
@@ -214,7 +215,7 @@ namespace JobPortal.Areas.Shared.AI
                     missing: (gaps ?? new List<string>()).ToList()),
                 Notes = notes ?? "",
                 PerRequirement = (llm?.PerRequirement ?? Array.Empty<PerRequirement>()).ToList(),
-                EvaluatedAt = DateTime.UtcNow
+                EvaluatedAt = MyTime.NowMalaysia()
             };
         }
 

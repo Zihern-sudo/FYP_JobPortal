@@ -99,4 +99,46 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // Require Description & MustHaves on client (matches Jobs Add/Edit)
+        (function () {
+            const form = document.querySelector('form[asp-action="Create"]');
+            if (!form) return;
+            const fields = [
+                { id: 'Description', msg: 'Job Description is required.' },
+                { id: 'MustHaves', msg: 'Must-have Requirements are required.' },
+                { id: 'Name', msg: 'Template Name is required.' },
+                { id: 'Title', msg: 'Job Title is required.' }
+            ];
+            fields.forEach(({ id, msg }) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.setAttribute('required', 'required');
+                el.setAttribute('data-val', 'true');
+                el.setAttribute('data-val-required', msg);
+            });
+            if (window.jQuery && $.validator && $.validator.unobtrusive) {
+                $.validator.unobtrusive.parse(form);
+            }
+        })();
+    </script>
+
+    <script>
+        // Salary Min ≤ Max guard
+        (function () {
+            const form = document.querySelector('form[asp-action="Create"]');
+            form?.addEventListener('submit', function (e) {
+                const minEl = document.getElementById('SalaryMin');
+                const maxEl = document.getElementById('SalaryMax');
+                const min = parseFloat(minEl?.value || '');
+                const max = parseFloat(maxEl?.value || '');
+                if (!isNaN(min) && !isNaN(max) && min > max) {
+                    e.preventDefault();
+                    minEl?.classList.add('is-invalid'); // why: show culprit
+                    alert('Minimum salary cannot exceed maximum salary.');
+                }
+            });
+        })();
+    </script>
 }

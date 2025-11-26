@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
+using JobPortal.Areas.Shared.Extensions;
+
 namespace JobPortal.Areas.Shared.AI
 {
     public interface ILanguageService
@@ -115,7 +117,7 @@ namespace JobPortal.Areas.Shared.AI
             static double YearsBetween(string start, string end)
             {
                 if (!DateTime.TryParseExact(start, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var s)) return 0;
-                var e = DateTime.TryParseExact(end, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var ee) ? ee : DateTime.UtcNow;
+                var e = DateTime.TryParseExact(end, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var ee) ? ee : MyTime.NowMalaysia();
                 var months = (e.Year - s.Year) * 12 + e.Month - s.Month;
                 return Math.Round(Math.Max(0, months) / 12.0, 2);
             }

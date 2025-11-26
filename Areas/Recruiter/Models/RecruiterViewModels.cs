@@ -2,6 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using JobPortal.Areas.Shared.Models;
+using JobPortal.Areas.Shared.Extensions;
 
 namespace JobPortal.Areas.Recruiter.Models
 {
@@ -41,46 +42,95 @@ namespace JobPortal.Areas.Recruiter.Models
 
     public class JobCreateVm : IValidatableObject
     {
-        [Required, Display(Name = "Job Title")]
-        public string job_title { get; set; } = string.Empty;
+        private string _jobTitle = string.Empty;
 
-        public string? job_description { get; set; }
+        [Required, Display(Name = "Job Title"), StringLength(160)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Job Title cannot be empty or whitespace.")]
+        public string job_title
+        {
+            get => _jobTitle;
+            set => _jobTitle = (value ?? string.Empty).Trim();
+        }
 
-        [Display(Name = "Must-have Requirements")]
-        public string? job_requirements { get; set; }
+        private string? _jobDescription;
 
-        [Display(Name = "Nice-to-have Requirements")]
-        public string? job_requirements_nice { get; set; }
+        [Required(ErrorMessage = "Job Description is required.")]
+        [Display(Name = "Job Description"), StringLength(10000)]
+        public string? job_description
+        {
+            get => _jobDescription;
+            set => _jobDescription = value?.Trim();
+        }
 
-        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Minimum salary must be > 0")]
-        [Display(Name = "Salary Min")]
-        [DataType(DataType.Currency)]
+        private string? _jobRequirements;
+
+        [Required(ErrorMessage = "Must-have requirements are required.")]
+        [Display(Name = "Must-have Requirements"), StringLength(8000)]
+        public string? job_requirements
+        {
+            get => _jobRequirements;
+            set => _jobRequirements = value?.Trim();
+        }
+
+        private string? _jobRequirementsNice;
+
+        [Display(Name = "Nice-to-have Requirements"), StringLength(8000)]
+        public string? job_requirements_nice
+        {
+            get => _jobRequirementsNice;
+            set => _jobRequirementsNice = value?.Trim();
+        }
+
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Minimum salary must be > 0")]
+        [Required, Display(Name = "Salary Min"), DataType(DataType.Currency)]
         public decimal? salary_min { get; set; }
 
-        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Maximum salary must be > 0")]
-        [Display(Name = "Salary Max")]
-        [DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Maximum salary must be > 0")]
+        [Required, Display(Name = "Salary Max"), DataType(DataType.Currency)]
         public decimal? salary_max { get; set; }
 
+        private string _jobType = "Full Time";
+
         [Required, Display(Name = "Employment Type")]
-        public string job_type { get; set; } = "Full Time";
+        public string job_type
+        {
+            get => _jobType;
+            set => _jobType = (value ?? string.Empty).Trim();
+        }
+
+        private string _workMode = "On-site";
 
         [Required, Display(Name = "Work Mode")]
-        public string work_mode { get; set; } = "On-site";
+        public string work_mode
+        {
+            get => _workMode;
+            set => _workMode = (value ?? string.Empty).Trim();
+        }
+
+        private string _jobCategory = "Marketing";
 
         [Required, Display(Name = "Job Category")]
-        public string job_category { get; set; } = "Marketing";
+        public string job_category
+        {
+            get => _jobCategory;
+            set => _jobCategory = (value ?? string.Empty).Trim();
+        }
 
-        [DataType(DataType.Date), Display(Name = "Application Deadline")]
+        [Required, DataType(DataType.Date), Display(Name = "Application Deadline")]
         public DateTime? expiry_date { get; set; }
 
+        // prevent client from posting/overriding status during creation
         [Display(Name = "Status")]
-        public JobStatus job_status { get; set; } = JobStatus.Open;
+        public JobStatus job_status { get; set; } = JobStatus.Open; // ignored by UI/controller
 
         public IEnumerable<ValidationResult> Validate(ValidationContext context)
         {
             if (salary_min.HasValue && salary_max.HasValue && salary_min.Value > salary_max.Value)
-                yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
+                yield return new ValidationResult(
+                    "Minimum salary cannot exceed maximum salary.",
+                    new[] { nameof(salary_min), nameof(salary_max) });
 
             if (!JobCatalog.Categories.Contains(job_type))
                 yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(job_type) });
@@ -88,12 +138,15 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
 
-            // allow either a standard category OR any non-empty custom string
             if (!(JobCatalog.IsStandardJobCategory(job_category) || JobCatalog.IsValidCustomCategory(job_category)))
-                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(job_category) });
+                yield return new ValidationResult(
+                    "Invalid Job Category. Choose one or enter a custom category.",
+                    new[] { nameof(job_category) });
 
             if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
-                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
+                yield return new ValidationResult(
+                    "Application deadline cannot be in the past.",
+                    new[] { nameof(expiry_date) });
         }
     }
 
@@ -105,46 +158,93 @@ namespace JobPortal.Areas.Recruiter.Models
         [Display(Name = "Status")]
         public JobStatus job_status { get; set; }
 
-        // === Added: required + sane limits (why: prevent empty/overlong titles) ===
+        private string _jobTitle = string.Empty;
+
         [Required, Display(Name = "Job Title"), StringLength(160)]
-        public string job_title { get; set; } = string.Empty;
+        [RegularExpression(@".*\S.*", ErrorMessage = "Job Title cannot be empty or whitespace.")]
+        public string job_title
+        {
+            get => _jobTitle;
+            set => _jobTitle = (value ?? string.Empty).Trim();
+        }
 
+        private string? _jobDescription;
+
+        [Required(ErrorMessage = "Job Description is required.")]
         [Display(Name = "Job Description"), StringLength(10000)]
-        public string? job_description { get; set; }
+        public string? job_description
+        {
+            get => _jobDescription;
+            set => _jobDescription = value?.Trim();
+        }
 
+        private string? _jobRequirements;
+
+        [Required(ErrorMessage = "Must-have requirements are required.")]
         [Display(Name = "Must-have Requirements"), StringLength(8000)]
-        public string? job_requirements { get; set; }
+        public string? job_requirements
+        {
+            get => _jobRequirements;
+            set => _jobRequirements = value?.Trim();
+        }
+
+        private string? _jobRequirementsNice;
 
         [Display(Name = "Nice-to-have Requirements"), StringLength(8000)]
-        public string? job_requirements_nice { get; set; }
+        public string? job_requirements_nice
+        {
+            get => _jobRequirementsNice;
+            set => _jobRequirementsNice = value?.Trim();
+        }
 
-        // === Added: range > 0 + currency (align with Create VM) ===
-        [Display(Name = "Salary Min"), DataType(DataType.Currency)]
-        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Minimum salary must be > 0")]
+        [Required, Display(Name = "Salary Min"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Minimum salary must be > 0")]
         public decimal? salary_min { get; set; }
 
-        [Display(Name = "Salary Max"), DataType(DataType.Currency)]
-        [Range(typeof(decimal), "0.01", "79228162514264337593543950335", ErrorMessage = "Maximum salary must be > 0")]
+        [Required, Display(Name = "Salary Max"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Maximum salary must be > 0")]
         public decimal? salary_max { get; set; }
 
+        private string _jobType = "Full Time";
+
         [Required, Display(Name = "Employment Type")]
-        public string job_type { get; set; } = "Full Time";
+        public string job_type
+        {
+            get => _jobType;
+            set => _jobType = (value ?? string.Empty).Trim();
+        }
+
+        private string _workMode = "On-site";
 
         [Required, Display(Name = "Work Mode")]
-        public string work_mode { get; set; } = "On-site";
+        public string work_mode
+        {
+            get => _workMode;
+            set => _workMode = (value ?? string.Empty).Trim();
+        }
+
+        private string _jobCategory = "Marketing";
 
         [Required, Display(Name = "Job Category")]
-        public string job_category { get; set; } = "Marketing";
+        public string job_category
+        {
+            get => _jobCategory;
+            set => _jobCategory = (value ?? string.Empty).Trim();
+        }
 
         public DateTime? date_posted { get; set; }
 
-        [DataType(DataType.Date), Display(Name = "Application Deadline")]
+        [Required, DataType(DataType.Date), Display(Name = "Application Deadline")]
         public DateTime? expiry_date { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext context)
         {
             if (salary_min.HasValue && salary_max.HasValue && salary_min.Value > salary_max.Value)
-                yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(salary_min), nameof(salary_max) });
+                yield return new ValidationResult(
+                    "Minimum salary cannot exceed maximum salary.",
+                    new[] { nameof(salary_min), nameof(salary_max) });
 
             if (!JobCatalog.Categories.Contains(job_type))
                 yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(job_type) });
@@ -152,12 +252,24 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(work_mode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(work_mode) });
 
-            // allow either a standard category OR any non-empty custom string
             if (!(JobCatalog.IsStandardJobCategory(job_category) || JobCatalog.IsValidCustomCategory(job_category)))
-                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(job_category) });
+                yield return new ValidationResult(
+                    "Invalid Job Category. Choose one or enter a custom category.",
+                    new[] { nameof(job_category) });
 
             if (expiry_date.HasValue && expiry_date.Value.Date < DateTime.Today)
-                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(expiry_date) });
+                yield return new ValidationResult(
+                    "Application deadline cannot be in the past.",
+                    new[] { nameof(expiry_date) });
+
+            // Optional: enforce logical order if date_posted present
+            if (date_posted.HasValue && expiry_date.HasValue &&
+                expiry_date.Value.Date < date_posted.Value.Date)
+            {
+                yield return new ValidationResult(
+                    "Application deadline must be on or after the posted date.",
+                    new[] { nameof(expiry_date), nameof(date_posted) });
+            }
         }
     }
 
@@ -217,22 +329,54 @@ namespace JobPortal.Areas.Recruiter.Models
         string Snippet
     );
 
-    public class TemplateFormVM
+    public class TemplateFormVM : IValidatableObject
     {
         public int? TemplateId { get; set; }
 
+        private string _name = "";
         [Required, Display(Name = "Template Name"), StringLength(120)]
-        public string Name { get; set; } = "";
+        [RegularExpression(@".*\S.*", ErrorMessage = "Template Name cannot be empty or whitespace.")]
+        public string Name
+        {
+            get => _name;
+            set => _name = (value ?? "").Trim();
+        }
 
+        private string? _subject;
         [Display(Name = "Subject"), StringLength(160)]
-        public string? Subject { get; set; }
+        // optional, but if provided cannot be whitespace-only
+        [RegularExpression(@"^\s*$|.*\S.*", ErrorMessage = "Subject cannot be only whitespace.")]
+        public string? Subject
+        {
+            get => _subject;
+            set => _subject = value?.Trim();
+        }
 
-        [Required, Display(Name = "Body")]
-        public string Body { get; set; } = "";
+        private string _body = "";
+        [Required, Display(Name = "Body"), StringLength(20000)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Body cannot be empty or whitespace.")]
+        [DataType(DataType.MultilineText)]
+        public string Body
+        {
+            get => _body;
+            set => _body = (value ?? "").Trim();
+        }
 
+        // Optional lifecycle flag; keep conservative allowed values
         public string Status { get; set; } = "Active";
-    }
 
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            // Guard status to a safe whitelist; adjust as needed (e.g., add "Draft")
+            var allowed = new[] { "Active", "Inactive", "Archived" };
+            if (!string.IsNullOrWhiteSpace(Status) && Array.IndexOf(allowed, Status.Trim()) < 0)
+            {
+                yield return new ValidationResult(
+                    $"Invalid Status. Allowed: {string.Join(", ", allowed)}.",
+                    new[] { nameof(Status) });
+            }
+        }
+    }
     public class OfferFormVM
     {
         [HiddenInput]
@@ -255,48 +399,105 @@ namespace JobPortal.Areas.Recruiter.Models
     {
         public int? TemplateId { get; set; }
 
-        [Required, Display(Name = "Template Name")]
-        public string Name { get; set; } = "";
+        private string _name = "";
 
-        // Match job listing fields
-        [Required, Display(Name = "Job Title")]
-        public string Title { get; set; } = "";
+        [Required, Display(Name = "Template Name"), StringLength(160)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Template Name cannot be empty or whitespace.")]
+        public string Name
+        {
+            get => _name;
+            set => _name = (value ?? "").Trim();
+        }
 
-        [Display(Name = "Job Description")]
-        public string? Description { get; set; }
+        private string _title = "";
 
-        [Display(Name = "Must-have Requirements")]
-        public string? MustHaves { get; set; }
+        [Required, Display(Name = "Job Title"), StringLength(160)]
+        [RegularExpression(@".*\S.*", ErrorMessage = "Job Title cannot be empty or whitespace.")]
+        public string Title
+        {
+            get => _title;
+            set => _title = (value ?? "").Trim();
+        }
 
-        [Display(Name = "Nice-to-have Requirements")]
-        public string? NiceToHaves { get; set; }
+        private string? _description;
+
+        [Required(ErrorMessage = "Job Description is required.")]
+        [Display(Name = "Job Description"), StringLength(10000)]
+        public string? Description
+        {
+            get => _description;
+            set => _description = value?.Trim();
+        }
+
+        private string? _mustHaves;
+
+        [Required(ErrorMessage = "Must-have requirements are required.")]
+        [Display(Name = "Must-have Requirements"), StringLength(8000)]
+        public string? MustHaves
+        {
+            get => _mustHaves;
+            set => _mustHaves = value?.Trim();
+        }
+
+        private string? _niceToHaves;
+
+        [Display(Name = "Nice-to-have Requirements"), StringLength(8000)]
+        public string? NiceToHaves
+        {
+            get => _niceToHaves;
+            set => _niceToHaves = value?.Trim();
+        }
+
+        private string _jobType = "Full Time";
 
         [Required, Display(Name = "Employment Type")]
-        public string JobType { get; set; } = "Full Time";
+        public string JobType
+        {
+            get => _jobType;
+            set => _jobType = (value ?? "").Trim();
+        }
+
+        private string _workMode = "On-site";
 
         [Required, Display(Name = "Work Mode")]
-        public string WorkMode { get; set; } = "On-site";
+        public string WorkMode
+        {
+            get => _workMode;
+            set => _workMode = (value ?? "").Trim();
+        }
+
+        private string _jobCategory = "Marketing";
 
         [Required, Display(Name = "Job Category")]
-        public string JobCategory { get; set; } = "Marketing";
+        public string JobCategory
+        {
+            get => _jobCategory;
+            set => _jobCategory = (value ?? "").Trim();
+        }
 
         [Display(Name = "Salary Min"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Minimum salary must be > 0")]
         public decimal? SalaryMin { get; set; }
 
         [Display(Name = "Salary Max"), DataType(DataType.Currency)]
+        [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+            ErrorMessage = "Maximum salary must be > 0")]
         public decimal? SalaryMax { get; set; }
 
         [Display(Name = "Application Deadline"), DataType(DataType.Date)]
         public DateTime? ExpiryDate { get; set; }
 
-        // Template metadata (kept)
         public string Status { get; set; } = "Active";
 
-        // Why: keep template data consistent with live job validations
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             if (SalaryMin.HasValue && SalaryMax.HasValue && SalaryMin.Value > SalaryMax.Value)
-                yield return new ValidationResult("Minimum salary cannot exceed maximum salary.", new[] { nameof(SalaryMin), nameof(SalaryMax) });
+            {
+                yield return new ValidationResult(
+                    "Minimum salary cannot exceed maximum salary.",
+                    new[] { nameof(SalaryMin), nameof(SalaryMax) });
+            }
 
             if (!JobCatalog.Categories.Contains(JobType))
                 yield return new ValidationResult("Invalid Employment Type.", new[] { nameof(JobType) });
@@ -304,12 +505,19 @@ namespace JobPortal.Areas.Recruiter.Models
             if (!JobCatalog.WorkModes.Contains(WorkMode))
                 yield return new ValidationResult("Invalid Work Mode.", new[] { nameof(WorkMode) });
 
-            // allow either a standard category OR any non-empty custom string
             if (!(JobCatalog.IsStandardJobCategory(JobCategory) || JobCatalog.IsValidCustomCategory(JobCategory)))
-                yield return new ValidationResult("Invalid Job Category. Choose one or enter a custom category.", new[] { nameof(JobCategory) });
+            {
+                yield return new ValidationResult(
+                    "Invalid Job Category. Choose one or enter a custom category.",
+                    new[] { nameof(JobCategory) });
+            }
 
             if (ExpiryDate.HasValue && ExpiryDate.Value.Date < DateTime.Today)
-                yield return new ValidationResult("Application deadline cannot be in the past.", new[] { nameof(ExpiryDate) });
+            {
+                yield return new ValidationResult(
+                    "Application deadline cannot be in the past.",
+                    new[] { nameof(ExpiryDate) });
+            }
         }
     }
 
@@ -422,7 +630,7 @@ namespace JobPortal.Areas.Recruiter.Models
         public string? company_industry { get; set; }
         public string? company_location { get; set; }
         public string? company_description { get; set; }
-        public DateTime saved_at { get; set; } = DateTime.UtcNow;
+        public DateTime saved_at { get; set; } = MyTime.NowMalaysia();
     }
 
     public class DashboardVm

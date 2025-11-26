@@ -38,10 +38,13 @@ namespace JobPortal.Areas.Admin.Controllers
             return anyUser; // if 0, SaveChanges will still fail -> indicates empty users table
         }
 
-        // ---------- Index (unchanged) ----------
-        public IActionResult Index(string? q = null, bool flaggedOnly = false, int page = 1, int pageSize = 10)
+        public IActionResult Index(string? q = null, bool flaggedOnly = false, int page = 1, int pageSize = 10, string? sort = null)
         {
             ViewData["Title"] = "Conversation Monitor";
+
+            // ADDED: normalize sort (default newest by ID)
+            sort = (sort ?? "id_desc").Trim().ToLowerInvariant();
+            if (sort != "id_asc" && sort != "id_desc") sort = "id_desc";
 
             var query = _db.conversations
                 .AsNoTracking()
@@ -60,7 +63,10 @@ namespace JobPortal.Areas.Admin.Controllers
             if (flaggedOnly)
                 query = query.Where(c => c.is_blocked || c.conversation_monitors.Any(m => m.flag));
 
-            query = query.OrderByDescending(c => c.last_message_at ?? c.created_at);
+            // ADDED: order by ID toggle BEFORE paging
+            query = sort == "id_asc"
+                ? query.OrderBy(c => c.conversation_id)
+                : query.OrderByDescending(c => c.conversation_id);
 
             var total = query.Count();
 
@@ -96,12 +102,13 @@ namespace JobPortal.Areas.Admin.Controllers
                     Page = page,
                     PageSize = pageSize,
                     TotalItems = total
-                }
+                },
+                // ADDED: pass sort to the view
+                Sort = sort
             };
 
             return View(vm);
         }
-
         // ---------- Thread (includes block state) ----------
         public IActionResult Thread(int id)
         {

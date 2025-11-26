@@ -125,17 +125,20 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 {
                     id = n.notification_id,
                     title = n.notification_title,
-                    textPreview = n.notification_msg.Length > 140 ? n.notification_msg.Substring(0, 140) + "..." : n.notification_msg,
+                    textPreview = n.notification_msg.Length > 140
+                        ? n.notification_msg.Substring(0, 140) + "..."
+                        : n.notification_msg,
                     type = n.notification_type,
                     isRead = n.notification_read_status,
                     createdAt = n.notification_date_created.ToString("yyyy-MM-dd HH:mm"),
-                    createdAtLocal = n.notification_date_created.ToLocalTime().ToString("HH:mm"),
+                    createdAtLocal = n.notification_date_created.ToString("HH:mm"),
                     url = Url.Action("Index", "Notifications", new { area = "Recruiter" })
                 })
                 .ToList();
 
             return Json(new { items });
         }
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]

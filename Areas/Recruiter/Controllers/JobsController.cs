@@ -35,6 +35,28 @@ namespace JobPortal.Areas.Recruiter.Controllers
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
+        // NEW: auto-close helper — mark past-deadline jobs as Closed
+        private async Task<int> AutoCloseExpiredJobsAsync(int recruiterId)
+        {
+            var today = MyTime.NowMalaysia().Date;
+            var targets = await _db.job_listings
+                .Where(j => j.user_id == recruiterId
+                         && j.expiry_date != null
+                         && j.expiry_date.Value.Date < today
+                         && j.job_status != "Closed")
+                .ToListAsync();
+
+            foreach (var j in targets)
+                j.job_status = "Closed";
+
+            if (targets.Count > 0)
+            {
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("Auto-closed {Count} expired job(s) for recruiter {RecruiterId}.", targets.Count, recruiterId);
+            }
+            return targets.Count;
+        }
+
         // Gate: recruiter can post only if company is Verified/Active
         private async Task<(bool Allowed, string? Reason, int? CompanyId)> CanPostJobAsync(int recruiterId)
         {
@@ -57,7 +79,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
         private async Task CreateApprovalForJobAsync(int jobId, int submittedByUserId)
         {
-            // why: persist submit intent in approval table (DB supports Pending/Approved/ChangesRequested/Rejected)
             var row = new job_post_approval
             {
                 user_id = submittedByUserId,
@@ -83,6 +104,9 @@ namespace JobPortal.Areas.Recruiter.Controllers
         public async Task<IActionResult> Index(string? q, string? status, string? order, int page = 1, int pageSize = DefaultPageSize)
         {
             if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            // NEW: auto-close any expired jobs on each visit to the list
+            await AutoCloseExpiredJobsAsync(recruiterId);
 
             ViewData["Title"] = "Jobs";
             page = Math.Max(1, page);
@@ -243,7 +267,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             _db.job_listings.Add(entity);
             await _db.SaveChangesAsync();
 
-            // why: signal Edit page to show "Pending Approval" UI and enable Submit
             TempData["JustCreated"] = true;
             TempData["Message"] = "Job saved. Review and Submit for Approval.";
             return RedirectToAction(nameof(Edit), new { id = entity.job_listing_id });
@@ -318,15 +341,14 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (latestApproval != null)
             {
-                ViewBag.ApprovalStatus = latestApproval.approval_status; // "Pending"|"Approved"|"ChangesRequested"|"Rejected"
+                ViewBag.ApprovalStatus = latestApproval.approval_status;
                 ViewBag.ApprovalComments = latestApproval.comments;
                 ViewBag.ApprovalUpdatedAt = latestApproval.date_approved;
             }
 
-            // UI status computation
             if (TempData.Peek("JustCreated") is bool justCreated && justCreated)
             {
-                ViewBag.UiStatus = "PendingApproval";      // UI-only label (VM enum added)
+                ViewBag.UiStatus = "PendingApproval";
                 ViewBag.ApprovalStatus ??= "None";
             }
             else if (string.Equals(job.job_status, "Draft", StringComparison.OrdinalIgnoreCase) &&
@@ -375,7 +397,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             await _db.SaveChangesAsync();
 
-            // why: let client enable Submit after a save
             TempData["SavedOnce"] = true;
             TempData["Message"] = $"Job #{job.job_listing_id} saved.";
             return RedirectToAction(nameof(Edit), new { id = job.job_listing_id });
@@ -401,13 +422,11 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             if (job == null) return NotFound();
 
-            job.job_status = "Draft"; // DB still Draft; approval row represents the submitted state
+            job.job_status = "Draft"; // approval row represents submitted state
             await _db.SaveChangesAsync();
 
-            // Create/append a Pending approval row
             await CreateApprovalForJobAsync(job.job_listing_id, recruiterId);
 
-            // Notify Admins (non-blocking)
             await this.TryNotifyAsync(_notif, _logger, () =>
                 _notif.SendToAdminsAsync(
                     title: "Job post submitted",
@@ -626,7 +645,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return RedirectToAction(nameof(Edit), new { id });
         }
 
-        // Move candidate — NOW sends notification like CandidatesController.SetStatus
         private static readonly Dictionary<string, string> _nextStage = new(StringComparer.OrdinalIgnoreCase)
         {
             ["AI-Screened"] = "Shortlisted",
@@ -662,7 +680,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             app.date_updated = MyTime.NowMalaysia();
             await _db.SaveChangesAsync();
 
-            // === NEW: notify candidate (non-blocking), same pattern as CandidatesController.SetStatus ===
             var jobTitle = await _db.job_listings
                 .Where(j => j.job_listing_id == app.job_listing_id)
                 .Select(j => j.job_title)
@@ -680,7 +697,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return Json(new { ok = true, applicationId, newStage = toStage });
         }
 
-        // Create offer — NOW also notifies candidate
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
@@ -719,7 +735,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
 
             await _db.SaveChangesAsync();
 
-            // === NEW: notify candidate about the offer (same content as CandidatesController.SendOffer) ===
             var jobTitle = app.job_listing?.job_title
                            ?? await _db.job_listings.Where(j => j.job_listing_id == app.job_listing_id)
                                                     .Select(j => j.job_title)
@@ -768,7 +783,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             });
         }
 
-        // Scoring rules — unchanged
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ScoringRules(int id, [FromForm] string[]? weight2)
@@ -849,7 +863,6 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return Json(new { ok = true, weight2 });
         }
 
-        // Manual Ranking — unchanged
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> OverrideRank(int id, int applicationId, string direction, string reason)
@@ -901,6 +914,37 @@ namespace JobPortal.Areas.Recruiter.Controllers
             await _db.SaveChangesAsync();
 
             return Json(new { ok = true, applicationId, dir = (delta > 0 ? "up" : "down"), at = now.ToString("s") });
+        }
+
+        // NEW: manual close endpoint (recruiter action)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Close(int id)
+        {
+            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+            var job = await _db.job_listings
+                .Where(j => j.user_id == recruiterId && j.job_listing_id == id)
+                .FirstOrDefaultAsync();
+
+            if (job is null) return NotFound();
+
+            if (!string.Equals(job.job_status, "Closed", StringComparison.OrdinalIgnoreCase))
+            {
+                job.job_status = "Closed";
+                await _db.SaveChangesAsync();
+                TempData["Message"] = $"Job #{id} is now Closed. It will no longer accept applications.";
+            }
+            else
+            {
+                TempData["Message"] = $"Job #{id} is already Closed.";
+            }
+
+            // Return to the page user likely came from:
+            if (Request.Headers["Referer"].ToString().Contains("/Edit", StringComparison.OrdinalIgnoreCase))
+                return RedirectToAction(nameof(Edit), new { id });
+
+            return RedirectToAction(nameof(Index));
         }
     }
 }

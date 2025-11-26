@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering; // Required for SelectList
+using JobPortal.Areas.Shared.Extensions;
 
 namespace JobPortal.Areas.Admin.Models;
 
@@ -106,6 +107,8 @@ public sealed class MessagesIndexViewModel
 {
     public MessagesFilterViewModel Filter { get; init; } = new();
     public PagedResult<ConversationListViewModel> Items { get; init; } = new();
+
+    public string Sort { get; set; } = "id_desc"; // id_asc | id_desc
 }
 
 public sealed class ConversationListViewModel
@@ -201,7 +204,7 @@ public sealed class PdfReportViewModel
     public IReadOnlyList<ReportStatCardViewModel> StatCards { get; init; } = Array.Empty<ReportStatCardViewModel>();
     public IReadOnlyList<DailyReportRow> DailyRows { get; init; } = Array.Empty<DailyReportRow>();
     public IReadOnlyList<TopCompanyRow> TopCompanies { get; init; } = Array.Empty<TopCompanyRow>();
-    public DateTime ReportDate { get; init; } = DateTime.UtcNow;
+    public DateTime ReportDate { get; init; } = MyTime.NowMalaysia();
 }
 
 public sealed class AdminNotificationSettingsViewModel
@@ -239,6 +242,9 @@ public sealed class CompaniesIndexViewModel
     public int RejectedCount { get; init; }
 
     public PagedResult<CompanyRow> Items { get; init; } = new();
+
+    public string Sort { get; set; } = "id_desc"; // id_asc | id_desc
+
 }
 
 public sealed class CompanyPreviewViewModel
@@ -464,7 +470,7 @@ public class AiJobPolicyCheckResultVM
 
     // NEW: align with controller JSON so the view can display cache freshness
     public bool FromCache { get; set; } = false;
-    public DateTime CachedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CachedAt { get; set; } = MyTime.NowMalaysia();
 }
 
 /* ===============================
@@ -487,5 +493,5 @@ public sealed class AiCompanyProfileCheckResultVM
 
     // Optional metadata for the UI (not required to persist)
     public bool FromCache { get; set; } = false;
-    public DateTime CachedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CachedAt { get; set; } = MyTime.NowMalaysia();
 }

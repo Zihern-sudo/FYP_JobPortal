@@ -1,3 +1,4 @@
+@* File: Areas/Admin/Views/Companies/Index.cshtml (UPDATED) *@
 @model JobPortal.Areas.Admin.Models.CompaniesIndexViewModel
 @{
     ViewData["Title"] = "Companies";
@@ -11,6 +12,13 @@
     };
 }
 
+@{
+    // Sorting state for ID toggle
+    var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+    var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+    var arrow = sort == "id_asc" ? "▲" : "▼";
+}
+
 <div class="card shadow-sm mb-3">
     <div class="card-body">
         <form method="get" class="row g-2 align-items-end">
@@ -18,25 +26,25 @@
                 <div class="btn-group mb-2">
                     <a class="btn btn-outline-secondary @Active("All")" asp-action="Index" asp-route-status="All"
                         asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">All (@Model.AllCount)</a>
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">All (@Model.AllCount)</a>
 
                     <a class="btn btn-outline-success @Active("Verified")" asp-action="Index"
                         asp-route-status="Verified" asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">Verified (@Model.VerifiedCount)</a>
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">Verified (@Model.VerifiedCount)</a>
 
                     <a class="btn btn-outline-secondary @Active("Unverified")" asp-action="Index"
                         asp-route-status="Unverified" asp-route-q="@Model.Query"
-                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)">Unverified
-                        (@Model.UnverifiedCount)</a>
+                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)"
+                        asp-route-sort="@sort">Unverified (@Model.UnverifiedCount)</a>
 
                     <a class="btn btn-outline-warning @Active("Incomplete")" asp-action="Index"
                         asp-route-status="Incomplete" asp-route-q="@Model.Query"
-                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)">Incomplete
-                        (@Model.IncompleteCount)</a>
+                        asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)"
+                        asp-route-sort="@sort">Incomplete (@Model.IncompleteCount)</a>
 
                     <a class="btn btn-outline-danger @Active("Rejected")" asp-action="Index" asp-route-status="Rejected"
                         asp-route-q="@Model.Query" asp-route-from="@((string?)ViewBag.From)"
-                        asp-route-to="@((string?)ViewBag.To)">Rejected (@Model.RejectedCount)</a>
+                        asp-route-to="@((string?)ViewBag.To)" asp-route-sort="@sort">Rejected (@Model.RejectedCount)</a>
                 </div>
             </div>
 
@@ -44,6 +52,8 @@
                 <input class="form-control" type="search" name="q" value="@Model.Query"
                     placeholder="Search name/industry/location" />
                 <input type="hidden" name="status" value="@Model.Status" />
+                @* Preserve sort on search *@
+                <input type="hidden" name="sort" value="@sort" />
             </div>
 
             <div class="col-auto">
@@ -58,6 +68,9 @@
 
             <div class="col-auto">
                 <button class="btn btn-primary" type="submit">Apply</button>
+
+                <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Companies"
+                    asp-action="Index">Reset</a>
             </div>
 
             <div class="col-auto ms-auto">
@@ -83,7 +96,16 @@
                     <thead>
                         <tr>
                             <th style="width:36px"><input type="checkbox" id="chkAll" /></th>
-                            <th style="width:72px">ID</th>
+                            @* ID sort toggle (cell-wide clickable, non-blue arrow) *@
+                            <th class="position-relative" style="width:72px">
+                                <span>ID</span>
+                                <span class="ms-1">@arrow</span>
+                                <a class="stretched-link text-decoration-none" asp-action="Index"
+                                    asp-route-status="@Model.Status" asp-route-q="@Model.Query"
+                                    asp-route-from="@((string?)ViewBag.From)" asp-route-to="@((string?)ViewBag.To)"
+                                    asp-route-page="@Model.Items.Page" asp-route-pageSize="@Model.Items.PageSize"
+                                    asp-route-sort="@idNext" aria-label="Sort by ID"></a>
+                            </th>
                             <th>Company</th>
                             <th>Industry</th>
                             <th>Location</th>
@@ -145,11 +167,11 @@
     }
     <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == 1 ? "disabled" : "")" asp-action="Index"
         asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-from="@ViewBag.From"
-        asp-route-to="@ViewBag.To" asp-route-page="@prev">Prev</a>
+        asp-route-to="@ViewBag.To" asp-route-page="@prev" asp-route-sort="@sort">Prev</a>
 
     <a class="btn btn-sm btn-outline-secondary @(Model.Items.Page == Model.Items.TotalPages ? "disabled" : "")"
         asp-action="Index" asp-route-status="@Model.Status" asp-route-q="@Model.Query" asp-route-from="@ViewBag.From"
-        asp-route-to="@ViewBag.To" asp-route-page="@next">Next</a>
+        asp-route-to="@ViewBag.To" asp-route-page="@next" asp-route-sort="@sort">Next</a>
 </div>
 
 @section Scripts {

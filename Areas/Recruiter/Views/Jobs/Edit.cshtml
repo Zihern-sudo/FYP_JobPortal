@@ -53,25 +53,25 @@
 
   <div class="mb-3">
     <label asp-for="job_title" class="form-label">Job Title</label>
-    <input asp-for="job_title" class="form-control" />
+    <input asp-for="job_title" class="form-control" required maxlength="160" />
     <span asp-validation-for="job_title" class="text-danger"></span>
   </div>
 
   <div class="mb-3">
     <label asp-for="job_description" class="form-label">Job Description</label>
-    <textarea asp-for="job_description" class="form-control" rows="6"></textarea>
+    <textarea asp-for="job_description" class="form-control" rows="6" maxlength="10000"></textarea>
     <span asp-validation-for="job_description" class="text-danger"></span>
   </div>
 
   <div class="mb-3">
     <label asp-for="job_requirements" class="form-label">Must-have Requirements</label>
-    <textarea asp-for="job_requirements" class="form-control" rows="4"></textarea>
+    <textarea asp-for="job_requirements" class="form-control" rows="4" maxlength="8000"></textarea>
     <span asp-validation-for="job_requirements" class="text-danger"></span>
   </div>
 
   <div class="mb-3">
     <label asp-for="job_requirements_nice" class="form-label">Nice-to-have Requirements</label>
-    <textarea asp-for="job_requirements_nice" class="form-control" rows="4"></textarea>
+    <textarea asp-for="job_requirements_nice" class="form-control" rows="4" maxlength="8000"></textarea>
     <span asp-validation-for="job_requirements_nice" class="text-danger"></span>
   </div>
 
@@ -90,7 +90,7 @@
 
       <div class="col-md-6">
         <label asp-for="job_type" class="form-label"></label>
-        <select asp-for="job_type" class="form-select"
+        <select asp-for="job_type" class="form-select" required
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.Categories)">
           <option value="">-- Select Employment Type --</option>
         </select>
@@ -99,7 +99,7 @@
 
       <div class="col-md-6">
         <label asp-for="work_mode" class="form-label"></label>
-        <select asp-for="work_mode" class="form-select"
+        <select asp-for="work_mode" class="form-select" required
           asp-items="new SelectList(JobPortal.Areas.Recruiter.Models.JobCatalog.WorkModes)">
           <option value="">-- Select Work Mode --</option>
         </select>
@@ -109,7 +109,8 @@
         <label asp-for="job_category" class="form-label">Job Category</label>
 
         <div id="jobCategoryTrigger" class="input-group">
-          <input id="jobCategoryDisplay" type="text" class="form-control" placeholder="Select a category" readonly />
+          <input id="jobCategoryDisplay" type="text" class="form-control" placeholder="Select a category" readonly
+            required />
           <span class="input-group-text">&#9662;</span>
         </div>
 
@@ -132,7 +133,8 @@
         <span asp-validation-for="job_category" class="text-danger"></span>
 
         <div id="otherCategoryWrap" class="mt-2" style="display:none;">
-          <input id="otherCategory" type="text" class="form-control" placeholder="Enter custom job category" />
+          <input id="otherCategory" type="text" class="form-control" placeholder="Enter custom job category"
+            maxlength="120" />
           <div class="form-text">Provide a category not in the list.</div>
         </div>
       </div>
@@ -323,6 +325,60 @@
 @section Scripts {
   @* enable unobtrusive client-side validation *@
   <partial name="_ValidationScriptsPartial" />
+
+  <script>
+    // why: jQuery Validate ignores hidden fields; our bound select is hidden
+    (function () {
+      if (window.jQuery && window.jQuery.validator) {
+        $.validator.setDefaults({ ignore: ":hidden:not(#job_category)" });
+      }
+    })();
+  </script>
+
+  <script>
+    // Make job_description & job_requirements required (client-side)
+    // why: ensure client validation even before server-side attributes are added
+    (function () {
+      const form = document.getElementById('editForm');
+      if (!form) return;
+
+      const reqFields = [
+        { id: 'job_description', msg: 'Job Description is required.' },
+        { id: 'job_requirements', msg: 'Must-have Requirements are required.' }
+      ];
+
+      reqFields.forEach(({ id, msg }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('required', 'required');
+        el.setAttribute('data-val', 'true');
+        el.setAttribute('data-val-required', msg);
+      });
+
+      // Re-parse unobtrusive attributes so jQuery Validate picks up new rules
+      if (window.jQuery && $.validator && $.validator.unobtrusive) {
+        $.validator.unobtrusive.parse(form);
+      }
+    })();
+  </script>
+
+  <script>
+    // Client cross-field guard: salary_min must not exceed salary_max
+    (function () {
+      const form = document.getElementById('editForm');
+      form?.addEventListener('submit', function (e) {
+        const minEl = document.getElementById('salary_min');
+        const maxEl = document.getElementById('salary_max');
+        const min = parseFloat(minEl?.value || '');
+        const max = parseFloat(maxEl?.value || '');
+        if (!isNaN(min) && !isNaN(max) && min > max) {
+          e.preventDefault();
+          minEl?.classList.add('is-invalid'); // why: immediate visual hint at the offending field
+          alert('Minimum salary cannot exceed maximum salary.');
+        }
+      });
+    })();
+  </script>
 
   <script>
     // ---- unified status chip helpers (chip beside Save/Submit) ----
@@ -618,7 +674,6 @@
       return false;
     }
   </script>
-
 
   <script>
     (function categoryDropdown_Edit() {

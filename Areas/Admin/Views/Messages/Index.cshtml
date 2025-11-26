@@ -1,3 +1,6 @@
+// ===============================
+// File: Areas/Admin/Views/Messages/Index.cshtml (UPDATED)
+// ===============================
 @* File: Areas/Admin/Views/Messages/Index.cshtml *@
 @model JobPortal.Areas.Admin.Models.MessagesIndexViewModel
 
@@ -5,6 +8,11 @@
   string FlagBadge(bool flagged) => flagged ? "badge text-bg-danger" : "badge text-bg-secondary";
   string UnreadBadge(int n) => n > 0 ? "badge text-bg-primary" : "badge text-bg-light";
   string Snip(string? s) => string.IsNullOrWhiteSpace(s) ? "-" : (s!.Length > 80 ? s.Substring(0, 80) + "…" : s);
+
+  // ADDED: sorting state
+  var sort = string.IsNullOrWhiteSpace(Model.Sort) ? "id_desc" : Model.Sort;
+  var idNext = sort == "id_desc" ? "id_asc" : "id_desc";
+  var arrow = sort == "id_asc" ? "▲" : "▼";
 }
 
 <div class="card shadow-sm mb-3">
@@ -22,6 +30,8 @@
         </div>
       </div>
       <input type="hidden" name="pageSize" value="@Model.Filter.PageSize" />
+      @* ADDED: preserve sort on search *@
+      <input type="hidden" name="sort" value="@sort" />
       <div class="col-sm-3 col-md-4 col-lg-6 text-end">
         <button class="btn btn-primary">Apply</button>
         <a class="btn btn-outline-secondary" asp-area="Admin" asp-controller="Messages" asp-action="Index">Reset</a>
@@ -35,7 +45,15 @@
     <table class="table align-middle mb-0">
       <thead>
         <tr>
-          <th style="width:80px">#</th>
+          @* ADDED: ID sort toggle (cell-wide clickable, non-blue arrow) *@
+          <th class="position-relative" style="width:80px">
+            <span>#</span>
+            <span class="ms-1">@arrow</span>
+            <a class="stretched-link text-decoration-none" asp-area="Admin" asp-controller="Messages" asp-action="Index"
+              asp-route-q="@Model.Filter.Q" asp-route-flaggedOnly="@Model.Filter.FlaggedOnly"
+              asp-route-page="@Model.Items.Page" asp-route-pageSize="@Model.Filter.PageSize" asp-route-sort="@idNext"
+              aria-label="Sort by ID"></a>
+          </th>
           <th>Company</th>
           <th>Job Title</th>
           <th>Last Message</th>
@@ -82,18 +100,13 @@
               <td class="text-end">
                 @if (t.Flagged)
                 {
-                  <!-- Gray, disabled button for blocked conversations -->
                   <button type="button" class="btn btn-sm btn-outline-secondary disabled" title="Blocked by admin"
-                    tabindex="-1" aria-disabled="true">
-                    Open
-                  </button>
+                    tabindex="-1" aria-disabled="true">Open</button>
                 }
                 else
                 {
                   <a class="btn btn-sm btn-outline-primary" asp-area="Admin" asp-controller="Messages" asp-action="Thread"
-                    asp-route-id="@t.ConversationId">
-                    Open
-                  </a>
+                    asp-route-id="@t.ConversationId">Open</a>
                 }
               </td>
             </tr>
@@ -118,12 +131,12 @@
         <li class="page-item@prevDisabled">
           <a class="page-link" asp-area="Admin" asp-controller="Messages" asp-action="Index"
             asp-route-q="@Model.Filter.Q" asp-route-flaggedOnly="@Model.Filter.FlaggedOnly" asp-route-page="@prevPage"
-            asp-route-pageSize="@Model.Filter.PageSize">Prev</a>
+            asp-route-pageSize="@Model.Filter.PageSize" asp-route-sort="@sort">Prev</a>
         </li>
         <li class="page-item@nextDisabled">
           <a class="page-link" asp-area="Admin" asp-controller="Messages" asp-action="Index"
             asp-route-q="@Model.Filter.Q" asp-route-flaggedOnly="@Model.Filter.FlaggedOnly" asp-route-page="@nextPage"
-            asp-route-pageSize="@Model.Filter.PageSize">Next</a>
+            asp-route-pageSize="@Model.Filter.PageSize" asp-route-sort="@sort">Next</a>
         </li>
       </ul>
     </nav>

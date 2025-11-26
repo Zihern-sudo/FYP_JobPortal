@@ -11,7 +11,7 @@
     DateTime? dateTo = ViewBag.DateTo as DateTime?;
     string actor = ViewBag.Actor as string ?? "All";
     string action = ViewBag.Action as string ?? "All";
-    DateTime generatedAt = (ViewBag.GeneratedAt as DateTime?) ?? DateTime.UtcNow;
+    DateTime generatedAt = (ViewBag.GeneratedAt as DateTime?) ?? MyTime.NowMalaysia();
 
     var total = items.Count;
     var uniqueActors = items.Where(x => !string.IsNullOrWhiteSpace(x.Actor)).Select(x => x.Actor).Distinct().Count();
@@ -160,7 +160,7 @@
 <body>
     <header style="margin-bottom:14px;">
         <h1>Audit Log</h1>
-        <div class="small muted">Generated @generatedAtMY.ToString("yyyy-MM-dd HH:mm") MYT</div>
+        <div class="small muted">Generated @generatedAtMY.ToString("yyyy-MM-dd") MYT</div>
     </header>
 
     <section class="card section">
@@ -256,7 +256,7 @@
     }
 
     <footer class="footer tiny">
-        © @DateTime.UtcNow.Year JobPortal • Generated for internal audit purposes.
+        © @MyTime.NowMalaysia().Year JobPortal • Generated for internal audit purposes.
     </footer>
 </body>
 
