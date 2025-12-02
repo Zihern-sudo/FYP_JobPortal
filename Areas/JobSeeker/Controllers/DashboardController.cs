@@ -16,6 +16,7 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using QuestPDF.Drawing;
 using System.Text.RegularExpressions;
+using JobPortal.Areas.Shared.Extensions;
 
 
 
@@ -856,54 +857,154 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             return View(model);
         }
 
-        [HttpPost]
-        public IActionResult AcceptOffer(int applicationId)
+[HttpPost]
+public IActionResult AcceptOffer(int applicationId)
+{
+    var application = _db.job_applications
+        .Include(a => a.job_listing)
+        .FirstOrDefault(a => a.application_id == applicationId);
+
+    if (application == null)
+    {
+        return NotFound();
+    }
+
+    var recruiterId = application.job_listing.user_id;
+    var candidateId = application.user_id;
+
+    // Update latest offer for this application
+    var latestOffer = _db.job_offers
+        .Where(o => o.application_id == applicationId)
+        .OrderByDescending(o => o.date_sent)
+        .FirstOrDefault();
+
+    if (latestOffer != null)
+    {
+        latestOffer.offer_status = "Accepted";   // valid per job_offer enum
+        latestOffer.date_updated = MyTime.NowMalaysia();
+    }
+
+    // Try to find existing conversation between recruiter and candidate
+    var convo = _db.conversations.FirstOrDefault(c =>
+        c.recruiter_id == recruiterId && c.candidate_id == candidateId);
+
+    if (convo == null)
+    {
+        // Create a new conversation entry
+        convo = new conversation
         {
-            var application = _db.job_applications
-                .Include(a => a.job_listing)
-                .FirstOrDefault(a => a.application_id == applicationId);
+            job_listing_id = application.job_listing_id,
+            created_at = DateTime.Now,
+            last_message_at = DateTime.Now,
+            last_snippet = "Offer accepted by candidate.",
+            unread_for_recruiter = 1,
+            unread_for_candidate = 0,
+            recruiter_id = recruiterId,
+            candidate_id = candidateId,
+            job_title = application.job_listing.job_title,
+            candidate_name = "Candidate"
+        };
 
-            if (application == null)
-            {
-                return NotFound();
-            }
+        _db.conversations.Add(convo);
+        _db.SaveChanges();
+    }
+    else
+    {
+        convo.last_message_at = DateTime.Now;
+        convo.last_snippet = "Offer accepted by candidate.";
+        convo.unread_for_recruiter = 1;
+    }
 
-            var recruiterId = application.job_listing.user_id;
-            var candidateId = application.user_id;
+ 
 
-            // Try to find existing conversation between recruiter and candidate
-            var convo = _db.conversations.FirstOrDefault(c =>
-                c.recruiter_id == recruiterId && c.candidate_id == candidateId);
+    _db.SaveChanges();
 
-            if (convo == null)
-            {
-                // Create a new conversation entry
-                convo = new conversation
-                {
-                    job_listing_id = application.job_listing_id,
-                    created_at = DateTime.Now,
-                    last_message_at = DateTime.Now,
-                    last_snippet = "Offer accepted by candidate.",
-                    unread_for_recruiter = 1,
-                    unread_for_candidate = 0,
-                    recruiter_id = recruiterId,
-                    candidate_id = candidateId,
-                    job_title = application.job_listing.job_title,
-                    candidate_name = "Candidate"
-                };
-
-                _db.conversations.Add(convo);
-                _db.SaveChanges();
-            }
-
-            // Update job application status
-            application.application_status = "Offer";
-            application.date_updated = DateTime.Now;
-            _db.SaveChanges();
-
-            // Redirect to the chat view (InboxController)
-            return RedirectToAction("Thread", "Inbox", new { id = convo.conversation_id, prefill = "Hi, I have accepted the offer. Thank you for the opportunity!" });
+    return RedirectToAction(
+        "Thread",
+        "Inbox",
+        new
+        {
+            id = convo.conversation_id,
+            prefill = "Hi, I have accepted the offer. Thank you for the opportunity!"
         }
+    );
+}
+
+
+
+
+[HttpPost]
+public IActionResult RejectOffer(int applicationId)
+{
+    var application = _db.job_applications
+        .Include(a => a.job_listing)
+        .FirstOrDefault(a => a.application_id == applicationId);
+
+    if (application == null)
+    {
+        return NotFound();
+    }
+
+    var recruiterId = application.job_listing.user_id;
+    var candidateId = application.user_id;
+
+    // Update latest offer for this application
+    var latestOffer = _db.job_offers
+        .Where(o => o.application_id == applicationId)
+        .OrderByDescending(o => o.date_sent)
+        .FirstOrDefault();
+
+    if (latestOffer != null)
+    {
+        // DB enum: Draft, Sent, Accepted, Declined, Withdrawn, Expired
+        latestOffer.offer_status = "Declined";   // corresponds to "Rejected" in UI
+        latestOffer.date_updated = DateTime.Now;
+    }
+
+    var convo = _db.conversations.FirstOrDefault(c =>
+        c.recruiter_id == recruiterId && c.candidate_id == candidateId);
+
+    if (convo == null)
+    {
+        convo = new conversation
+        {
+            job_listing_id = application.job_listing_id,
+            created_at = DateTime.Now,
+            last_message_at = DateTime.Now,
+            last_snippet = "Offer rejected by candidate.",
+            unread_for_recruiter = 1,
+            unread_for_candidate = 0,
+            recruiter_id = recruiterId,
+            candidate_id = candidateId,
+            job_title = application.job_listing.job_title,
+            candidate_name = "Candidate"
+        };
+
+        _db.conversations.Add(convo);
+        _db.SaveChanges();
+    }
+    else
+    {
+        convo.last_message_at = DateTime.Now;
+        convo.last_snippet = "Offer rejected by candidate.";
+        convo.unread_for_recruiter = 1;
+    }
+
+
+    _db.SaveChanges();
+
+    return RedirectToAction(
+        "Thread",
+        "Inbox",
+        new
+        {
+            id = convo.conversation_id,
+            prefill = "Hi, thank you for the offer, but I have decided to decline."
+        }
+    );
+}
+
+
 
         // ✅ Dynamic Job Listings with Pagination
         public async Task<IActionResult> JobListings(int? minSalary, int? maxSalary, string? search, string? location, string? salaryRange, string? workMode, string? jobCategory, int page = 1,

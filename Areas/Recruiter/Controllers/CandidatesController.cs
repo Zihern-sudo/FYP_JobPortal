@@ -179,108 +179,115 @@ namespace JobPortal.Areas.Recruiter.Controllers
         // ---------------- existing actions below (unchanged) ----------------
 
         [HttpGet]
-        public async Task<IActionResult> Detail(int id)
+public async Task<IActionResult> Detail(int id)
+{
+    if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+    var app = await _db.job_applications
+        .Include(a => a.user)
+        .Include(a => a.job_listing)
+        .FirstOrDefaultAsync(a => a.application_id == id);
+
+    if (app == null) return NotFound();
+
+    int? aiScore = null;
+    DateTime? aiWhen = null;
+    {
+        var latestResumeId = await _db.resumes
+            .Where(r => r.user_id == app.user_id)
+            .OrderByDescending(r => r.upload_date)
+            .Select(r => (int?)r.resume_id)
+            .FirstOrDefaultAsync();
+
+        if (latestResumeId.HasValue)
         {
-            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            var ev = await _db.ai_resume_evaluations
+                .Where(e => e.resume_id == latestResumeId.Value && e.job_listing_id == app.job_listing_id)
+                .Select(e => new { e.match_score, e.date_evaluated })
+                .FirstOrDefaultAsync();
 
-            var app = await _db.job_applications
-                .Include(a => a.user)
-                .Include(a => a.job_listing)
-                .FirstOrDefaultAsync(a => a.application_id == id);
-
-            if (app == null) return NotFound();
-
-            int? aiScore = null;
-            DateTime? aiWhen = null;
+            if (ev != null)
             {
-                var latestResumeId = await _db.resumes
-                    .Where(r => r.user_id == app.user_id)
-                    .OrderByDescending(r => r.upload_date)
-                    .Select(r => (int?)r.resume_id)
-                    .FirstOrDefaultAsync();
-
-                if (latestResumeId.HasValue)
-                {
-                    var ev = await _db.ai_resume_evaluations
-                        .Where(e => e.resume_id == latestResumeId.Value && e.job_listing_id == app.job_listing_id)
-                        .Select(e => new { e.match_score, e.date_evaluated })
-                        .FirstOrDefaultAsync();
-
-                    if (ev != null)
-                    {
-                        aiScore = ev.match_score ?? 0;
-                        aiWhen = ev.date_evaluated;
-                    }
-                }
+                aiScore = ev.match_score ?? 0;
+                aiWhen = ev.date_evaluated;
             }
-
-            var fullName = $"{app.user.first_name} {app.user.last_name}".Trim();
-            var vm = new CandidateVM(
-                ApplicationId: app.application_id,
-                UserId: app.user_id,
-                Name: string.IsNullOrWhiteSpace(fullName) ? $"User #{app.user_id}" : fullName,
-                Email: app.user.email,
-                Phone: "000-0000000",
-                Status: (app.application_status ?? "Submitted").Trim()
-            );
-
-            var raw = await _db.job_seeker_notes
-                .Where(n => n.application_id == id)
-                .Include(n => n.job_recruiter)
-                .Include(n => n.job_seeker)
-                .OrderByDescending(n => n.created_at)
-                .Select(n => new
-                {
-                    n.note_id,
-                    n.note_text,
-                    n.created_at,
-                    n.job_recruiter_id,
-                    RecruiterFirst = n.job_recruiter.first_name,
-                    RecruiterLast = n.job_recruiter.last_name,
-                    SeekerFirst = n.job_seeker.first_name,
-                    SeekerLast = n.job_seeker.last_name
-                })
-                .AsNoTracking()
-                .ToListAsync();
-
-            var notes = raw.Select(n =>
-            {
-                var isFromRecruiter = n.job_recruiter_id == recruiterId;
-                var author = (isFromRecruiter
-                    ? $"{n.RecruiterFirst} {n.RecruiterLast}"
-                    : $"{n.SeekerFirst} {n.SeekerLast}").Trim();
-
-                return new NoteVM(
-                    n.note_id,
-                    author,
-                    n.note_text,
-                    n.created_at.ToString("yyyy-MM-dd HH:mm"),
-                    isFromRecruiter
-                );
-            }).ToList();
-
-            ViewData["Title"] = $"Candidate #{vm.ApplicationId}";
-            ViewBag.Profile = vm;
-            ViewBag.Messages = notes;
-
-            ViewBag.OfferForm = new OfferFormVM
-            {
-                ApplicationId = vm.ApplicationId,
-                ContractType = "Full-time"
-            };
-
-            ViewBag.AiScore = aiScore;
-            ViewBag.AiEvaluated = aiWhen;
-
-            // NEW: surface job_application.description & expected_salary to the view
-            ViewBag.Description = app.description?.Trim();
-            // store as int? to match view's cast/format; convert safely if DB type is decimal
-            ViewBag.ExpectedSalary = app.expected_salary == null
-                ? (int?)null
-                : (int?)Convert.ToInt32(app.expected_salary);
-
-            return View();
         }
+    }
+
+    var fullName = $"{app.user.first_name} {app.user.last_name}".Trim();
+    var vm = new CandidateVM(
+        ApplicationId: app.application_id,
+        UserId: app.user_id,
+        Name: string.IsNullOrWhiteSpace(fullName) ? $"User #{app.user_id}" : fullName,
+        Email: app.user.email,
+        Phone: "000-0000000",
+        Status: (app.application_status ?? "Submitted").Trim()
+    );
+
+    var raw = await _db.job_seeker_notes
+        .Where(n => n.application_id == id)
+        .Include(n => n.job_recruiter)
+        .Include(n => n.job_seeker)
+        .OrderByDescending(n => n.created_at)
+        .Select(n => new
+        {
+            n.note_id,
+            n.note_text,
+            n.created_at,
+            n.job_recruiter_id,
+            RecruiterFirst = n.job_recruiter.first_name,
+            RecruiterLast = n.job_recruiter.last_name,
+            SeekerFirst = n.job_seeker.first_name,
+            SeekerLast = n.job_seeker.last_name
+        })
+        .AsNoTracking()
+        .ToListAsync();
+
+    var notes = raw.Select(n =>
+    {
+        var isFromRecruiter = n.job_recruiter_id == recruiterId;
+        var author = (isFromRecruiter
+            ? $"{n.RecruiterFirst} {n.RecruiterLast}"
+            : $"{n.SeekerFirst} {n.SeekerLast}").Trim();
+
+        return new NoteVM(
+            n.note_id,
+            author,
+            n.note_text,
+            n.created_at.ToString("yyyy-MM-dd HH:mm"),
+            isFromRecruiter
+        );
+    }).ToList();
+
+    // NEW: load all offers for this application
+    var offers = await _db.job_offers
+        .Where(o => o.application_id == id)
+        .OrderByDescending(o => o.date_sent)
+        .AsNoTracking()
+        .ToListAsync();
+
+    ViewData["Title"] = $"Candidate #{vm.ApplicationId}";
+    ViewBag.Profile = vm;
+    ViewBag.Messages = notes;
+    ViewBag.Offers = offers;        // <--- pass to view
+
+    ViewBag.OfferForm = new OfferFormVM
+    {
+        ApplicationId = vm.ApplicationId,
+        ContractType = "Full-time"
+    };
+
+    ViewBag.AiScore = aiScore;
+    ViewBag.AiEvaluated = aiWhen;
+
+    ViewBag.Description = app.description?.Trim();
+    ViewBag.ExpectedSalary = app.expected_salary == null
+        ? (int?)null
+        : (int?)Convert.ToInt32(app.expected_salary);
+
+    return View();
+}
+
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -311,84 +318,171 @@ namespace JobPortal.Areas.Recruiter.Controllers
             return SetStatus(id, "Hired");
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SendOffer(OfferFormVM vm)
+    [HttpPost]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> SendOffer(OfferFormVM vm)
+{
+    if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+
+    if (!ModelState.IsValid)
+    {
+        TempData["Message"] = "Offer form has validation errors.";
+        return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
+    }
+
+    var app = await _db.job_applications.FirstOrDefaultAsync(a => a.application_id == vm.ApplicationId);
+    if (app == null) return NotFound();
+
+    // Block if application already marked Hired
+    if (string.Equals(app.application_status, "Hired", StringComparison.OrdinalIgnoreCase))
+    {
+        TempData["Message"] = "This application is already marked as Hired. You cannot send another offer.";
+        return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
+    }
+
+    // Block if an offer for this application was already accepted
+    var hasAccepted = await _db.job_offers
+        .AnyAsync(o => o.application_id == vm.ApplicationId && o.offer_status == "Accepted");
+    if (hasAccepted)
+    {
+        TempData["Message"] = "Offer is already accepted. You cannot send another offer for this application.";
+        return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
+    }
+
+    // Pull listing owner/title for conversation metadata
+    var listing = await _db.job_listings
+        .Where(j => j.job_listing_id == app.job_listing_id)
+        .Select(j => new { j.job_listing_id, j.user_id, j.job_title })
+        .FirstOrDefaultAsync();
+    if (listing == null) return NotFound();
+
+    var token = Guid.NewGuid();
+    var now = MyTime.NowMalaysia();
+    DateOnly? startDate = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value) : (DateOnly?)null;
+
+    await using var tx = await _db.Database.BeginTransactionAsync();
+
+    // 1) Save offer
+    var offer = new job_offer
+    {
+        application_id = vm.ApplicationId,
+        offer_status = "Sent",
+        salary_offer = vm.SalaryOffer,
+        start_date = startDate,
+        contract_type = vm.ContractType,
+        notes = vm.Notes,
+        candidate_token = token,
+        date_sent = now
+    };
+    _db.job_offers.Add(offer);
+
+    app.application_status = "Offer";
+    app.date_updated = now;
+
+    // 2) Audit note
+    var offerLines = new[]
+    {
+        "=== Offer Sent ===",
+        vm.SalaryOffer.HasValue ? $"Salary: {vm.SalaryOffer.Value:N2}" : "Salary: (not specified)",
+        vm.StartDate.HasValue ? $"Start Date: {vm.StartDate:yyyy-MM-dd}" : "Start Date: (not specified)",
+        !string.IsNullOrWhiteSpace(vm.ContractType) ? $"Contract: {vm.ContractType}" : "Contract: (not specified)",
+        string.IsNullOrWhiteSpace(vm.Notes) ? null : $"Notes: {vm.Notes}"
+    }.Where(x => x != null);
+
+    _db.job_seeker_notes.Add(new job_seeker_note
+    {
+        application_id = vm.ApplicationId,
+        job_recruiter_id = recruiterId,
+        job_seeker_id = app.user_id,
+        note_text = string.Join("\n", offerLines),
+        created_at = now
+    });
+
+    // 3) Ensure/find conversation for this listing + candidate
+    var conv = await _db.conversations.FirstOrDefaultAsync(c =>
+        c.job_listing_id == listing.job_listing_id &&
+        c.candidate_id == app.user_id);
+
+    if (conv == null)
+    {
+        conv = new conversation
         {
-            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+            job_listing_id = listing.job_listing_id,
+            recruiter_id = listing.user_id,
+            candidate_id = app.user_id,
+            job_title = listing.job_title,
+            created_at = now,
+            last_message_at = null,
+            last_snippet = null,
+            unread_for_recruiter = 0,
+            unread_for_candidate = 0,
+            is_blocked = false
+        };
+        _db.conversations.Add(conv);
+        await _db.SaveChangesAsync(); // need PK for FK
+    }
 
-            if (!ModelState.IsValid)
-            {
-                TempData["Message"] = "Offer form has validation errors.";
-                return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
-            }
+    // 4) Post a nicely formatted “Offer Details” message into the thread (with real line breaks)
+    if (!conv.is_blocked)
+    {
+        string salaryText   = vm.SalaryOffer.HasValue ? $"RM {vm.SalaryOffer.Value:N2}" : "(not specified)";
+        string startText    = vm.StartDate.HasValue ? vm.StartDate.Value.ToString("yyyy-MM-dd") : "(not specified)";
+        string contractText = string.IsNullOrWhiteSpace(vm.ContractType) ? "(not specified)" : vm.ContractType;
+        string notesText    = string.IsNullOrWhiteSpace(vm.Notes) ? null : vm.Notes.Trim();
 
-            var app = await _db.job_applications.FirstOrDefaultAsync(a => a.application_id == vm.ApplicationId);
-            if (app == null) return NotFound();
+        var reviewUrl = Url.Action("Review", "Offers", new { area = "Seeker", token }, Request.Scheme);
+        const string NL = "\u2028"; // Unicode LINE SEPARATOR for HTML rendering
 
-            var token = Guid.NewGuid();
-            var now = MyTime.NowMalaysia();
+        var body =
+            $"Offer Details{NL}" +
+            $"Position: “{listing.job_title}”{NL}" +
+            $"Salary: {salaryText}{NL}" +
+            $"Start Date: {startText}{NL}" +
+            $"Contract: {contractText}" +
+            (notesText is null ? "" : $"{NL}Notes: {notesText}") +
+            $"{NL}Review & Respond: {reviewUrl}";
 
-            DateOnly? startDate = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value) : (DateOnly?)null;
+        var msg = new message
+        {
+            conversation_id = conv.conversation_id,
+            sender_id = recruiterId,
+            receiver_id = app.user_id,
+            msg_content = body,
+            msg_timestamp = now,
+            is_read = false
+        };
+        _db.messages.Add(msg);
 
-            await using var tx = await _db.Database.BeginTransactionAsync();
+        var snippet = $"Offer — {listing.job_title} · {salaryText} · {startText} · {contractText}";
+        conv.last_message_at = now;
+        conv.last_snippet = snippet.Length > 200 ? snippet.Substring(0, 200) : snippet;
+        conv.unread_for_candidate++;
 
-            var offer = new job_offer
-            {
-                application_id = vm.ApplicationId,
-                offer_status = "Sent",
-                salary_offer = vm.SalaryOffer,
-                start_date = startDate,
-                contract_type = vm.ContractType,
-                notes = vm.Notes,
-                candidate_token = token,
-                date_sent = now
-            };
-            _db.job_offers.Add(offer);
+        if (string.IsNullOrWhiteSpace(conv.job_title))
+            conv.job_title = listing.job_title;
+        if (conv.recruiter_id == null)
+            conv.recruiter_id = listing.user_id;
+    }
 
-            app.application_status = "Offer";
-            app.date_updated = now;
+    await _db.SaveChangesAsync();
+    await tx.CommitAsync();
 
-            var offerLines = new[]
-            {
-                "=== Offer Sent ===",
-                vm.SalaryOffer.HasValue ? $"Salary: {vm.SalaryOffer.Value:N2}" : "Salary: (not specified)",
-                vm.StartDate.HasValue ? $"Start Date: {vm.StartDate:yyyy-MM-dd}" : "Start Date: (not specified)",
-                !string.IsNullOrWhiteSpace(vm.ContractType) ? $"Contract: {vm.ContractType}" : "Contract: (not specified)",
-                string.IsNullOrWhiteSpace(vm.Notes) ? null : $"Notes: {vm.Notes}"
-            }.Where(x => x != null);
+    // 5) Notify candidate (kept)
+    await this.TryNotifyAsync(_notif, _logger, () =>
+        _notif.SendAsync(
+            userId: app.user_id,
+            title: "Job offer sent",
+            message: $"You have a job offer for “{(listing.job_title ?? "your application")}”.",
+            type: "System"
+        )
+    );
 
-            var note = new job_seeker_note
-            {
-                application_id = vm.ApplicationId,
-                job_recruiter_id = recruiterId,
-                job_seeker_id = app.user_id,
-                note_text = string.Join("\n", offerLines),
-                created_at = now
-            };
-            _db.job_seeker_notes.Add(note);
+    TempData["Message"] = $"Offer sent for Application #{vm.ApplicationId}.";
+    return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
+}
 
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
 
-            // notify candidate (non-blocking)
-            var jobTitle = await _db.job_listings
-                .Where(j => j.job_listing_id == app.job_listing_id)
-                .Select(j => j.job_title)
-                .FirstOrDefaultAsync();
 
-            await this.TryNotifyAsync(_notif, _logger, () =>
-                _notif.SendAsync(
-                    userId: app.user_id,
-                    title: "Job offer sent",
-                    message: $"You have a job offer for “{(jobTitle ?? "your application")}”.",
-                    type: "System"
-                )
-            );
-
-            TempData["Message"] = $"Offer sent for Application #{vm.ApplicationId}.";
-            return RedirectToAction(nameof(Detail), new { id = vm.ApplicationId });
-        }
 
         // ---------------- AI recruiter controls (NEW) ----------------
 

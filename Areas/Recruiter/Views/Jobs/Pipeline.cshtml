@@ -3,9 +3,14 @@
 @{
   var job = ViewBag.Job as JobItemVM ?? new JobItemVM(0, "", "", JobStatus.Draft, "");
   var cands = ViewBag.Cands as List<CandidateItemVM> ?? new List<CandidateItemVM>();
-  string[] cols = new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired/Rejected" };
-  var by = cols.ToDictionary(c => c, c => cands.Where(x => string.Equals(x.Stage ?? "", c,
-  StringComparison.OrdinalIgnoreCase)).ToList());
+
+  // SPLIT Hired and Rejected into separate columns
+  string[] cols = new[] { "New", "AI-Screened", "Shortlisted", "Interview", "Offer", "Hired", "Rejected" };
+
+  var by = cols.ToDictionary(
+      c => c,
+      c => cands.Where(x => string.Equals(x.Stage ?? "", c, StringComparison.OrdinalIgnoreCase)).ToList()
+  );
 
   // NEW: requirements (if controller populated ViewBag.Reqs)
   var reqs = ViewBag.Reqs as string[] ?? Array.Empty<string>();
@@ -19,6 +24,20 @@
 }
 
 <style>
+  /* Layout for the whole board: keep all columns in a single row with horizontal scroll */
+  #board.kanban {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 1.5rem;
+    overflow-x: auto;
+    align-items: flex-start;
+  }
+
+  #board .kanban-col {
+    min-width: 260px;
+    flex: 0 0 auto;
+  }
+
   .kanban-col.drop-hover {
     background: #f1f5ff;
     border-color: #9ec5fe;
@@ -63,8 +82,7 @@
   @* ==== AI: Evaluate All candidates for this job + Scoring Rules ==== *@
   @if (job.Id > 0)
   {
-    <form id="evalAllForm" method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateJob"
-      class="ms-2">
+    <form id="evalAllForm" method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateJob" class="ms-2">
       @Html.AntiForgeryToken()
       <input type="hidden" name="jobId" value="@job.Id" />
       <div class="dropdown d-inline">
@@ -113,7 +131,7 @@
   @foreach (var col in cols)
   {
     <div class="kanban-col" data-stage="@col">
-      <div class="fw-semibold mb-2">@col (@by[col].Count)</div>
+      <div class="fw-semibold mb-2">@col (<span class="stage-count">@by[col].Count</span>)</div>
       @foreach (var x in by[col])
       {
         <div class="candidate-card" draggable="true" data-id="@x.Id" data-stage="@col">
@@ -123,8 +141,7 @@
               <div class="score">@x.Score</div>
 
               @* ==== AI: Evaluate this single candidate; inherits weights from Scoring Rules ==== *@
-              <form method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne"
-                class="m-0 p-0 eval-one-form">
+              <form method="post" asp-area="Recruiter" asp-controller="AiEvaluation" asp-action="EvaluateOne" class="m-0 p-0 eval-one-form">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="applicationId" value="@x.Id" />
                 <button type="submit" class="btn btn-xxs btn-outline-secondary" title="AI Evaluate this candidate">
@@ -133,10 +150,8 @@
               </form>
 
               @* ==== Manual rank note (up/down) ==== *@
-              <button type="button" class="btn btn-xxs btn-outline-dark" title="Boost (note required)"
-                onclick="openRank('@x.Id','up')">▲</button>
-              <button type="button" class="btn btn-xxs btn-outline-dark" title="Demote (note required)"
-                onclick="openRank('@x.Id','down')">▼</button>
+              <button type="button" class="btn btn-xxs btn-outline-dark" title="Boost (note required)" onclick="openRank('@x.Id','up')">▲</button>
+              <button type="button" class="btn btn-xxs btn-outline-dark" title="Demote (note required)" onclick="openRank('@x.Id','down')">▼</button>
             </div>
           </div>
           <div class="small text-muted">@x.AppliedAt</div>
@@ -147,21 +162,19 @@
             }
             @if (x.Override)
             {
-              <span class="badge text-bg-info">Former employee</span>
+              <span class="badge text-bg-success">Active employee</span>
             }
           </div>
           <div class="mt-2 d-flex gap-2">
-            <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail"
-              asp-route-id="@x.Id">Open</a>
+            <a class="btn btn-sm btn-outline-primary" asp-area="Recruiter" asp-controller="Candidates" asp-action="Detail" asp-route-id="@x.Id">Open</a>
           </div>
-
         </div>
       }
     </div>
   }
 </div>
 
-@* --- OFFER MODAL (unchanged UI) --- *@
+@* --- OFFER MODAL (enhanced UI + server-side validation display) --- *@
 <style>
   /* Position close button at top-right of the header */
   #offer-modal .modal-header {
@@ -190,18 +203,25 @@
         </div>
 
         <div class="modal-body">
-          <div class="form-group">
-            <label>Salary Offer</label>
-            <input name="SalaryOffer" type="number" step="0.01" class="form-control" />
+          <div id="offer-errors" class="alert alert-danger small d-none mb-3"></div>
+
+          <div class="mb-3">
+            <h6 class="mb-1">Compensation</h6>
+            <small class="text-muted">You can fine-tune these details later in the contract.</small>
           </div>
 
-          <div class="form-group">
-            <label>Start Date</label>
-            <input name="StartDate" type="date" class="form-control" />
+          <div class="form-group mb-3">
+            <label class="form-label">Salary Offer <span class="text-danger">*</span></label>
+            <input name="SalaryOffer" type="number" step="0.01" class="form-control" placeholder="e.g. 4500.00" required />
           </div>
 
-          <div class="form-group">
-            <label>Contract Type</label>
+          <div class="form-group mb-3">
+            <label class="form-label">Start Date <span class="text-danger">*</span></label>
+            <input name="StartDate" type="date" class="form-control" required />
+          </div>
+
+          <div class="form-group mb-3">
+            <label class="form-label">Contract Type <span class="text-danger">*</span></label>
             <select name="ContractType" class="form-control" required>
               <option value="" selected disabled>Select contract type</option>
               <option>Full Time</option>
@@ -212,9 +232,9 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label>Notes</label>
-            <textarea name="Notes" class="form-control"></textarea>
+          <div class="form-group mb-2">
+            <label class="form-label">Notes to candidate (optional)</label>
+            <textarea name="Notes" class="form-control" rows="3" placeholder="Add a short friendly note, probation details, benefits, etc."></textarea>
           </div>
 
           <small class="text-muted">
@@ -245,8 +265,7 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
-          <textarea class="form-control" id="rankReason" name="reason" rows="3" placeholder="e.g. Good culture fit"
-            required></textarea>
+          <textarea class="form-control" id="rankReason" name="reason" rows="3" placeholder="e.g. Good culture fit" required></textarea>
           <small class="text-muted">This note is saved to the candidate’s thread.</small>
         </div>
         <div class="modal-footer">
@@ -277,8 +296,14 @@
         return input ? input.value : '';
       }
 
-      function showOverlay() { const el = document.getElementById('aiProgressOverlay'); if (el) el.style.display = 'block'; }
-      function hideOverlay() { const el = document.getElementById('aiProgressOverlay'); if (el) el.style.display = 'none'; }
+      function showOverlay() {
+        const el = document.getElementById('aiProgressOverlay');
+        if (el) el.style.display = 'block';
+      }
+      function hideOverlay() {
+        const el = document.getElementById('aiProgressOverlay');
+        if (el) el.style.display = 'none';
+      }
 
       function toast(msg, isError) {
         if (window.toastr) { isError ? toastr.error(msg) : toastr.success(msg); return; }
@@ -353,7 +378,9 @@
             const tok = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
             const t = document.createElement('input'); t.type = 'hidden'; t.name = '__RequestVerificationToken'; t.value = tok; form.appendChild(t);
             const j = document.createElement('input'); j.type = 'hidden'; j.name = 'jobId'; j.value = jobId; form.appendChild(j);
-            (json.weight2 || []).forEach(function (w) { const h = document.createElement('input'); h.type = 'hidden'; h.name = 'weight2'; h.value = w; form.appendChild(h); });
+            (json.weight2 || []).forEach(function (w) {
+              const h = document.createElement('input'); h.type = 'hidden'; h.name = 'weight2'; h.value = w; form.appendChild(h);
+            });
             document.body.appendChild(form);
             form.submit();
           } catch (e) {
@@ -414,9 +441,17 @@
         }
       });
 
-      // ===== Drag & drop (existing) =====
-      const stages = ["AI-Screened", "Shortlisted", "Interview", "Offer"];
-      const nextStage = { "AI-Screened": "Shortlisted", "Shortlisted": "Interview", "Interview": "Offer" };
+      // ===== Drag & drop =====
+      // Stages allowed to receive drops (New is excluded on purpose)
+      const stages = ["AI-Screened", "Shortlisted", "Interview", "Offer", "Hired", "Rejected"];
+
+      // Allowed transitions (fromStage -> [toStage...])
+      const allowedTransitions = {
+        "AI-Screened": ["Shortlisted"],
+        "Shortlisted": ["Interview"],
+        "Interview": ["Offer"],
+        "Offer": ["Hired", "Rejected"]  // NEW: Hire or Reject from Offer
+      };
 
       document.querySelectorAll('.candidate-card').forEach(card => {
         card.addEventListener('dragstart', e => {
@@ -447,25 +482,59 @@
         const card = document.querySelector(`.candidate-card[data-id="${appId}"]`);
         if (!card) return;
 
+        const fromColumn = card.closest('.kanban-col');
         const fromStage = (card.dataset.stage || '').trim();
-        if (!nextStage[fromStage] || nextStage[fromStage] !== toStage) {
+
+        const allowed = allowedTransitions[fromStage] || [];
+        if (!allowed.includes(toStage)) {
           toast(`Invalid move: ${fromStage || 'Unknown'} → ${toStage}`, true);
           return;
         }
 
         const jobId = document.getElementById('jobId')?.value || '0';
 
+        // Special case: moves into Offer still use the Offer modal
         if (toStage === "Offer") {
           OfferUI.open(appId, async function (formData) {
-            const res = await fetch(`@Url.Action("CreateOffer", "Jobs", new { area = "Recruiter" })`, {
-              method: 'POST',
-              headers: { 'RequestVerificationToken': antiForgery() },
-              body: formData
-            });
-            const json = await res.json();
-            if (!json.ok) { toast(json.error || 'Failed to send offer', true); return; }
-            moveCard(card, column, toStage);
+            const errorsBox = document.getElementById('offer-errors');
+            if (errorsBox) {
+              errorsBox.classList.add('d-none');
+              errorsBox.innerHTML = '';
+            }
+
+            try {
+              const res = await fetch(`@Url.Action("CreateOffer", "Jobs", new { area = "Recruiter" })`, {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': antiForgery() },
+                body: formData
+              });
+
+              let json = {};
+              try { json = await res.json(); } catch { json = {}; }
+
+              if (!res.ok || !json || json.ok === false) {
+                const messages = [];
+                if (Array.isArray(json.errors)) messages.push(...json.errors);
+                if (json.error) messages.push(json.error);
+                const msg = messages[0] || 'Failed to send offer';
+
+                if (errorsBox && messages.length) {
+                  errorsBox.innerHTML = messages.map(m => `<div>${m}</div>`).join('');
+                  errorsBox.classList.remove('d-none');
+                }
+
+                toast(msg, true);
+                return false; // keep modal open
+              }
+
+            } catch (e) {
+              toast('Failed to send offer', true);
+              return false;
+            }
+
+            moveCard(card, fromColumn, column, toStage);
             toast('Offer sent and candidate moved to Offer.');
+            return true;
           });
           return;
         }
@@ -486,33 +555,69 @@
         const json = await res.json();
         if (!json.ok) { toast(json.error || 'Failed to move candidate', true); return; }
 
-        moveCard(card, column, toStage);
+        moveCard(card, fromColumn, column, toStage);
         toast(`Moved to ${toStage}.`);
       }
 
-      function moveCard(card, column, toStage) {
-        column.appendChild(card);
+      // === helper to keep column counts in sync ===
+      function updateCount(col, delta) {
+        if (!col) return;
+        const span = col.querySelector('.stage-count');
+        if (!span) return;
+        const current = parseInt(span.textContent || '0', 10) || 0;
+        span.textContent = current + delta;
+      }
+
+      function moveCard(card, fromColumn, toColumn, toStage) {
+        if (fromColumn && toColumn && fromColumn !== toColumn) {
+          updateCount(fromColumn, -1);
+          updateCount(toColumn, +1);
+        }
+        toColumn.appendChild(card);
         card.dataset.stage = toStage;
       }
 
       // Simple Offer modal helper
       window.OfferUI = {
+        _handler: null,
         open(appId, onSubmit) {
           const modal = document.getElementById('offer-modal');
           const form = document.getElementById('offer-form');
           document.getElementById('offer-ApplicationId').value = appId;
 
-          const handler = async function (ev) {
+          // reset previous handler if any
+          if (this._handler) {
+            form.removeEventListener('submit', this._handler);
+            this._handler = null;
+          }
+
+          const errorsBox = document.getElementById('offer-errors');
+          if (errorsBox) {
+            errorsBox.classList.add('d-none');
+            errorsBox.innerHTML = '';
+          }
+
+          const handler = async (ev) => {
             ev.preventDefault();
             const fd = new FormData(form);
-            await onSubmit(fd);
-            form.removeEventListener('submit', handler);
-            OfferUI.close();
+            const ok = await onSubmit(fd);
+            if (ok) {
+              form.reset();
+              form.removeEventListener('submit', handler);
+              this._handler = null;
+              OfferUI.close();
+            }
           };
+
+          this._handler = handler;
           form.addEventListener('submit', handler);
+
           modal.style.display = 'block';
         },
-        close() { document.getElementById('offer-modal').style.display = 'none'; }
+        close() {
+          const modal = document.getElementById('offer-modal');
+          if (modal) modal.style.display = 'none';
+        }
       };
     })();
   </script>

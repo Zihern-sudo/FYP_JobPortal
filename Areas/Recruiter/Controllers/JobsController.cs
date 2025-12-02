@@ -550,18 +550,19 @@ namespace JobPortal.Areas.Recruiter.Controllers
                 .Select(g => new { application_id = g.Key, at = g.Max(x => x.created_at) })
                 .ToDictionaryAsync(x => x.application_id, x => (DateTime?)x.at);
 
-            string MapStage(string dbStatusRaw)
-            {
-                var dbStatus = (dbStatusRaw ?? "").Trim();
-                if (dbStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase)) return "New";
-                if (dbStatus.Equals("Hired", StringComparison.OrdinalIgnoreCase)) return "Hired/Rejected";
-                if (dbStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase)) return "Hired/Rejected";
-                if (dbStatus.Equals("AI-Screened", StringComparison.OrdinalIgnoreCase)) return "AI-Screened";
-                if (dbStatus.Equals("Shortlisted", StringComparison.OrdinalIgnoreCase)) return "Shortlisted";
-                if (dbStatus.Equals("Interview", StringComparison.OrdinalIgnoreCase)) return "Interview";
-                if (dbStatus.Equals("Offer", StringComparison.OrdinalIgnoreCase)) return "Offer";
-                return "New";
-            }
+           string MapStage(string dbStatusRaw)
+{
+    var dbStatus = (dbStatusRaw ?? "").Trim();
+    if (dbStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase)) return "New";
+    if (dbStatus.Equals("Hired", StringComparison.OrdinalIgnoreCase)) return "Hired";      // was Hired/Rejected
+    if (dbStatus.Equals("Rejected", StringComparison.OrdinalIgnoreCase)) return "Rejected"; // was Hired/Rejected
+    if (dbStatus.Equals("AI-Screened", StringComparison.OrdinalIgnoreCase)) return "AI-Screened";
+    if (dbStatus.Equals("Shortlisted", StringComparison.OrdinalIgnoreCase)) return "Shortlisted";
+    if (dbStatus.Equals("Interview", StringComparison.OrdinalIgnoreCase)) return "Interview";
+    if (dbStatus.Equals("Offer", StringComparison.OrdinalIgnoreCase)) return "Offer";
+    return "New";
+}
+
 
             var composed = apps.Select(a => new
             {
@@ -653,110 +654,161 @@ namespace JobPortal.Areas.Recruiter.Controllers
         };
 
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> MoveCandidate(int jobId, int applicationId, string toStage)
-        {
-            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
-            if (string.IsNullOrWhiteSpace(toStage)) return BadRequest(new { ok = false, error = "Missing target stage." });
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> MoveCandidate(int jobId, int applicationId, string toStage)
+{
+    if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+    if (string.IsNullOrWhiteSpace(toStage)) return BadRequest(new { ok = false, error = "Missing target stage." });
 
-            if (toStage.Equals("Offer", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { ok = false, error = "Use CreateOffer endpoint for Offer stage." });
+    if (toStage.Equals("Offer", StringComparison.OrdinalIgnoreCase))
+        return BadRequest(new { ok = false, error = "Use CreateOffer endpoint for Offer stage." });
 
-            var job = await _db.job_listings
-                .Where(j => j.user_id == recruiterId && j.job_listing_id == jobId)
-                .FirstOrDefaultAsync();
-            if (job is null) return NotFound(new { ok = false, error = "Job not found." });
+    var job = await _db.job_listings
+        .Where(j => j.user_id == recruiterId && j.job_listing_id == jobId)
+        .FirstOrDefaultAsync();
+    if (job is null) return NotFound(new { ok = false, error = "Job not found." });
 
-            var app = await _db.job_applications
-                .Where(a => a.job_listing_id == jobId && a.application_id == applicationId)
-                .FirstOrDefaultAsync();
-            if (app is null) return NotFound(new { ok = false, error = "Application not found." });
+    var app = await _db.job_applications
+        .Where(a => a.job_listing_id == jobId && a.application_id == applicationId)
+        .FirstOrDefaultAsync();
+    if (app is null) return NotFound(new { ok = false, error = "Application not found." });
 
-            var current = (app.application_status ?? "").Trim();
-            if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals(toStage, StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
+    var current = (app.application_status ?? "").Trim();
 
-            app.application_status = toStage;
-            app.date_updated = MyTime.NowMalaysia();
-            await _db.SaveChangesAsync();
+    bool isValid;
+    if (current.Equals("Offer", StringComparison.OrdinalIgnoreCase))
+    {
+        // NEW: Allow Offer → Hired or Offer → Rejected
+        isValid = toStage.Equals("Hired", StringComparison.OrdinalIgnoreCase)
+               || toStage.Equals("Rejected", StringComparison.OrdinalIgnoreCase);
+    }
+    else
+    {
+        isValid = _nextStage.TryGetValue(current, out var allowed)
+               && allowed.Equals(toStage, StringComparison.OrdinalIgnoreCase);
+    }
 
-            var jobTitle = await _db.job_listings
-                .Where(j => j.job_listing_id == app.job_listing_id)
-                .Select(j => j.job_title)
-                .FirstOrDefaultAsync();
+    if (!isValid)
+        return BadRequest(new { ok = false, error = $"Invalid transition: {current} → {toStage}." });
 
-            await this.TryNotifyAsync(_notif, _logger, () =>
-                _notif.SendAsync(
-                    userId: app.user_id,
-                    title: "Application status updated",
-                    message: $"Your application for “{(jobTitle ?? "the job")}” is now {toStage}.",
-                    type: "System"
-                )
-            );
+    app.application_status = toStage;
+    app.date_updated = MyTime.NowMalaysia();
+    await _db.SaveChangesAsync();
 
-            return Json(new { ok = true, applicationId, newStage = toStage });
-        }
+    var jobTitle = await _db.job_listings
+        .Where(j => j.job_listing_id == app.job_listing_id)
+        .Select(j => j.job_title)
+        .FirstOrDefaultAsync();
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
-        {
-            if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
-            if (vm is null || vm.ApplicationId <= 0) return BadRequest(new { ok = false, error = "Invalid payload." });
+    await this.TryNotifyAsync(_notif, _logger, () =>
+        _notif.SendAsync(
+            userId: app.user_id,
+            title: "Application status updated",
+            message: $"Your application for “{(jobTitle ?? "the job")}” is now {toStage}.",
+            type: "System"
+        )
+    );
 
-            var app = await _db.job_applications
-                .Include(a => a.job_listing)
-                .Where(a => a.application_id == vm.ApplicationId)
-                .FirstOrDefaultAsync();
+    return Json(new { ok = true, applicationId, newStage = toStage });
+}
 
-            if (app is null) return NotFound(new { ok = false, error = "Application not found." });
-            if (app.job_listing.user_id != recruiterId) return Forbid();
+       [HttpPost]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> CreateOffer(Recruiter.Models.OfferFormVM vm)
+{
+    if (!this.TryGetUserId(out var recruiterId, out var early)) return early!;
+    if (vm is null) return BadRequest(new { ok = false, error = "Invalid payload." });
 
-            var current = (app.application_status ?? "").Trim();
-            if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals("Offer", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { ok = false, error = $"Invalid transition: {current} → Offer." });
+    // Server-side validation for the offer form
+    if (!ModelState.IsValid)
+    {
+        var firstError = ModelState.Values
+            .SelectMany(v => v.Errors)
+            .FirstOrDefault()?.ErrorMessage
+            ?? "Please correct the offer details.";
 
-            var offer = new Areas.Shared.Models.job_offer
-            {
-                application_id = app.application_id,
-                offer_status = "Sent",
-                salary_offer = vm.SalaryOffer,
-                start_date = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value.Date) : null,
-                contract_type = vm.ContractType,
-                notes = vm.Notes,
-                candidate_token = Guid.NewGuid(),
-                date_sent = MyTime.NowMalaysia(),
-                date_updated = MyTime.NowMalaysia()
-            };
-            _db.job_offers.Add(offer);
+        return BadRequest(new { ok = false, error = firstError });
+    }
 
-            app.application_status = "Offer";
-            app.date_updated = MyTime.NowMalaysia();
+    if (vm.ApplicationId <= 0)
+        return BadRequest(new { ok = false, error = "Missing application id." });
 
-            await _db.SaveChangesAsync();
+    var app = await _db.job_applications
+        .Include(a => a.job_listing)
+        .Where(a => a.application_id == vm.ApplicationId)
+        .FirstOrDefaultAsync();
 
-            var jobTitle = app.job_listing?.job_title
-                           ?? await _db.job_listings.Where(j => j.job_listing_id == app.job_listing_id)
-                                                    .Select(j => j.job_title)
-                                                    .FirstOrDefaultAsync();
+    if (app is null) return NotFound(new { ok = false, error = "Application not found." });
+    if (app.job_listing.user_id != recruiterId) return Forbid();
 
-            await this.TryNotifyAsync(_notif, _logger, () =>
-                _notif.SendAsync(
-                    userId: app.user_id,
-                    title: "Job offer sent",
-                    message: $"You have a job offer for “{(jobTitle ?? "your application")}”.",
-                    type: "System"
-                )
-            );
+    var current = (app.application_status ?? "").Trim();
+    if (!_nextStage.TryGetValue(current, out var allowed) || !allowed.Equals("Offer", StringComparison.OrdinalIgnoreCase))
+        return BadRequest(new { ok = false, error = $"Invalid transition: {current} → Offer." });
 
-            return Json(new
-            {
-                ok = true,
-                applicationId = app.application_id,
-                newStage = "Offer",
-                offerId = offer.offer_id
-            });
-        }
+    // Compose richer notes from the additional fields
+    var notesLines = new List<string>();
+
+    if (!string.IsNullOrWhiteSpace(vm.WorkLocation))
+        notesLines.Add($"Work location: {vm.WorkLocation}");
+
+    if (vm.ProbationMonths.HasValue)
+        notesLines.Add($"Probation period: {vm.ProbationMonths.Value} month(s)");
+
+    if (vm.OfferExpiryDate.HasValue)
+        notesLines.Add($"Offer expiry: {vm.OfferExpiryDate.Value:yyyy-MM-dd}");
+
+    if (!string.IsNullOrWhiteSpace(vm.Benefits))
+        notesLines.Add("Benefits: " + vm.Benefits);
+
+    if (!string.IsNullOrWhiteSpace(vm.Notes))
+        notesLines.Add("Internal notes: " + vm.Notes);
+
+    var combinedNotes = notesLines.Count == 0
+        ? null
+        : string.Join(Environment.NewLine, notesLines);
+
+    var offer = new Areas.Shared.Models.job_offer
+    {
+        application_id = app.application_id,
+        offer_status = "Sent",
+        salary_offer = vm.SalaryOffer,
+        start_date = vm.StartDate.HasValue ? DateOnly.FromDateTime(vm.StartDate.Value.Date) : null,
+        contract_type = vm.ContractType,
+        notes = combinedNotes,
+        candidate_token = Guid.NewGuid(),
+        date_sent = MyTime.NowMalaysia(),
+        date_updated = MyTime.NowMalaysia()
+    };
+    _db.job_offers.Add(offer);
+
+    app.application_status = "Offer";
+    app.date_updated = MyTime.NowMalaysia();
+
+    await _db.SaveChangesAsync();
+
+    var jobTitle = app.job_listing?.job_title
+                   ?? await _db.job_listings.Where(j => j.job_listing_id == app.job_listing_id)
+                                            .Select(j => j.job_title)
+                                            .FirstOrDefaultAsync();
+
+    await this.TryNotifyAsync(_notif, _logger, () =>
+        _notif.SendAsync(
+            userId: app.user_id,
+            title: "Job offer sent",
+            message: $"You have a job offer for “{(jobTitle ?? "your application")}”.",
+            type: "System"
+        )
+    );
+
+    return Json(new
+    {
+        ok = true,
+        applicationId = app.application_id,
+        newStage = "Offer",
+        offerId = offer.offer_id
+    });
+}
+
 
         // AJAX: approval info
         [HttpGet]

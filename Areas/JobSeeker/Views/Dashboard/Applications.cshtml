@@ -147,6 +147,13 @@
                                         <input type="hidden" name="applicationId" value="@app.application_id" />
                                         <button type="submit" class="btn btn-success btn-sm">Accept Offer</button>
                                     </form>
+
+
+                                    <form asp-controller="Dashboard" asp-action="RejectOffer" method="post" style="display:inline;">
+    <input type="hidden" name="applicationId" value="@app.application_id" />
+    <button type="submit" class="btn btn-danger btn-sm">Reject Offer</button>
+</form>
+
                                 }
                             </td>
                             <td>@company?.company_name</td>

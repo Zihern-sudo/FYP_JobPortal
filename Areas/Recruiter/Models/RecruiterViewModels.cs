@@ -377,23 +377,70 @@ namespace JobPortal.Areas.Recruiter.Models
             }
         }
     }
-    public class OfferFormVM
+   public class OfferFormVM : IValidatableObject
+{
+    [HiddenInput]
+    public int ApplicationId { get; set; }
+
+    [Required, Display(Name = "Salary Offer"), DataType(DataType.Currency)]
+    [Range(typeof(decimal), "0.01", "79228162514264337593543950335",
+        ErrorMessage = "Salary offer must be greater than 0.")]
+    public decimal? SalaryOffer { get; set; }
+
+    [Required, Display(Name = "Start Date"), DataType(DataType.Date)]
+    public DateTime? StartDate { get; set; }
+
+    [Required, Display(Name = "Contract Type")]
+    [StringLength(60)]
+    public string? ContractType { get; set; }
+
+    [Display(Name = "Offer Expiry Date"), DataType(DataType.Date)]
+    public DateTime? OfferExpiryDate { get; set; }
+
+    [Display(Name = "Work Location"), StringLength(160)]
+    public string? WorkLocation { get; set; }
+
+    [Display(Name = "Probation Period (months)")]
+    [Range(0, 24, ErrorMessage = "Probation period must be between 0 and 24 months.")]
+    public int? ProbationMonths { get; set; }
+
+    [Display(Name = "Benefits Summary")]
+    [DataType(DataType.MultilineText)]
+    [StringLength(2000)]
+    public string? Benefits { get; set; }
+
+    [Display(Name = "Internal Notes")]
+    [DataType(DataType.MultilineText)]
+    [StringLength(2000)]
+    public string? Notes { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {
-        [HiddenInput]
-        public int ApplicationId { get; set; }
+        if (StartDate.HasValue && StartDate.Value.Date < DateTime.Today)
+        {
+            yield return new ValidationResult(
+                "Start date cannot be in the past.",
+                new[] { nameof(StartDate) });
+        }
 
-        [Display(Name = "Salary Offer"), DataType(DataType.Currency)]
-        public decimal? SalaryOffer { get; set; }
+        if (OfferExpiryDate.HasValue && OfferExpiryDate.Value.Date < DateTime.Today)
+        {
+            yield return new ValidationResult(
+                "Offer expiry date cannot be in the past.",
+                new[] { nameof(OfferExpiryDate) });
+        }
 
-        [Display(Name = "Start Date"), DataType(DataType.Date)]
-        public DateTime? StartDate { get; set; }
-
-        [Display(Name = "Contract Type")]
-        public string? ContractType { get; set; }
-
-        [Display(Name = "Notes")]
-        public string? Notes { get; set; }
+        // Optional business rule: expiry should be on or before the start date (if both provided)
+        if (OfferExpiryDate.HasValue && StartDate.HasValue &&
+            OfferExpiryDate.Value.Date > StartDate.Value.Date)
+        {
+            yield return new ValidationResult(
+                "Offer expiry should be on or before the start date.",
+                new[] { nameof(OfferExpiryDate), nameof(StartDate) });
+        }
     }
+}
+
 
     public class JobTemplateFormVM : IValidatableObject
     {
@@ -485,7 +532,7 @@ namespace JobPortal.Areas.Recruiter.Models
             ErrorMessage = "Maximum salary must be > 0")]
         public decimal? SalaryMax { get; set; }
 
-        [Display(Name = "Application Deadline"), DataType(DataType.Date)]
+        [Required, Display(Name = "Application Deadline"), DataType(DataType.Date)]
         public DateTime? ExpiryDate { get; set; }
 
         public string Status { get; set; } = "Active";

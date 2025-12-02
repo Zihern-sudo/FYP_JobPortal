@@ -6,6 +6,7 @@
   var p = (CandidateVM)ViewBag.Profile;
   var notes = ViewBag.Messages as List<NoteVM> ?? new List<NoteVM>();
   var offerVm = (OfferFormVM)ViewBag.OfferForm;
+  var offers = ViewBag.Offers as List<job_offer> ?? new List<job_offer>();
 
   var s = (p.Status ?? "").Trim().ToLowerInvariant();
   bool isSubmitted = s == "submitted";
@@ -75,8 +76,6 @@
               New Conversation
             </button>
           </form>
-
-
         }
 
         <div class="btn-group">
@@ -100,7 +99,7 @@
 
         @if (showSendOffer)
         {
-          <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#offerModal">Send Offer</button>
+          <button class="btn btn-primary btn-sm" onclick="OfferUI.open(@p.ApplicationId)">Send Offer</button>
         }
         @if (showHire)
         {
@@ -151,6 +150,73 @@
     </div>
   </div>
 
+  @* ================= Offers Sent ================= *@
+  @if (offers.Any())
+  {
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="text-uppercase text-muted mb-3">Offers Sent</h6>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Sent On</th>
+                  <th>Salary</th>
+                  <th>Start Date</th>
+                  <th>Contract</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @foreach (var o in offers)
+                {
+                  string statusLabel = o.offer_status switch
+                  {
+                    "Accepted" => "Accepted",
+                    "Sent"     => "Sent",
+                    "Draft"    => "Pending",
+                    "Declined" => "Rejected",
+                    _          => o.offer_status
+                  };
+
+                  string statusClass = statusLabel switch
+                  {
+                    "Accepted" => "bg-success",
+                    "Rejected" => "bg-danger",
+                    "Pending"  => "bg-primary",
+                    "Sent"     => "bg-secondary",
+                    _          => "bg-secondary"
+                  };
+
+                  <tr>
+                    <td>@(o.date_sent?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                    <td>@(o.salary_offer.HasValue ? $"RM {o.salary_offer.Value:N2}" : "-")</td>
+                    <td>@(o.start_date.HasValue ? o.start_date.Value.ToString("yyyy-MM-dd") : "-")</td>
+                    <td>@(string.IsNullOrWhiteSpace(o.contract_type) ? "-" : o.contract_type)</td>
+                    <td><span class="badge @statusClass">@statusLabel</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+  else
+  {
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="text-uppercase text-muted mb-3">Offers Sent</h6>
+          <div class="text-muted">No offers have been sent to this candidate yet.</div>
+        </div>
+      </div>
+    </div>
+  }
+
   @* ================= Score Breakdown ================= *@
   <div class="col-12">
     <div class="card border-0 shadow-sm">
@@ -161,8 +227,7 @@
         </div>
 
         <div id="sb-loading" class="text-muted">Loading breakdown…</div>
-        <div id="sb-empty" class="text-muted d-none">No breakdown available. Re-score the candidate to generate it.
-        </div>
+        <div id="sb-empty" class="text-muted d-none">No breakdown available. Re-score the candidate to generate it.</div>
 
         <div id="sb-container" class="d-none">
           <div class="d-flex align-items-start align-items-md-center flex-column flex-md-row mb-3">
@@ -173,9 +238,7 @@
             </div>
           </div>
 
-          <div id="sb-sections" class="row g-3">
-            @* sections injected by JS *@
-          </div>
+          <div id="sb-sections" class="row g-3"></div>
 
           <details class="mt-3">
             <summary class="small text-muted">Per requirement similarity details</summary>
@@ -208,14 +271,9 @@
                     <span class="text-muted">• @n.CreatedAt</span>
                   </div>
                   @if (n.FromRecruiter)
-                  {
-                    <span class="badge bg-primary">Recruiter</span>
-                  }
+                  { <span class="badge bg-primary">Recruiter</span> }
                   else
-                  {
-
-                    <span class="badge bg-secondary">Candidate</span>
-                  }
+                  { <span class="badge bg-secondary">Candidate</span> }
                 </div>
                 <div class="mt-1" style="white-space:pre-line">@n.Text</div>
               </div>
@@ -239,18 +297,26 @@
 </div>
 
 @* ================= Offer Modal ================= *@
-<div class="modal fade" id="offerModal" tabindex="-1" aria-labelledby="offerModalLabel" aria-hidden="true">
+<div id="offer-modal" class="modal" style="display:none;">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form asp-area="Recruiter" asp-controller="Candidates" asp-action="SendOffer" method="post">
-        @Html.AntiForgeryToken()
-        <div class="modal-header">
-          <h5 class="modal-title" id="offerModalLabel">Send Offer</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
 
-        <div class="modal-body">
-          <input type="hidden" asp-for="@offerVm.ApplicationId" name="ApplicationId" value="@offerVm.ApplicationId" />
+      <div class="modal-header">
+        <h5 class="modal-title">Send Offer</h5>
+        <button type="button" class="btn-close" onclick="OfferUI.close()"></button>
+      </div>
+
+      <div class="modal-body">
+        <div id="offer-errors" class="alert alert-danger small d-none mb-3"></div>
+
+        <form id="offer-form"
+              asp-area="Recruiter"
+              asp-controller="Candidates"
+              asp-action="SendOffer"
+              method="post">
+          @Html.AntiForgeryToken()
+
+          <input type="hidden" name="ApplicationId" value="@p.ApplicationId" />
 
           <div class="mb-3">
             <label class="form-label">Salary Offer</label>
@@ -264,42 +330,36 @@
 
           <div class="mb-3">
             <label class="form-label">Contract Type</label>
-            @{
-              var selectedCt = offerVm?.ContractType ?? "";
-              var contractItems = new List<SelectListItem>
-                        {
-                        new("Full Time", "Full Time", selectedCt == "Full Time"),
-                        new("Part Time", "Part Time", selectedCt == "Part Time"),
-                        new("Contract", "Contract", selectedCt == "Contract"),
-                        new("Freelance", "Freelance", selectedCt == "Freelance"),
-                        new("Internship", "Internship", selectedCt == "Internship"),
-                        };
-            }
-            @Html.DropDownList("ContractType", contractItems, "Select contract type", new { @class = "form-select",
-            required = "required" })
+            <select name="ContractType" class="form-select">
+              <option value="">Select contract type</option>
+              <option>Full Time</option>
+              <option>Part Time</option>
+              <option>Contract</option>
+              <option>Freelance</option>
+              <option>Internship</option>
+            </select>
           </div>
 
           <div class="mb-3">
             <label class="form-label">Notes</label>
-            <textarea class="form-control" rows="3" name="Notes"
-              placeholder="Add any special terms or instructions..."></textarea>
+            <textarea class="form-control" name="Notes" rows="3"
+                      placeholder="Add any special terms or instructions..."></textarea>
           </div>
-        </div>
+        </form>
+      </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-link" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Send Offer</button>
-        </div>
-      </form>
+      <div class="modal-footer">
+        <button class="btn btn-link" type="button" onclick="OfferUI.close()">Cancel</button>
+        <button class="btn btn-primary" id="offer-submit-btn" type="button">Send Offer</button>
+      </div>
+
     </div>
   </div>
 </div>
 
 @section Scripts {
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      fetchBreakdown(@p.ApplicationId);
-    });
+    document.addEventListener('DOMContentLoaded', () => { fetchBreakdown(@p.ApplicationId); });
 
     async function fetchBreakdown(appId) {
       const url = '@Url.Action("Breakdown", "AiEvaluation", new { area = "Recruiter" })' + `?applicationId=${appId}`;
@@ -313,20 +373,13 @@
       const box = document.getElementById('sb-container');
 
       loading.classList.add('d-none');
+      if (!data.ok) { empty.classList.remove('d-none'); return; }
 
-      if (!data.ok) {
-        empty.classList.remove('d-none');
-        return;
-      }
-
-      // Total + meta
       document.getElementById('sb-total').innerText = (data.total ?? 0);
       document.getElementById('sb-evaluated').innerText = data.evaluatedAt
-        ? `Evaluated at ${new Date(data.evaluatedAt).toLocaleString()}`
-        : '';
+        ? `Evaluated at ${new Date(data.evaluatedAt).toLocaleString()}` : '';
       document.getElementById('sb-notes').innerText = data.explanation || '';
 
-      // Sections
       const sc = data.breakdown || {};
       const sections = [
         sc.skills || sc.Skills,
@@ -349,27 +402,26 @@
         const col = document.createElement('div');
         col.className = 'col-12 col-md-6 col-lg-3';
         col.innerHTML = `
-                          <div class="h-100 border rounded p-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                              <strong>${escapeHtml(name)}</strong>
-                              <span class="badge bg-light text-dark">${pts} / ${max}</span>
-                            </div>
-                            <div class="progress mb-2" style="height:8px;">
-                              <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
-                            <div class="small text-muted mb-1">Matched</div>
-                            <ul class="mb-2 small list-unstyled" style="max-height:110px;overflow:auto;">
-                              ${matched.length ? matched.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
-                            </ul>
-                            <div class="small text-muted mb-1">Missing</div>
-                            <ul class="small list-unstyled" style="max-height:110px;overflow:auto;">
-                              ${missing.length ? missing.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
-                            </ul>
-                          </div>`;
+          <div class="h-100 border rounded p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <strong>${escapeHtml(name)}</strong>
+              <span class="badge bg-light text-dark">${pts} / ${max}</span>
+            </div>
+            <div class="progress mb-2" style="height:8px;">
+              <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="small text-muted mb-1">Matched</div>
+            <ul class="mb-2 small list-unstyled" style="max-height:110px;overflow:auto;">
+              ${matched.length ? matched.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
+            </ul>
+            <div class="small text-muted mb-1">Missing</div>
+            <ul class="small list-unstyled" style="max-height:110px;overflow:auto;">
+              ${missing.length ? missing.map(x => `<li class="text-body">${escapeHtml(x)}</li>`).join('') : '<li class="text-muted">—</li>'}
+            </ul>
+          </div>`;
         container.appendChild(col);
       }
 
-      // Per requirement table
       const pr = sc.perRequirement || sc.PerRequirement || [];
       const prBox = document.getElementById('sb-perreq');
       if (pr.length === 0) {
@@ -381,30 +433,30 @@
           const cat = escapeHtml(x.category || x.Category || '');
           const pct = Math.round(sim * 100);
           return `<tr>
-                              <td>${req}</td>
-                              <td class="text-capitalize">${cat}</td>
-                              <td style="width:220px;">
-                                <div class="progress" style="height:8px;">
-                                  <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
-                                </div>
-                              </td>
-                              <td class="text-muted small ps-2" style="width:60px;">${pct}%</td>
-                            </tr>`;
+            <td>${req}</td>
+            <td class="text-capitalize">${cat}</td>
+            <td style="width:220px;">
+              <div class="progress" style="height:8px;">
+                <div class="progress-bar" role="progressbar" style="width:${pct}%" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+              </div>
+            </td>
+            <td class="text-muted small ps-2" style="width:60px;">${pct}%</td>
+          </tr>`;
         }).join('');
 
         prBox.innerHTML = `
-                          <div class="table-responsive">
-                            <table class="table table-sm align-middle">
-                              <thead class="table-light">
-                                <tr>
-                                  <th>Requirement</th>
-                                  <th>Category</th>
-                                  <th colspan="2">Similarity</th>
-                                </tr>
-                              </thead>
-                              <tbody>${rows}</tbody>
-                            </table>
-                          </div>`;
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Requirement</th>
+                  <th>Category</th>
+                  <th colspan="2">Similarity</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
       }
 
       box.classList.remove('d-none');
@@ -423,15 +475,12 @@
   <script>
     (function () {
       if (window.bootstrap) {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-          new bootstrap.Tooltip(el);
-        });
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => { new bootstrap.Tooltip(el); });
       }
 
       const createUrl = '@Url.Action("StartFromApplication", "Inbox", new { area = "Recruiter" })';
       const existsUrl = '@Url.Action("ExistsForApplication", "Inbox", new { area = "Recruiter" })';
 
-      // PRE-CHECK: show "Open Conversation" if exists
       document.querySelectorAll('.js-new-conv').forEach(async (btn) => {
         const form = btn.closest('.js-start-conv-form');
         const appId = form.querySelector('input[name="ApplicationId"]').value;
@@ -449,8 +498,6 @@
           }
         } catch { }
       });
-
-
 
       document.querySelectorAll('.js-new-conv').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -507,4 +554,64 @@
     })();
   </script>
 
+  <script>
+    window.OfferUI = {
+      open(appId) {
+        const modal = document.getElementById('offer-modal');
+        const form = document.getElementById('offer-form');
+        const errorsBox = document.getElementById('offer-errors');
+
+        form.reset();
+        hideErrors();
+        form.querySelector("input[name='ApplicationId']").value = appId;
+
+        modal.style.display = "block";
+        modal.classList.add("show");
+
+        const btn = document.getElementById('offer-submit-btn');
+        btn.onclick = () => {
+          const messages = validateOfferForm(form);
+          if (messages.length) { showErrors(messages); return; }
+          form.submit(); // why: controller returns redirect; let browser follow it
+        };
+
+        function validateOfferForm(f) {
+          const msgs = [];
+          const salaryRaw = f.querySelector("input[name='SalaryOffer']").value;
+          const startRaw = f.querySelector("input[name='StartDate']").value;
+          const contract = f.querySelector("select[name='ContractType']").value;
+
+          const salary = salaryRaw === "" ? NaN : Number(salaryRaw);
+          if (!salaryRaw || isNaN(salary) || salary <= 0) msgs.push("Salary offer must be greater than 0.");
+
+          if (!startRaw) {
+            msgs.push("Start date is required.");
+          } else {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const start = new Date(startRaw); start.setHours(0,0,0,0);
+            if (start < today) msgs.push("Start date cannot be in the past.");
+          }
+
+          if (!contract) msgs.push("Contract type is required.");
+
+          return msgs;
+        }
+
+        function showErrors(msgs) {
+          errorsBox.classList.remove("d-none");
+          errorsBox.innerHTML = msgs.map(m => `<div>${escapeHtml(m)}</div>`).join("");
+        }
+        function hideErrors() {
+          errorsBox.classList.add("d-none");
+          errorsBox.innerHTML = "";
+        }
+      },
+
+      close() {
+        const modal = document.getElementById('offer-modal');
+        modal.classList.remove("show");
+        modal.style.display = "none";
+      }
+    };
+  </script>
 }

@@ -1,6 +1,8 @@
 @* ============================================
    File: Areas/Recruiter/Views/Inbox/Thread.cshtml
-   CHANGES: add warning div + JS to intercept submit and call /Recruiter/Inbox/Moderate
+   CHANGES:
+   - Wire "Save as Template" button directly to Templates/QuickSave
+   - Keep AI moderation + AJAX send
    ============================================ *@
 @{
   ViewData["Title"] = ViewData["Title"] ?? "Thread";
@@ -22,7 +24,7 @@
     &leftarrow; Back to Inbox
   </a>
   <a class="btn btn-outline-secondary"
-    href="@(Url.Action("Index", "Templates", new { area = "Recruiter", threadId = threadId, firstName = otherFirst, jobTitle = jobTitle }))">
+     href="@(Url.Action("Index", "Templates", new { area = "Recruiter", threadId = threadId, firstName = otherFirst, jobTitle = jobTitle }))">
     Open Templates
   </a>
 </div>
@@ -70,25 +72,27 @@
   </div>
   <div class="card-body">
     <textarea name="text" id="composer" class="form-control" rows="3"
-      placeholder="@(isBlocked ? "Chat is blocked by admin." : "Type a message…")" @(isBlocked ? "readonly disabled" :
-      "")>@(isBlocked ? "" : draft)</textarea>
+              placeholder="@(isBlocked ? "Chat is blocked by admin." : "Type a message…")"
+              @(isBlocked ? "readonly disabled" : "")>
+@(isBlocked ? "" : draft)
+    </textarea>
   </div>
   <div class="card-footer d-flex justify-content-end align-items-center gap-2">
-    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveTplModal">
+    @* CHANGED: Simple button with id; no modal attributes *@
+    <button id="btnSaveTemplate" class="btn btn-outline-secondary" type="button">
       Save as Template
     </button>
 
-    <span id="sendStatus" class="small text-muted d-none me-2">Sending…</span> <!-- ADD: status -->
+    <span id="sendStatus" class="small text-muted d-none me-2">Sending…</span>
 
     <button id="sendBtn" class="btn btn-primary" type="submit" @(isBlocked ? "disabled aria-disabled=\"true\"" : "")>
       <span class="js-send-text">Send</span>
       <span class="spinner-border spinner-border-sm ms-1 d-none js-send-spin" role="status" aria-hidden="true"></span>
-    </button> <!-- ADD: spinner inside button -->
+    </button>
   </div>
-
 </form>
 
-<!-- (modal markup unchanged) -->
+@* (no modal needed anymore for quick save) *@
 
 @section Scripts {
   <script>
@@ -98,11 +102,11 @@
       const fields = document.getElementById('token-fields');
       const sendForm = document.getElementById('sendForm');
       const aiWarn = document.getElementById('aiWarn');
-      const sendBtn = document.getElementById('sendBtn');            // ADD
-      const sendSpin = sendBtn ? sendBtn.querySelector('.js-send-spin') : null; // ADD
-      const sendTxt = sendBtn ? sendBtn.querySelector('.js-send-text') : null;  // ADD
-      const sendStatus = document.getElementById('sendStatus');      // ADD
-
+      const sendBtn = document.getElementById('sendBtn');
+      const sendSpin = sendBtn ? sendBtn.querySelector('.js-send-spin') : null;
+      const sendTxt = sendBtn ? sendBtn.querySelector('.js-send-text') : null;
+      const sendStatus = document.getElementById('sendStatus');
+      const btnSaveTemplate = document.getElementById('btnSaveTemplate');
 
       const ctx = {
         FirstName: '@otherFirst',
@@ -130,7 +134,10 @@
       }
 
       function scanTokens() {
-        if (IS_BLOCKED === true || IS_BLOCKED === 'true') { helper.classList.add('d-none'); return; }
+        if (IS_BLOCKED === true || IS_BLOCKED === 'true') {
+          helper.classList.add('d-none');
+          return;
+        }
         const v = composer.value || '';
         const re = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
         const found = new Set();
@@ -158,15 +165,14 @@
           if (tok.toLowerCase() === 'date' || tok.toLowerCase() === 'duedate') inputType = 'date';
           else if (tok.toLowerCase() === 'time') inputType = 'time';
           col.innerHTML = `
-                        <label class="form-label mb-0 small">${tok}</label>
-                        <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
-                      `;
+            <label class="form-label mb-0 small">${tok}</label>
+            <input class="form-control form-control-sm" type="${inputType}" name="tokens[${tok}]" />
+          `;
           fields.appendChild(col);
         });
       }
 
       async function moderateText() {
-        // why: pass anti-forgery header for JSON AJAX
         const tokenInput = sendForm.querySelector('input[name="__RequestVerificationToken"]');
         const token = tokenInput ? tokenInput.value : '';
 
@@ -190,6 +196,7 @@
         return await resp.json();
       }
 
+      // ===== Send message (AI moderation + AJAX) =====
       sendForm.addEventListener('submit', async function (e) {
         if (@(isBlocked ? "true" : "false")) return;
         e.preventDefault();
@@ -205,7 +212,6 @@
           return;
         }
 
-        // UI: start loading
         if (sendBtn) sendBtn.disabled = true;
         if (sendSpin) sendSpin.classList.remove('d-none');
         if (sendTxt) sendTxt.textContent = 'Sending';
@@ -215,15 +221,14 @@
           sendStatus.textContent = 'Checking…';
         }
 
-        // 1) AI moderation
         try {
           const result = await moderateText();
           if (result && result.allowed === false) {
-            const cat = result.category ? ` <span class="badge bg-warning text-dark ms-2">Violation: ${result.category}</span>` : '';
+            const cat = result.category
+              ? ` <span class="badge bg-warning text-dark ms-2">Violation: ${result.category}</span>` : '';
             aiWarn.innerHTML = `<strong>Message blocked by policy:</strong> ${result.reason || 'Not allowed.'}${cat}`;
             aiWarn.classList.remove('d-none');
 
-            // reset UI
             if (sendSpin) sendSpin.classList.add('d-none');
             if (sendTxt) sendTxt.textContent = 'Send';
             if (sendBtn) sendBtn.disabled = false;
@@ -240,16 +245,13 @@
 
         if (sendStatus) sendStatus.textContent = 'Sending…';
 
-        // 2) Send via AJAX (stay on page)
         try {
-          const formData = new FormData(sendForm); // includes __RequestVerificationToken
+          const formData = new FormData(sendForm);
           const body = new URLSearchParams(formData);
 
           const resp = await fetch('@Url.Action("Send", "Inbox", new { area = "Recruiter" })', {
             method: 'POST',
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest' // ask server to JSON-return
-            },
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body
           });
 
@@ -258,7 +260,7 @@
             const data = await resp.json();
             ok = !!data.ok;
           } catch {
-            ok = resp.ok; // treat 200 non-JSON as success fallback
+            ok = resp.ok;
           }
 
           if (ok) {
@@ -267,10 +269,8 @@
               sendStatus.classList.remove('text-muted');
               sendStatus.classList.add('text-success');
             }
-            // Show delivered briefly then reload so the new message appears
             setTimeout(() => { window.location.reload(); }, 150);
           } else {
-
             if (sendStatus) {
               sendStatus.textContent = 'Failed to send';
               sendStatus.classList.remove('text-muted');
@@ -291,24 +291,57 @@
         }
       });
 
+      // ===== Quick Save as Template (no modal) =====
+      if (btnSaveTemplate) {
+        btnSaveTemplate.addEventListener('click', async function () {
+          if (IS_BLOCKED === true || IS_BLOCKED === 'true') return;
+
+          const bodyText = (composer.value || '').trim();
+          if (!bodyText) {
+            alert('Type a message first before saving it as a template.');
+            composer.focus();
+            return;
+          }
+
+          const name = prompt('Template name:', '');
+          if (!name) {
+            return; // cancelled
+          }
+
+          const tokenInput = sendForm.querySelector('input[name="__RequestVerificationToken"]');
+          const token = tokenInput ? tokenInput.value : '';
+
+          const payload = new URLSearchParams();
+          payload.append('name', name);
+          payload.append('subject', '');
+          payload.append('body', bodyText);
+          payload.append('threadId', '@threadId');
+          payload.append('useNow', 'false');
+
+          try {
+            const resp = await fetch('@Url.Action("QuickSave", "Templates", new { area = "Recruiter" })', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                'RequestVerificationToken': token
+              },
+              body: payload.toString()
+            });
+
+            if (resp.ok) {
+              alert('Template saved. You can find it on the Templates page.');
+            } else {
+              alert('Failed to save template.');
+            }
+          } catch {
+            alert('Failed to save template.');
+          }
+        });
+      }
 
       function init() {
         ensureFriendlyDefaults();
         scanTokens();
-
-        const quickSaveForm = document.getElementById('quickSaveForm');
-        const quickSaveBody = document.getElementById('quickSaveBody');
-        const useNowField = document.getElementById('quickSaveUseNow');
-
-        function prepForm(useNow) {
-          quickSaveBody.value = composer.value || '';
-          useNowField.value = useNow ? 'true' : 'false';
-        }
-
-        const btnSaveOnly = document.getElementById('btnSaveOnly');
-        const btnSaveUse = document.getElementById('btnSaveUse');
-        if (btnSaveOnly) btnSaveOnly.addEventListener('click', function () { prepForm(false); });
-        if (btnSaveUse) btnSaveUse.addEventListener('click', function () { prepForm(true); });
       }
 
       composer.addEventListener('input', scanTokens);

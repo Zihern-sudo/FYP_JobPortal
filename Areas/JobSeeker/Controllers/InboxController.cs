@@ -15,7 +15,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using JobPortal.Areas.Shared.Options; // OpenAIOptions
 using JobPortal.Areas.Shared.Extensions;
-
+using JobPortal.Areas.Shared.Models.Extensions; // <-- TryNotifyAsync extension :contentReference[oaicite:0]{index=0}
+using Microsoft.Extensions.Logging;
 
 namespace JobPortal.Areas.JobSeeker.Controllers
 {
@@ -27,24 +28,33 @@ namespace JobPortal.Areas.JobSeeker.Controllers
         private const int DefaultPageSize = 10;
         private const int MaxPageSize = 20;
 
-        private readonly IHttpClientFactory _httpFactory;     // NEW
-        private readonly IOptions<OpenAIOptions> _openAi;      // NEW
+        private readonly IHttpClientFactory _httpFactory;
+        private readonly IOptions<OpenAIOptions> _openAi;
 
+        // NEW: notifications + logger
+        private readonly INotificationService _notif;          // :contentReference[oaicite:1]{index=1}
+        private readonly ILogger<InboxController> _logger;     // used by TryNotifyAsync
 
-        public InboxController(ChatbotService chatbot, AppDbContext db, IHttpClientFactory httpFactory, IOptions<OpenAIOptions> openAi)
+        public InboxController(
+            ChatbotService chatbot,
+            AppDbContext db,
+            IHttpClientFactory httpFactory,
+            IOptions<OpenAIOptions> openAi,
+            INotificationService notif,            // NEW
+            ILogger<InboxController> logger)       // NEW
         {
             _chatbot = chatbot;
             _db = db;
-            _httpFactory = httpFactory;      // NEW
-            _openAi = openAi;                // NEW
+            _httpFactory = httpFactory;
+            _openAi = openAi;
+            _notif = notif;        // NEW
+            _logger = logger;      // NEW
         }
-
 
         // GET: /JobSeeker/Inbox
         [HttpGet]
         public async Task<IActionResult> Index(string? q, string? filter, int page = 1, int pageSize = 10)
         {
-            // Get the logged-in candidate
             var userIdStr = HttpContext.Session.GetString("UserId");
             if (string.IsNullOrEmpty(userIdStr))
                 return RedirectToAction("Login", "Account", new { area = "JobSeeker" });
@@ -52,17 +62,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             int candidateId = int.Parse(userIdStr);
             ViewData["Title"] = "Inbox";
 
-            // Base query: conversations belonging to this candidate
             var baseQuery = _db.conversations
                 .Where(c => c.candidate_id == candidateId);
 
-            // Optional filter: show only unread conversations
             if (filter == "unread")
             {
                 baseQuery = baseQuery.Where(c => c.unread_for_candidate > 0);
             }
 
-            // Optional search by job title, recruiter, or snippet
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var qTrim = q.Trim();
@@ -73,7 +80,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 );
             }
 
-            // Pagination setup
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 5, 20);
 
@@ -83,14 +89,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
 
             var skip = (page - 1) * pageSize;
 
-            // Fetch the conversations
             var conversations = await baseQuery
                 .OrderByDescending(c => c.last_message_at ?? c.created_at)
                 .Skip(skip)
                 .Take(pageSize)
                 .ToListAsync();
 
-            // ✅ Build proper view model instead of using ViewBag
             var vm = new InboxIndexVM
             {
                 Threads = conversations.Select(c => new ThreadItemVM(
@@ -129,17 +133,14 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (convo == null)
                 return NotFound();
 
-            // NEW: expose block state to the view
             ViewBag.IsBlocked = convo.is_blocked;
             ViewBag.BlockedReason = convo.blocked_reason ?? string.Empty;
 
-            // Get messages linked to this conversation
             var messages = await _db.messages
                 .Where(m => m.conversation_id == convo.conversation_id)
                 .OrderBy(m => m.msg_timestamp)
                 .ToListAsync();
 
-            // Mark unread messages as read (keep existing behavior)
             var unread = messages.Where(m => m.receiver_id == candidateId && m.is_read == false).ToList();
             if (unread.Any())
             {
@@ -164,7 +165,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 Messages = messageList
             };
 
-            // Prefilled message to the View
             ViewBag.PrefillMessage = prefill;
 
             return View(vm);
@@ -187,7 +187,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (convo == null)
                 return NotFound();
 
-            // NEW: hard block enforcement
             if (convo.is_blocked)
             {
                 TempData["Message"] = string.IsNullOrWhiteSpace(convo.blocked_reason)
@@ -196,7 +195,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Thread", new { id = vm.ThreadId });
             }
 
-            // Server-side AI moderation (backstop if JS fails)
             var ai = await CheckAiForCandidateAsync(vm.ThreadId, candidateId, vm.MessageText ?? "");
             if (!ai.Allowed)
             {
@@ -207,36 +205,47 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return RedirectToAction("Thread", new { id = vm.ThreadId });
             }
 
+            var now = MyTime.NowMalaysia();
 
-            // Create new message
             var message = new message
             {
                 conversation_id = vm.ThreadId,
                 sender_id = candidateId,
                 receiver_id = convo.recruiter_id ?? 0,
                 msg_content = vm.MessageText,
-                msg_timestamp = MyTime.NowMalaysia(),
+                msg_timestamp = now,
                 is_read = false
             };
 
             _db.messages.Add(message);
 
-            // Update conversation
-            convo.last_message_at = MyTime.NowMalaysia();
+            convo.last_message_at = now;
             convo.last_snippet = vm.MessageText.Length > 100 ? vm.MessageText.Substring(0, 100) : vm.MessageText;
             convo.unread_for_recruiter += 1;
 
             await _db.SaveChangesAsync();
+
+            // Notify recruiter (non-blocking) using helper
+            var otherId = convo.recruiter_id ?? 0;
+            var preview = vm.MessageText.Length > 140 ? vm.MessageText.Substring(0, 140) + "…" : vm.MessageText;
+
+            await this.TryNotifyAsync(_notif, _logger, () =>
+                _notif.SendAsync(
+                    userId: otherId,
+                    title: "New message from candidate",
+                    message: preview,
+                    type: "Message"
+                )
+            );
+
             TempData["Message"] = "Message sent successfully!";
 
             if (Request.Headers["X-Requested-With"] == "XMLHttpRequest")
                 return Json(new { ok = true });
 
             return RedirectToAction("Thread", new { id = vm.ThreadId });
-
         }
 
-        // === NEW: AI moderation for outbound jobseeker messages ===
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Moderate([FromBody] MessageModerationCheckRequestVM req)
@@ -250,14 +259,12 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             if (req is null || string.IsNullOrWhiteSpace(req.Text))
                 return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Message is empty.", Category = "Empty" });
 
-            // Ownership check
             var conv = await _db.conversations
                 .FirstOrDefaultAsync(c => c.conversation_id == req.ThreadId && c.candidate_id == candidateId);
 
             if (conv == null)
                 return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = "Thread not found or access denied.", Category = "Access" });
 
-            // Admin block
             if (conv.is_blocked)
             {
                 var reason = string.IsNullOrWhiteSpace(conv.blocked_reason)
@@ -266,7 +273,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 return Json(new MessageModerationCheckResultVM { Allowed = false, Reason = reason, Category = "AdminBlock" });
             }
 
-            // OpenAI config
             var opts = _openAi.Value;
             if (string.IsNullOrWhiteSpace(opts.ApiKey))
                 return Json(new MessageModerationCheckResultVM { Allowed = true, Reason = "AI check unavailable (no API key).", Category = "Bypass" });
@@ -283,13 +289,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 response_format = new { type = "json_object" },
                 messages = new object[]
                 {
-            new { role = "system", content =
-                "You are the content policy judge for a recruitment chat. " +
-                "Given ONE outbound candidate message, decide if it violates policy. " +
-                "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
-                "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
-                "Block only for clear violations; neutral/safety reminders are allowed." },
-            new { role = "user", content = req.Text.Trim() }
+                    new { role = "system", content =
+                        "You are the content policy judge for a recruitment chat. " +
+                        "Given ONE outbound candidate message, decide if it violates policy. " +
+                        "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
+                        "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
+                        "Block only for clear violations; neutral/safety reminders are allowed." },
+                    new { role = "user", content = req.Text.Trim() }
                 }
             };
 
@@ -340,7 +346,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
         }
 
-        // Server-side enforcement: reuse OpenAI moderation for candidate messages
         private async Task<(bool Allowed, string Reason, string Category)> CheckAiForCandidateAsync(int threadId, int candidateId, string text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -374,13 +379,13 @@ namespace JobPortal.Areas.JobSeeker.Controllers
                 response_format = new { type = "json_object" },
                 messages = new object[]
                 {
-            new { role = "system", content =
-                "You are the content policy judge for a recruitment chat. " +
-                "Given ONE outbound candidate message, decide if it violates policy. " +
-                "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
-                "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
-                "Block only for clear violations; neutral/safety reminders are allowed." },
-            new { role = "user", content = text.Trim() }
+                    new { role = "system", content =
+                        "You are the content policy judge for a recruitment chat. " +
+                        "Given ONE outbound candidate message, decide if it violates policy. " +
+                        "Return STRICT JSON ONLY: {\"allowed\": boolean, \"reason\": string, \"category\": string}. " +
+                        "Use categories: OffPlatform, Payment, PersonalData, Threat, Harassment, Discrimination, Explicit, Spam, Other. " +
+                        "Block only for clear violations; neutral/safety reminders are allowed." },
+                    new { role = "user", content = text.Trim() }
                 }
             };
 
@@ -419,8 +424,6 @@ namespace JobPortal.Areas.JobSeeker.Controllers
             }
             catch { return (true, "AI check timed out.", "Bypass"); }
         }
-
-
 
         [HttpPost]
         public async Task<IActionResult> AskAI(string question)
